@@ -20,6 +20,7 @@
 #include <math.h>
 #include <ctype.h>
 #include "grads.h"
+#include "caltime.h"
 
 extern struct gamfcmn mfcmn;
 static char pout[256];
@@ -227,8 +228,16 @@ gaint gaddes (char *name, struct gafile *pfi, gaint mflag) {
           else if (cmpwrd("pascals",ch)) pfi->pa2mb = 1;
 #endif
           else if (cmpwrd("365_day_calendar",ch)) {
-            pfi->calendar=1;
+            pfi->calendar = CALTIME_NOLEAP;
             mfcmn.cal365=pfi->calendar;
+          }
+          else if (cmpwrd("360_day_calendar",ch)) {
+            pfi->calendar = CALTIME_360_DAY;
+            mfcmn.cal365 = pfi->calendar;
+          }
+          else if (cmpwrd("julian_calendar",ch)) {
+            pfi->calendar = CALTIME_JULIAN;
+            mfcmn.cal365 = pfi->calendar;
           }
           else if (cmpwrd("big_endian",ch)) {
             if (!BYTEORDER) pfi->bswap = 1;
@@ -2858,6 +2867,16 @@ size_t sz;
   for (i=0; i<100; i++) pfi->sdfdimsiz[i]=-1;
   for (i=0; i<100; i++) pfi->sdfdimnam[i][0]='\0';
   pfi->cachesize = -1;   /* if <0, a good default cache size has not been calcuated */
+
+#if GTOOL3 == 1
+  pfi->gthist  = NULL;
+  pfi->gtvar   = NULL;
+  pfi->gtrsv   = 0;
+  pfi->gtcurr  = -1;
+  pfi->gtvlist = NULL;
+  pfi->gtaxis_degen = 0;
+#endif
+
   return (pfi);
 }
 
@@ -2945,6 +2964,16 @@ gaint i;
     if (attrib->value) gree(attrib->value,"f85");
     gree(attrib,"f86");
   }
+
+#if GTOOL3 == 1 && !defined(STNDALN)
+  if (pfi->gthist) {
+    GT3_freeVarbuf(pfi->gtvar);
+    GT3_close(pfi->gthist);
+    for (i = 1; i < pfi->vnum; i++)
+      free(pfi->gtvlist[i]); /* XXX gtvpath[0]: not 'malloc'ed */
+    free(pfi->gtvlist);
+  }
+#endif
   gree(pfi,"f87");
 }
 

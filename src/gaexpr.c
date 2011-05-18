@@ -713,6 +713,46 @@ size_t sz;
   return (pgr);
 }
 
+
+/*
+ *
+ */
+struct gafile *
+lookupfile(const struct gastat *pst, const char *vname)
+{
+    int i, n;
+    struct gafile *pfi;
+    struct gavar *pvar;
+    char buf[64];
+
+    /* At first, searching from a default gafile  */
+    pfi = pst->pfid;
+    pvar = pfi->pvar1;
+    for (n = 0; n < pfi->vnum; n++, pvar++)
+        if (cmpwrd(vname, pvar->abbrv))
+            return pfi;
+
+    /* searching from the others. */
+    for (i = 0, pfi = pst->pfi1;
+         i < pst->fnum && pfi != NULL;
+         i++, pfi = pfi->pforw) {
+
+        if (pfi == pst->pfid)
+            continue;
+
+        pvar = pfi->pvar1;
+        for (n = 0; n < pfi->vnum; n++, pvar++)
+            if (cmpwrd(vname, pvar->abbrv)) {
+                sprintf(buf, "%s is found in File #%d\n", vname, i + 1);
+                gaprnt(0, buf);
+                return pfi;
+            }
+    }
+
+    return NULL; /* not found */
+}
+
+
 /* Handle a variable or function call.  If successful, we return
    a data object (pointed to by the pst) and a ptr to the first
    character after the variable or function name.  If an error
@@ -779,7 +819,8 @@ size_t sz;
   /* If not a defined grid, get a pointer to a file structure    */
   if (pfi==NULL) {
     if (!dotflg) {
-      pfi = pst->pfid;
+      /* pfi = pst->pfid; */
+      pfi = lookupfile(pst, name);
     }
     else {
       pfi = pst->pfi1;
@@ -796,6 +837,7 @@ size_t sz;
     if ( cmpwrd(name,"lat") ||
          cmpwrd(name,"lon") ||
          cmpwrd(name,"lev") ) {
+      pfi = pst->pfid;
       pvar = &vfake;
       vfake.levels = -999;
       vfake.vecpair = -999;
@@ -815,18 +857,18 @@ size_t sz;
       /* See if this is a variable name.
          If not, give an error message (if a file number was specified)
          or check for a function call via rtnprs.   */
+
+      if (pfi == NULL) {
+        ch = rtnprs(ch,name,pst);              /* Handle function call */
+        return (ch);
+      }
       pvar = pfi->pvar1;
       for (i=0; (i<pfi->vnum)&&(!cmpwrd(name,pvar->abbrv)); i++) pvar++;
       if (i>=pfi->vnum) {
-        if (dotflg) {
-          gaprnt (0,"Data Request Error:  Invalid variable name \n");
-          snprintf(pout,255,"  Variable '%s' not found in file %i\n",vnam,fnum);
-          gaprnt (0,pout);
-          return (NULL);
-        } else {
-          ch = rtnprs(ch,name,pst);              /* Handle function call */
-          return (ch);
-        }
+        gaprnt (0,"Data Request Error:  Invalid variable name \n");
+        snprintf(pout,255,"  Variable '%s' not found in file %i\n",vnam,fnum);
+        gaprnt (0,pout);
+        return (NULL);
       }
     }
   }

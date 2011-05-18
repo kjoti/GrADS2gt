@@ -33,6 +33,7 @@
 #include "gagui.h"
 #endif
 
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -40,6 +41,10 @@
 #include <math.h>
 #include "grads.h"
 #include "gx.h"
+
+#if GTOOL3 == 1
+#include "gagt3.h"
+#endif
 
 char *gatxtl(char *str, int level);
 
@@ -272,6 +277,7 @@ size_t sz;
       }
       gacmd ("set t 1",pcm,0);
       gacmd ("set e 1",pcm,0);
+      mfcmn.cal365 = pfi->calendar;
     }
     gxfrme (1);
     if (reinit)
@@ -666,6 +672,28 @@ size_t sz;
     if (!retcod) mygreta(cmd);  /* (for IGES only) keep track of user's opened files */
     goto retrn ;
 #endif
+#if GTOOL3 == 1
+  } else if (cmpwrd("gtopen", cmd)) {
+    if ( (cmd = nxtwrd(com)) == NULL) {
+      gaprnt(0, "GTOPEN error:  missing gtool3 file pathname\n") ;
+      retcod = 1;
+      goto retrn;
+    }
+    retcod = gagt3open(cmd, pcm);
+    goto retrn;
+  } else if (cmpwrd("vgtopen", cmd)) {
+    if ( (cmd = nxtwrd(com)) == NULL) {
+      gaprnt(0, "GTOPEN error:  missing gtool3 file pathname\n") ;
+      retcod = 1;
+      goto retrn;
+    }
+    retcod = gagt3vopen(cmd, pcm);
+    goto retrn;
+  } else if (cmpwrd("gtoptions", cmd)) {
+    cmd = nxtwrd(com);
+    retcod = gagt3options(cmd, pcm);
+    goto retrn;
+#endif /* GTOOL3 */
   } else if (cmpwrd("d",cmd) || cmpwrd("display",cmd)) {
     if (pcm->pfid==NULL) {
       gaprnt (0,"DISPLAY error:  no file open yet\n");
@@ -710,6 +738,27 @@ size_t sz;
       goto retrn;
     }
     retcod = gamodf (cmd, pcm);
+    goto retrn;
+  }
+  else if (cmpwrd("cd",cmd)) {
+    retcod = 0;
+    if ((cmd = nxtwrd(com)) != NULL) {
+      if (chdir(cmd) < 0) {
+        gaprnt(0, "LCD error: ");
+        gaprnt(0, strerror(errno));
+        gaprnt(0, "\n");
+        retcod = 1;
+      } else {
+        char *cwd;
+
+        if ((cwd = getcwd(NULL, 1024)) != NULL) {
+          gaprnt(0, "Current directory: ");
+          gaprnt(0, cwd);
+          gaprnt(0, "\n");
+          free(cwd);
+        }
+      }
+    }
     goto retrn;
   }
   else if (cmpwrd("sdfwrite",cmd)) {
@@ -5633,7 +5682,7 @@ static char *kwds[123] = {"X","Y","Z","T","LON","LAT","LEV","TIME",
       pcm->gout2a = 15; pcm->goutstn = 9;}
 #else
       gaprnt(0,"Creating shapefiles is not supported in this build\n");
-      goto err;
+      goto err; }
 #endif
     else if (cmpwrd("value",cmd))    pcm->goutstn = 1;
     else if (cmpwrd("barb",cmd))    {pcm->goutstn = 2; pcm->gout2b = 9; pcm->gout1a = 2;}
@@ -6342,6 +6391,7 @@ static char *kwds[123] = {"X","Y","Z","T","LON","LAT","LEV","TIME",
     gaprnt (2,pout);
     pcm->pfid = pfi;
     pcm->dfnum = id;
+    mfcmn.cal365 = pfi->calendar;
   }
   else if (cmpwrd("background",cmd)) {
     kwrd = 58;

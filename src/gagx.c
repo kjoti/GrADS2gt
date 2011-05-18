@@ -3879,6 +3879,7 @@ cleanup:
    flag = 1 for dynamic fields (values vary with shape)
 
 */
+#if USESHP == 1
 struct dbfld* newdbfld (char *fldname, DBFFieldType dbtype, gaint len, gaint prec,
                         gaint flag, char *val) {
   gaint sz;
@@ -3914,7 +3915,7 @@ struct dbfld* newdbfld (char *fldname, DBFFieldType dbtype, gaint len, gaint pre
     return NULL;
   }
 }
-
+#endif
 
 /* Writes out a KML file containing output from contouring routine */
 

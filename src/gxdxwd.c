@@ -13,7 +13,7 @@
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 
-#include <X11/Xmu/WinUtil.h>
+/* #include <X11/Xmu/WinUtil.h> */  /* no need */
 #include "gatypes.h"
 #define FEEP_VOLUME 0
 

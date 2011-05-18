@@ -110,6 +110,9 @@ snprintf(cmd,255,"Config: v%s",GRADS_VERSION);
 #if USESHP==1
  strcat(cmd," shapefile");
 #endif
+#if GTOOL3==1
+ strcat(cmd," gtool3");
+#endif
  strcat(cmd,"\n");
  gaprnt(verbose,cmd);
 
@@ -238,6 +241,8 @@ snprintf(cmd,255,"Config: v%s",GRADS_VERSION);
    gaprnt(verbose,"  o Shapefile interface DISABLED\n");
 #endif
 
+ sprintf(cmd, "   o GTOOL3 interface %sABLED.\n", GTOOL3 ? "EN" : "DIS");
+ gaprnt(verbose, cmd);
 
  gaprnt(verbose,"\nFor additional information please consult http://iges.org/grads\n\n");
 

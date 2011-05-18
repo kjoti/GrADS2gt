@@ -2,6 +2,9 @@
     Institute of Global Environment and Society (IGES).
     See file COPYRIGHT for more information.   */
 
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
 #include <stdlib.h>
 
 /* Installation options for the GX package. */

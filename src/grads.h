@@ -2,9 +2,16 @@
     Institute of Global Environment and Society (IGES).
     See file COPYRIGHT for more information.   */
 
+#ifndef GRADS_H
+#define GRADS_H
+
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
+#include <sys/types.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/types.h>
 #include "gabufr.h"
 /* #include <gatypes.h>  JMA why is this causing problems? */
 #if GRIB2==1
@@ -15,6 +22,9 @@
 #endif
 #if USEHDF5==1
 #include <hdf5.h>
+#endif
+#if GTOOL3 == 1
+#include "gtool3.h"
 #endif
 
 /* Handling of missing data values. After the data I/O is done,
@@ -472,6 +482,15 @@ struct gafile {
   gaint time_type;             /* temporary flag for SDF time handling */
   char sdfdimnam[100][129];
   long cachesize;            /* default netcdf4/hdf5 cache size */
+
+#if GTOOL3 == 1
+  GT3_File *gthist;
+  GT3_Varbuf *gtvar;
+  int gtrsv;
+  int gtcurr;
+  char **gtvlist;        /* a list of path */
+  int gtaxis_degen;
+#endif
 };
 
 /* Structure that describes a grid (requestor or descriptor block).  */
@@ -1141,11 +1160,14 @@ gaint gashdc (struct gacmn *, gadouble);
     dqual: test if two doubles are equal                                                 */
 
 gaint nxtcmd (char *, char *);
-void timadd (struct dt *, struct dt *);
-void timsub (struct dt *, struct dt *);
-gadouble t2gr (gadouble *, struct dt *);
-void gr2t (gadouble *, gadouble, struct dt *);
-gaint timdif (struct dt *, struct dt *);
+
+void timadd(const struct dt *dtim, struct dt *dto);
+void timsub(const struct dt *dtim, struct dt *dto);
+gaint timdif(const struct dt *dtim1, const struct dt *dtim2);
+gadouble t2gr(const gadouble *vals, const struct dt *dtim);
+void gr2t(const gadouble *vals, gadouble gr, struct dt *dtim);
+int invalid_date(const struct dt *dtim);
+
 gaint qleap (gaint);
 char *adtprs (char *, struct dt *, struct dt *);
 char *rdtprs (char *, struct dt *);
@@ -1186,6 +1208,11 @@ void gapby (gaint, unsigned char *, gaint, gaint);
 void gapbb (gaint, unsigned char *, gaint, gaint);
 char *gafndt (char *, struct dt *, struct dt *, gadouble *,
               struct gachsub *, struct gaens *, gaint, gaint, gaint *);
+int gafndt_impl(char *out, size_t outsize, const char *in,
+                struct dt *dtim, struct dt *dtimi,
+                gadouble *vals,
+                struct gachsub *pch1st,
+                struct gaens *ens1st, gaint t, gaint e, gaint *flag);
 void gabswp (void *, gaint);
 void gabswp8 (void *, gaint);
 void gahswp (struct rpthdr *);
@@ -1271,3 +1298,4 @@ gaint getncvnm (struct sdfnames *, char *);
 void *galloc(size_t,char *);
 void gree();
 void glook();
+#endif /* !GRADS_H */

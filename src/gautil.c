@@ -110,255 +110,10 @@ static gaint mnacum[13] = {0,0,44640,84960,129600,172800,217440,
 static gaint mnacul[13] = {0,0,44640,86400,131040,174240,218880,
                         262080,306720,351360,394560,439200,482400};
 
-/* Add an offset to a time.  Output to dto.                          */
-
-void timadd (struct dt *dtim, struct dt *dto) {
-gaint i;
-gaint cont;
-
-  /* First add months and years.  Normalize as needed.               */
-  dto->mo += dtim->mo;
-  dto->yr += dtim->yr;
-
-  while (dto->mo>12) {
-    dto->mo -= 12;
-    dto->yr++;
-  }
-
-  /* Add minutes, hours, and days directly.  Then normalize
-     to days, then normalize extra days to months/years.             */
-
-  dto->mn += dtim->mn;
-  dto->hr += dtim->hr;
-  dto->dy += dtim->dy;
-
-  if (dto->mn > 59) {
-    i = dto->mn / 60;
-    dto->hr += i;
-    dto->mn = dto->mn - (i*60);
-  }
-  if (dto->hr > 23) {
-    i = dto->hr / 24;
-    dto->dy += i;
-    dto->hr = dto->hr - (i*24);
-  }
-
-  cont = 1;
-  while (dto->dy > mosiz[dto->mo] && cont) {
-    if (dto->mo==2 && qleap(dto->yr)) {
-      if (dto->dy == 29) cont=0;
-      else {
-        dto->dy -= 29;
-        dto->mo++;
-      }
-    } else {
-      dto->dy -= mosiz[dto->mo];
-      dto->mo++;
-    }
-    while (dto->mo > 12) {dto->mo-=12; dto->yr++;}
-  }
-}
-
-/* Subtract an offset from a time.  Subtract minutes/hours/days
-   first so that we will exactly reverse the operation of timadd     */
-
-void timsub (struct dt *dtim, struct dt *dto) {
-gaint s1,s2;
-
-  /* Subtract minutes, hour, and days directly.  Then normalize
-     to days, then normalize deficient days from months/years.       */
-
-  dto->mn = dtim->mn - dto->mn;
-  dto->hr = dtim->hr - dto->hr;
-  dto->dy = dtim->dy - dto->dy;
-  s1 = dto->mo; s2 = dto->yr;
-  dto->mo = dtim->mo;
-  dto->yr = dtim->yr;
-
-  while (dto->mn < 0) {dto->mn+=60; dto->hr--;}
-  while (dto->hr < 0) {dto->hr+=24; dto->dy--;}
-
-  while (dto->dy < 1) {
-    dto->mo--;
-    if (dto->mo < 1) {dto->mo=12; dto->yr--;}
-    if (dto->mo==2 && qleap(dto->yr)) dto->dy += 29;
-    else dto->dy += mosiz[dto->mo];
-  }
-
-  /* Now subtract months and years.  Normalize as needed.            */
-
-  dto->mo = dto->mo - s1;
-  dto->yr = dto->yr - s2;
-
-  while (dto->mo < 1) {dto->mo+=12; dto->yr--;}
-
-  /* Adjust for leaps */
-
-  if (dto->mo==2 && dto->dy==29 && !qleap(dto->yr)) {
-    dto->mo=3; dto->dy=1;
-  }
-}
-
-/* Convert from Absolute time (year/month/day/etc.) to grid
-   coordinate.                                                       */
-
-gadouble t2gr (gadouble *vals, struct dt *dtim) {
-struct dt stim;
-gaint eyear,mins;
-gadouble val,*moincr,*mnincr,rdiff;
-
-  /* Get constants associated with this conversion                   */
-
-  stim.yr = (gaint)(*vals+0.1);
-  stim.mo = (gaint)(*(vals+1)+0.1);
-  stim.dy = (gaint)(*(vals+2)+0.1);
-  stim.hr = (gaint)(*(vals+3)+0.1);
-  stim.mn = (gaint)(*(vals+4)+0.1);
-
-  moincr = vals+5;
-  mnincr = vals+6;
-
-  /* If the increment for this conversion is days, hours, or minutes,
-     then we do our calculations in minutes.  If the increment is
-     months or years, we do our calculations in months.              */
-
-  if (*mnincr>0.1) {
-    mins = timdif(&stim,dtim);
-    rdiff = (gadouble)mins;
-    val = rdiff/(*mnincr);
-    val += 1.0;
-    return (val);
-  } else {
-    eyear = stim.yr;
-    if (stim.yr > dtim->yr) eyear = dtim->yr;
-    rdiff = (((dtim->yr - eyear)*12) + dtim->mo) -
-            (((stim.yr - eyear)*12) + stim.mo);
-    stim.yr = dtim->yr;
-    stim.mo = dtim->mo;
-    mins = timdif(&stim,dtim);
-    if (mins>0) {
-      if (dtim->mo==2 && qleap(dtim->yr) ) {
-        rdiff = rdiff + (((gadouble)mins)/41760.0);
-      } else {
-        rdiff = rdiff + (((gadouble)mins)/((gadouble)momn[dtim->mo]));
-      }
-    }
-    val = rdiff/(*moincr);
-    val += 1.0;
-    return (val);
-  }
-}
-
-/* Convert from a t grid coordinate to an absolute time.           */
-
-void gr2t (gadouble *vals, gadouble gr, struct dt *dtim) {
-struct dt stim;
-gadouble *moincr,*mnincr;
-gadouble v;
-
-  /* Get constants associated with this conversion                   */
-  stim.yr = (gaint)(*vals+0.1);
-  stim.mo = (gaint)(*(vals+1)+0.1);
-  stim.dy = (gaint)(*(vals+2)+0.1);
-  stim.hr = (gaint)(*(vals+3)+0.1);
-  stim.mn = (gaint)(*(vals+4)+0.1);
-  moincr = vals+5;
-  mnincr = vals+6;
-
-  /* Initialize output time                                          */
-  dtim->yr = 0;
-  dtim->mo = 0;
-  dtim->dy = 0;
-  dtim->hr = 0;
-  dtim->mn = 0;
-
-  /* Do conversion if increment is in minutes.                       */
-  if (*mnincr>0.1) {
-    v = *mnincr * (gr-1.0);
-    if (v>0.0) v = v + 0.5;   /* round */
-    else v = v - 0.5;
-    dtim->mn = (gaint)v;
-    if (dtim->mn<0) {
-      dtim->mn = -1 * dtim->mn;
-      timsub (&stim,dtim);
-    } else {
-      timadd (&stim,dtim);
-    }
-    return;
-
-  /* Do conversion if increment is in months.  Same as for minutes,
-     except special handling is required for partial months.
-     JMA There is a bug here, and some precision decisions that need attention */
-
-  } else {
-    v = *moincr * (gr-1.0);
-    if (v<0.0) dtim->mo = (gaint)(v-0.9999); /* round (sort of)       */
-    else dtim->mo = (gaint)(v+0.0001);
-    v = v - (gadouble)dtim->mo;                /* Get fractional month  */
-    if (dtim->mo<0) {
-      dtim->mo = -1 * dtim->mo;
-      timsub (&stim,dtim);
-    } else timadd (&stim,dtim);
-    if (v<0.0001) return;         /* if fraction small, return       */
-
-    if (dtim->mo==2 && qleap(dtim->yr) ) {
-      v = v * 41760.0;
-    } else {
-      v = v * (gadouble)momn[dtim->mo];
-    }
-    stim = *dtim;
-    dtim->yr = 0;
-    dtim->mo = 0;
-    dtim->dy = 0;
-    dtim->hr = 0;
-    dtim->mn = (gaint)(v+0.5);
-    timadd (&stim,dtim);
-    return;
-  }
-}
-
-/* Calculate the difference between two times and return the
-   difference in minutes.   The calculation is time2 - time1, so
-   if time2 is earlier than time1, the result is negative.           */
-
-gaint timdif (struct dt *dtim1, struct dt *dtim2) {
-gaint min1,min2,yr;
-struct dt *temp;
-gaint swap,mo1,mo2;
-
-  swap = 0;
-  if (dtim1->yr > dtim2->yr) {
-    temp = dtim1;
-    dtim1 = dtim2;
-    dtim2 = temp;
-    swap = 1;
-  }
-
-  min1 = 0;
-  min2 = 0;
-
-  yr = dtim1->yr;
-  while (yr < dtim2->yr) {
-    if (qleap(yr)) min2 += 527040L;
-    else min2 += 525600L;
-    yr++;
-  }
-
-  mo1 = dtim1->mo;
-  mo2 = dtim2->mo;
-  if (qleap(dtim1->yr)) {
-    min1 = min1+mnacul[mo1]+(dtim1->dy*1440L)+(dtim1->hr*60L)+dtim1->mn;
-  } else {
-    min1 = min1+mnacum[mo1]+(dtim1->dy*1440L)+(dtim1->hr*60L)+dtim1->mn;
-  }
-  if (qleap(dtim2->yr)) {
-    min2 = min2+mnacul[mo2]+(dtim2->dy*1440L)+(dtim2->hr*60L)+dtim2->mn;
-  } else {
-    min2 = min2+mnacum[mo2]+(dtim2->dy*1440L)+(dtim2->hr*60L)+dtim2->mn;
-  }
-  if (swap) return (min1-min2);
-  else return (min2-min1);
-}
+/*
+ *  Date/Time manipulation routines are moved into gacal.c.
+ *  "gacal.c" interacts with "caltime.c" to support more calendars.
+ */
 
 /* Test for leap year.  Rules are:
 
@@ -504,9 +259,7 @@ char monam[5];
     dtim->yr = val;
   }
 
-  i = mosiz[dtim->mo];
-  if (dtim->mo==2 && qleap(dtim->yr)) i = 29;
-  if (dtim->dy > i) {
+  if (invalid_date(dtim)) {
     gaprnt (0,"Syntax Error:  Invalid Date/Time value.\n");
     snprintf(pout,255,"  Day = %i -- greater than %i \n",dtim->dy,i);
     gaprnt (0,pout);
@@ -1556,29 +1309,26 @@ gaint i,j;
   *out = '\0';
 }
 
-/* Given a file name template and a dt structure, fill in to get the file name */
+int
+gafndt_impl(char *out, size_t outsize, const char *in,
+            struct dt *dtim, struct dt *dtimi,
+            gadouble *vals,
+            struct gachsub *pch1st,
+            struct gaens *ens1st, gaint t, gaint e, gaint *flag) {
+  struct gachsub *pchsub;
+  struct gaens *ens;
+  struct dt stim;
+  gaint len,iv,tdif,i,tused,eused,mo,doy,dys,hrs,mns;
+  size_t sz;
+  char *lastptr;
+  int rval = 0;
 
-char *gafndt (char *fn, struct dt *dtim, struct dt *dtimi, gadouble *vals,
-              struct gachsub *pch1st, struct gaens *ens1st, gaint t, gaint e, gaint *flag) {
-struct gachsub *pchsub;
-struct gaens *ens;
-struct dt stim;
-gaint len,olen,iv,tdif,i,tused,eused,mo,doy,dys,hrs,mns;
-char *fnout, *in, *out, *work, *in2, *out2;
-size_t sz;
-
+  lastptr = out + outsize - 1;  /* null */
+  lastptr -= 10;  /* mergin */
+  sz = 10; /* ad-hoc */
   tused = eused = 0;
-  olen = 0;
-  while (*(fn+olen)) olen++;
-  olen+=5;
-  sz = olen;
-  fnout = (char *)galloc(sz+1,"fnout");
-  if (fnout==NULL) return (NULL);
 
-  in = fn;
-  out = fnout;
-
-  while (*in) {
+  while (*in && out < lastptr) {
     pchsub = pch1st;
     ens = ens1st;
     /* handle template strings for initial time */
@@ -1872,25 +1622,12 @@ size_t sz;
     else if (*in=='%' && *(in+1)=='c' && *(in+2)=='h') {
       tused=1;
       while (pchsub) {
-        if (t>=pchsub->t1 && (pchsub->t2 == -99 || t<=pchsub->t2) ) {
-          len = wrdlen(pchsub->ch);    /* Reallocate output string */
-          olen += len;
-          sz = olen;
-          work = (char *)galloc(sz+1,"work");
-          if (work==NULL) {
-            gree(fnout,"f240");
-            return (NULL);
-          }
-          in2 = fnout;
-          out2 = work;
-          while (in2!=out) {
-            *out2 = *in2;
-            in2++; out2++;
-          }
-          gree(fnout,"f241");
-          fnout = work;
-          out = out2;
-          getwrd(out,pchsub->ch,len);
+        if (t >= pchsub->t1 && (pchsub->t2 == -99 || t <= pchsub->t2) ) {
+          len = wrdlen(pchsub->ch);
+          if (out + len > lastptr)
+              return -1;
+
+          getwrd(out, pchsub->ch, len);
           out += len;
           break;
         }
@@ -1900,38 +1637,20 @@ size_t sz;
     }
     /* ensemble name substitution */
     else if  (*in=='%' && *(in+1)=='e') {
+      if (ens == NULL)
+        return -1;
+
       eused=1;
-      if (ens == NULL) {
-        gree(fnout,"f242");
-        return (NULL);
-      } else {
-        /* advance through array of ensemble structures, till we reach ensemble 'e' */
-        i=1;
-        while (i!=e) { i++; ens++; }
-        len = strlen(ens->name);
-        if (len < 1) {
-          gree(fnout,"f243");
-          return (NULL);
-        }
-        olen += len;
-        sz = olen;
-        work = (char *)galloc(sz+1,"work2");     /* Reallocate output string */
-        if (work==NULL) {
-          gree(fnout,"f244");
-          return (NULL);
-        }
-        in2 = fnout;            /* copy the string we've got so far */
-        out2 = work;
-        while (in2!=out) {
-          *out2 = *in2;
-          in2++; out2++;
-        }
-        gree(fnout,"f245");
-        fnout = work;
-        out = out2;
-        getwrd(out,ens->name,len);
-        out += len;
-      }
+      /* advance through array of ensemble structures,
+         till we reach ensemble 'e' */
+      i=1;
+      while (i!=e) { i++; ens++; }
+      len = strlen(ens->name);
+      if (len < 1 || out + len > lastptr)
+        return -1;
+
+      getwrd(out, ens->name, len);
+      out += len;
       in+=2;
     }
     else {
@@ -1940,6 +1659,9 @@ size_t sz;
     }
   }
   *out = '\0';
+  if (*in || out >= lastptr)
+    rval = 1;
+
   if (eused==1 && tused==1) {
     *flag = 3;                       /* templating on E and T */
   }
@@ -1952,8 +1674,26 @@ size_t sz;
   else {
     *flag = 0;                       /* no templating */
   }
-  return (fnout);
+  return rval;
 }
+
+/* Given a file name template and a dt structure, fill in to get the file name */
+char *gafndt(char *fn, struct dt *dtim, struct dt *dtimi, gadouble *vals,
+             struct gachsub *pch1st, struct gaens *ens1st,
+             gaint t, gaint e, gaint *flag) {
+  char temp[4096];  /* XXX: sizeof(struct gafile:name) */
+  char *rval;
+
+  rval = gafndt_impl(temp, sizeof temp, fn,
+                     dtim, dtimi, vals, pch1st,
+                     ens1st, t, e, flag);
+  if (rval != 0) {
+    gaprnt(0, "too long pathname in template evaluation\n");
+    return NULL;
+  }
+  return strdup(temp);
+}
+
 
 /* Byte swap requested number of 4 byte elements */
 

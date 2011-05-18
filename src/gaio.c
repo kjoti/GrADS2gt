@@ -32,6 +32,9 @@
 #if USEHDF5 ==1
 #include "hdf5.h"
 #endif
+#if GTOOL3 == 1
+#include "gagt3.h"
+#endif
 
 /* global struct for warning level setting */
 extern struct gamfcmn mfcmn;
@@ -273,6 +276,14 @@ gaint gaggrd (struct gagrid *pgrid) {
       /* set h5-relevant variables in the gavar structure */
       pvr->h5vid = (gaint)vid;
     }
+  }
+#endif
+
+#if GTOOL3 == 1
+  if (pfi->gthist) {
+    for (i = 0; i < sz; i++)
+      gru[i] = 1;
+    return gaggt3(pgr, gr, d);
   }
 #endif
 

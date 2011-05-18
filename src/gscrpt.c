@@ -21,8 +21,121 @@
 #include "grads.h"
 #include "gs.h"
 
+#include <ctype.h>
+#include <limits.h>
+#include <stdio.h>
+#include <unistd.h>
+#define PATHSEP '/'
+
 static char *rcdef = "rc              ";
 static char *redef = "result          ";
+
+
+char *
+get_fullpath2(char *out, size_t size, const char *path)
+{
+    char buf[PATH_MAX];
+    size_t len;
+
+    while (isspace(*path))
+        path++;
+
+    if (path[0] == '/')
+        len = snprintf(out, size, path);
+    else {
+        if (getcwd(buf, sizeof buf) == NULL)
+            return NULL;
+
+        len = snprintf(out, size, "%s/%s", buf, path);
+    }
+
+    return len >= size ? NULL : out;
+}
+
+
+/*
+ *  another dirname()
+ */
+char *
+dirname2(char *out, size_t size, const char *path)
+{
+    const char *tail;
+
+    if (out == NULL || path == NULL)
+        return NULL;
+
+    tail = path + strlen(path) - 1;
+
+    while (tail > path) {
+        if (*tail == PATHSEP && *(tail - 1) != PATHSEP)
+            break;
+        tail--;
+    }
+
+    if (tail > path + size - 1)
+        return NULL; /* not enough spece */
+
+    if (tail == path) {
+        out[0] = (*tail != PATHSEP) ? '.' : '/';
+        out[1] = '\0';
+    } else {
+        memcpy(out, path, tail - path);
+        out[tail - path] = '\0';
+    }
+    return out;
+}
+
+
+char *
+basename_ptr(const char *path)
+{
+    const char *p;
+
+    p = strrchr(path, PATHSEP);
+    return p != NULL ? (char *)p + 1 : (char *)path;
+}
+
+
+static struct gsvar *
+new_var(const char *name, const char *value)
+{
+    struct gsvar *var;
+    int i, len;
+
+    if ((var = (struct gsvar *)malloc(sizeof(struct gsvar))) == NULL)
+        return NULL;
+
+    var->forw = NULL;
+
+    len = strlen(name);
+    for (i = 0; i < 16; i++)
+        var->name[i] = (i < len) ? name[i] : ' ';
+
+    var->strng = strdup(value);
+    return var;
+}
+
+
+/* set builtin variables */
+int
+builtin_vars(struct gscmn *pcmn)
+{
+    struct gsvar *temp[2];
+    char buf[PATH_MAX];
+    char buf2[PATH_MAX];
+
+
+    get_fullpath2(buf, sizeof buf, pcmn->fname);
+
+    temp[0] = new_var("_SCRFILE", basename_ptr(pcmn->fname));
+    temp[1] = new_var("_SCRDIR",  dirname2(buf2, sizeof buf2, buf));
+
+    temp[0]->forw = temp[1];
+
+    pcmn->gvar = temp[0];
+    return 0;
+}
+
 
 /*  Execute a script, from one or more files.
     Beware: various levels of recursion are used.     */
@@ -71,6 +184,9 @@ gaint len,rc,i;
   pcmn->gsfflg = 0;   /* No dynamic functions by default.
                          The gsfallow function controls this. */
   res = NULL;
+
+  /* set builtin global variables */
+  builtin_vars(pcmn);
 
   /* Open, read, and scan the script file. */
 
