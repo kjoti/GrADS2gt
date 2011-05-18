@@ -10,7 +10,7 @@
 
 # Targets that will built by "make all"
 bin_PROGRAMS	       = grads \
-		         gribmap gxeps gxps stnmap wgrib gribscan bufrscan \
+			 gribmap gxeps gxps stnmap wgrib gribscan bufrscan \
 			 $(extra_utils)
 
 # Targets that will not always be built
@@ -32,7 +32,7 @@ supp_lib_dir		= $(SUPPLIBS)/lib
 LDADD			= -L$(supp_lib_dir)
 INCLUDES		= $(readline_inc) $(printim_inc) $(grib2_inc) $(gui_inc) $(nc_inc) \
 			  $(hdf_inc) $(hdf5_inc) $(geotiff_inc) $(shp_inc) $(gadap_inc) \
-                          $(X_CFLAGS) $(XAW_CFLAGS) $(GD_CFLAGS) $(HDF4_CFLAGS)
+			  $(X_CFLAGS) $(XAW_CFLAGS) $(GD_CFLAGS) $(HDF4_CFLAGS)
 
 # Settings used for all GrADS binaries
 common_ldadd            = $(LDADD) $(X_LIBS) $(host_ldadd) -lX11
@@ -52,7 +52,9 @@ hdr_x11		    = gx.h bitmaps.h
 hdr_sdf             = gasdf.h gasdf_std_time.h
 hdr_gui		    = gagui.h
 hdr_png             = mtables.c
-noinst_HEADERS	    = $(hdr_core) $(hdr_x11) $(hdr_sdf) $(hdr_png) $(hdr_gui) $(hdr_bufr)
+hdr_gtool3          = gagt3.h
+noinst_HEADERS	    = $(hdr_core) $(hdr_x11) $(hdr_sdf) $(hdr_png) \
+		      $(hdr_gui) $(hdr_bufr) $(hdr_gtool3)
 
 # Get rid of buildinfo.h on "make distclean"
 DISTCLEANFILES	       = buildinfo.h
@@ -72,6 +74,9 @@ if USEGUI
 src_gui             = gagui.c gsgui.c
 endif
 
+if GTOOL3
+src_gtool3          = gagt3.c
+endif
 
 ##############################################################
 #
@@ -82,7 +87,8 @@ grads_SOURCES          = grads.c gxsubs.c gxmeta.c gxchpl.c gxcntr.c gxstrm.c \
 			 gxwmap.c gxshad.c gaexpr.c gafunc.c gautil.c gagx.c \
 			 gscrpt.c gamach.c bufrstn.c gabufr.c gabufrtbl.c \
 			 gxX.c gxdxwd.c galloc.c $(src_gui) $(src_gadap) \
-                         gaddes.c gaio.c gacfg.c gauser.c gasdf.c gatxt.c
+			 gaddes.c gaio.c gacfg.c gauser.c gasdf.c gatxt.c \
+			 gacal.c caltime.c $(src_gtool3)
 
 # Sources that will not always be compiled
 # Since gradsc is the only GrADS binary that is not conditionally compiled,
@@ -94,7 +100,8 @@ EXTRA_grads_SOURCES    = gagmap.c gagui.c gsgui.c dodstn.c
 # libraries needed
 grads_LDADD	       = $(common_ldadd) $(readline_libs) $(printim_libs) \
 			 $(grib2_libs) $(hdf_libs) $(hdf5_libs) $(nc_libs) \
-			 $(gui_libs) $(geotiff_libs) $(shp_libs) $(dap_libs)
+			 $(gui_libs) $(geotiff_libs) $(shp_libs) $(dap_libs) \
+			 $(gtool3_libs)
 
 # Custom compilation for object files specific to this GrADS binary
 COMPILE_C = $(COMPILE)
@@ -140,14 +147,18 @@ gxmeta.sa.o: $(srcdir)/gxmeta.c
 # stnmap
 #
 stnmap_SOURCES	       = stnmap.c gamach.c galloc.c
-stnmap_LDADD	       = gaddes.sa.o gautil.sa.o gatxt.o $(LDADD) $(readline_libs)
+stnmap_LDADD	       = gaddes.sa.o gautil.sa.o gatxt.o \
+			 gacal.o caltime.o \
+			 $(LDADD) $(readline_libs)
 
 ##############################################################
 #
 # gribmap
 #
 gribmap_SOURCES	       = gribmap.c gagmap.c gamach.c galloc.c
-gribmap_LDADD	       = gaddes.sa.o gautil.sa.o gatxt.o $(LDADD) $(readline_libs) $(grib2_libs)
+gribmap_LDADD	       = gaddes.sa.o gautil.sa.o gatxt.o \
+			 gacal.o caltime.o \
+			 $(LDADD) $(readline_libs) $(grib2_libs)
 
 ##############################################################
 #
@@ -174,7 +185,8 @@ gxtran_LDADD	       = gxmeta.sa.o $(LDADD) $(X_LIBS) $(printim_libs) -lX11
 # gribscan
 #
 gribscan_SOURCES       = gribscan.c gamach.c galloc.c
-gribscan_LDADD	       = gautil.sa.o gatxt.o $(LDADD) $(readline_libs)
+gribscan_LDADD	       = gautil.sa.o gatxt.o gacal.o caltime.o \
+			 $(LDADD) $(readline_libs)
 
 ##############################################################
 #
