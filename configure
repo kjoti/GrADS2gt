@@ -705,6 +705,7 @@ X_EXTRA_LIBS
 GREP
 EGREP
 SUPPLIBS
+GRADS_DATADIR
 PKG_CONFIG
 XAW7_CFLAGS
 XAW7_LIBS
@@ -790,6 +791,7 @@ CCC
 XMKMF
 CPP
 SUPPLIBS
+GRADS_DATADIR
 PKG_CONFIG
 XAW7_CFLAGS
 XAW7_LIBS
@@ -1431,6 +1433,8 @@ Some influential environment variables:
   XMKMF       Path to xmkmf, Makefile generator for X Window System
   CPP         C preprocessor
   SUPPLIBS    Custom path (must be absolute) to a GrADS supplib distribution
+  GRADS_DATADIR
+              Data directory for fonts and maps
   PKG_CONFIG  path to pkg-config utility
   XAW7_CFLAGS C compiler flags for XAW7, overriding pkg-config
   XAW7_LIBS   linker flags for XAW7, overriding pkg-config
@@ -6476,6 +6480,100 @@ fi
 done
 
 
+for ac_func in strlcpy
+do
+as_ac_var=`echo "ac_cv_func_$ac_func" | $as_tr_sh`
+{ echo "$as_me:$LINENO: checking for $ac_func" >&5
+echo $ECHO_N "checking for $ac_func... $ECHO_C" >&6; }
+if { as_var=$as_ac_var; eval "test \"\${$as_var+set}\" = set"; }; then
+  echo $ECHO_N "(cached) $ECHO_C" >&6
+else
+  cat >conftest.$ac_ext <<_ACEOF
+/* confdefs.h.  */
+_ACEOF
+cat confdefs.h >>conftest.$ac_ext
+cat >>conftest.$ac_ext <<_ACEOF
+/* end confdefs.h.  */
+/* Define $ac_func to an innocuous variant, in case <limits.h> declares $ac_func.
+   For example, HP-UX 11i <limits.h> declares gettimeofday.  */
+#define $ac_func innocuous_$ac_func
+
+/* System header to define __stub macros and hopefully few prototypes,
+    which can conflict with char $ac_func (); below.
+    Prefer <limits.h> to <assert.h> if __STDC__ is defined, since
+    <limits.h> exists even on freestanding compilers.  */
+
+#ifdef __STDC__
+# include <limits.h>
+#else
+# include <assert.h>
+#endif
+
+#undef $ac_func
+
+/* Override any GCC internal prototype to avoid an error.
+   Use char because int might match the return type of a GCC
+   builtin and then its argument prototype would still apply.  */
+#ifdef __cplusplus
+extern "C"
+#endif
+char $ac_func ();
+/* The GNU C library defines this for functions which it implements
+    to always fail with ENOSYS.  Some functions are actually named
+    something starting with __ and the normal name is an alias.  */
+#if defined __stub_$ac_func || defined __stub___$ac_func
+choke me
+#endif
+
+int
+main ()
+{
+return $ac_func ();
+  ;
+  return 0;
+}
+_ACEOF
+rm -f conftest.$ac_objext conftest$ac_exeext
+if { (ac_try="$ac_link"
+case "(($ac_try" in
+  *\"* | *\`* | *\\*) ac_try_echo=\$ac_try;;
+  *) ac_try_echo=$ac_try;;
+esac
+eval "echo \"\$as_me:$LINENO: $ac_try_echo\"") >&5
+  (eval "$ac_link") 2>conftest.er1
+  ac_status=$?
+  grep -v '^ *+' conftest.er1 >conftest.err
+  rm -f conftest.er1
+  cat conftest.err >&5
+  echo "$as_me:$LINENO: \$? = $ac_status" >&5
+  (exit $ac_status); } && {
+	 test -z "$ac_c_werror_flag" ||
+	 test ! -s conftest.err
+       } && test -s conftest$ac_exeext &&
+       $as_test_x conftest$ac_exeext; then
+  eval "$as_ac_var=yes"
+else
+  echo "$as_me: failed program was:" >&5
+sed 's/^/| /' conftest.$ac_ext >&5
+
+	eval "$as_ac_var=no"
+fi
+
+rm -f core conftest.err conftest.$ac_objext conftest_ipa8_conftest.oo \
+      conftest$ac_exeext conftest.$ac_ext
+fi
+ac_res=`eval echo '${'$as_ac_var'}'`
+	       { echo "$as_me:$LINENO: result: $ac_res" >&5
+echo "${ECHO_T}$ac_res" >&6; }
+if test `eval echo '${'$as_ac_var'}'` = yes; then
+  cat >>confdefs.h <<_ACEOF
+#define `echo "HAVE_$ac_func" | $as_tr_cpp` 1
+_ACEOF
+
+fi
+done
+
+
 { echo "$as_me:$LINENO: checking for off_t" >&5
 echo $ECHO_N "checking for off_t... $ECHO_C" >&6; }
 if test "${ac_cv_type_off_t+set}" = set; then
@@ -7086,7 +7184,9 @@ fi
 
 
 
-
+if test -z "$GRADS_DATADIR"; then
+    GRADS_DATADIR="/usr/local/share/grads"
+fi
 
 # ----------------------------------------------------
 # Check for optional feature support
@@ -21912,6 +22012,12 @@ echo
 # Send test results to makefile and config.h
 # ----------------------------------------------------
 
+
+cat >>confdefs.h <<_ACEOF
+#define GRADS_DATADIR "$GRADS_DATADIR"
+_ACEOF
+
+
 # Some non-configuration-dependent GrADS macros
 
 cat >>confdefs.h <<\_ACEOF
@@ -22900,13 +23006,13 @@ X_EXTRA_LIBS!$X_EXTRA_LIBS$ac_delim
 GREP!$GREP$ac_delim
 EGREP!$EGREP$ac_delim
 SUPPLIBS!$SUPPLIBS$ac_delim
+GRADS_DATADIR!$GRADS_DATADIR$ac_delim
 PKG_CONFIG!$PKG_CONFIG$ac_delim
 XAW7_CFLAGS!$XAW7_CFLAGS$ac_delim
 XAW7_LIBS!$XAW7_LIBS$ac_delim
 XAW_LIBS!$XAW_LIBS$ac_delim
 XAW_XLIBS!$XAW_XLIBS$ac_delim
 XAW_CFLAGS!$XAW_CFLAGS$ac_delim
-GA_LIBSX_LIBS!$GA_LIBSX_LIBS$ac_delim
 _ACEOF
 
   if test `sed -n "s/.*$ac_delim\$/X/p" conf$$subs.sed | grep -c X` = 97; then
@@ -22948,6 +23054,7 @@ _ACEOF
 ac_delim='%!_!# '
 for ac_last_try in false false false false false :; do
   cat >conf$$subs.sed <<_ACEOF
+GA_LIBSX_LIBS!$GA_LIBSX_LIBS$ac_delim
 grads_xlibs!$grads_xlibs$ac_delim
 gui_inc!$gui_inc$ac_delim
 gui_libs!$gui_libs$ac_delim
@@ -23013,7 +23120,7 @@ LIBOBJS!$LIBOBJS$ac_delim
 LTLIBOBJS!$LTLIBOBJS$ac_delim
 _ACEOF
 
-  if test `sed -n "s/.*$ac_delim\$/X/p" conf$$subs.sed | grep -c X` = 63; then
+  if test `sed -n "s/.*$ac_delim\$/X/p" conf$$subs.sed | grep -c X` = 64; then
     break
   elif $ac_last_try; then
     { { echo "$as_me:$LINENO: error: could not make $CONFIG_STATUS" >&5
