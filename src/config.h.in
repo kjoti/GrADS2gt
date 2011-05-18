@@ -12,6 +12,9 @@
 /* Machine is a Cray */
 #undef GRADS_CRAY
 
+/* GrADS data dir */
+#undef GRADS_DATADIR
+
 /* Obsolete feature description string */
 #undef GRADS_DESC
 
@@ -89,6 +92,9 @@
 
 /* Define to 1 if you have the <string.h> header file. */
 #undef HAVE_STRING_H
+
+/* Define to 1 if you have the `strlcpy' function. */
+#undef HAVE_STRLCPY
 
 /* Define to 1 if you have the `strtod' function. */
 #undef HAVE_STRTOD

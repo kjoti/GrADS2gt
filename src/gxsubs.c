@@ -33,7 +33,7 @@ void gree();
 /* The following variables are local to this file, and are used by
    all the routines in the file.    */
 
-static char *datad = "/usr/local/share/grads";
+static char *datad = GRADS_DATADIR;
 static gadouble xsize, ysize;                /* Virtual size       */
 static gadouble rxsize, rysize;              /* Real size          */
 static gaint lwflg;                          /* Reduce lw due vpage*/

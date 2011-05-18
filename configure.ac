@@ -202,6 +202,7 @@ dnl AC_CHECK_FUNCS(strdup strstr strtod strtol)
 
 dnl In this case we do have an alternative - valprs()
 AC_CHECK_FUNCS(strtod)
+AC_CHECK_FUNCS(strlcpy)
 
 dnl Check for and set up large file support via fseeko()
 AC_TYPE_OFF_T
@@ -251,8 +252,11 @@ fi
 
 AC_ARG_VAR(SUPPLIBS,
            [Custom path (must be absolute) to a GrADS supplib distribution])
-
-
+AC_ARG_VAR(GRADS_DATADIR,
+           [Data directory for fonts and maps])
+if test -z "$GRADS_DATADIR"; then
+    GRADS_DATADIR="/usr/local/share/grads"
+fi
 
 # ----------------------------------------------------
 # Check for optional feature support
@@ -905,6 +909,8 @@ echo
 #  ----------------------------------------------------
 # Send test results to makefile and config.h
 # ----------------------------------------------------
+
+AC_DEFINE_UNQUOTED(GRADS_DATADIR, "$GRADS_DATADIR", [GrADS data dir])
 
 # Some non-configuration-dependent GrADS macros
 AC_DEFINE(GRADS_VERSION, "AC_PACKAGE_VERSION", [GrADS version])
