@@ -433,6 +433,7 @@ setup_dim(struct gafile *pfi, int id, int gtaxid)
 }
 
 
+#if 0
 static int
 clipint(int val, int low, int up, int def, const char *msg)
 {
@@ -442,6 +443,7 @@ clipint(int val, int low, int up, int def, const char *msg)
     }
     return val;
 }
+#endif
 
 
 static int
@@ -661,11 +663,59 @@ set_missing_value(struct gafile *pfi, double miss)
 {
     pfi->undef = miss;
 
-    if (1) {
-        pfi->ulow = fabs(pfi->undef / EPSILON);
-        pfi->uhi = pfi->undef + pfi->ulow;
-        pfi->ulow = pfi->undef - pfi->ulow;
-    }
+    pfi->ulow = fabs(pfi->undef / EPSILON);
+    pfi->uhi = pfi->undef + pfi->ulow;
+    pfi->ulow = pfi->undef - pfi->ulow;
+}
+
+
+static void
+set_ensemble(struct gaens *ens, const char *name,
+             int len, const gadouble *vals)
+{
+    int i;
+
+    strlcpy(ens->name, name, 16);
+    ens->length = len;
+    ens->gt = 1;
+    gr2t(vals, 1, &ens->tinit);
+
+    for (i = 0; i < 4; i++)
+        ens->grbcode[i] = -999;
+}
+
+
+
+static void
+set_var_default(struct gavar *pvar)
+{
+    int i;
+
+    pvar->varnm[0] = '\0';
+    pvar->abbrv[0] = '\0';
+    pvar->longnm[0] = '\0';
+    for (i = 0; i < 16; i++)
+        pvar->units[i] = -999;
+    pvar->offset   = 0;         /* unused in gtool3 */
+    pvar->recoff   = 0;         /* unused in gtool3 */
+    pvar->ncvid    = -999;
+    pvar->sdvid    = -999;
+    pvar->h5vid    = -999;
+    pvar->levels   = 0;
+    pvar->dfrm     = 0;
+    pvar->var_t    = 0;
+    pvar->scale    = 1.;
+    pvar->add      = 0.;
+    pvar->vecpair  = -999;      /* version 1.9 */
+    pvar->isu      = 0;         /* version 1.9 */
+    pvar->isdvar   = 0;         /* version 2.0 */
+    pvar->nvardims = 0;         /* version 2.0 */
+#if USEHDF5==1
+    pvar->h5varflg = -999;
+    pvar->dataspace = -999;
+#endif
+    /* pvar->var_z    = 1; */   /* removed in 2.0 */
+    /* pvar->y_x      = 0; */   /* removed in 2.0 */
 }
 
 
@@ -685,24 +735,7 @@ get_pvar(const GT3_Varbuf *var, const char *alias)
     /*
      * default settings
      */
-    pvar->varnm[0] = '\0';
-    pvar->abbrv[0] = '\0';
-    pvar->units[0] = 99;
-    pvar->units[1] = -999;
-    pvar->units[2] = -999;
-    pvar->units[3] = -999;
-    pvar->offset   = 0;         /* unused in gtool3 */
-    pvar->recoff   = 0;         /* unused in gtool3 */
-    pvar->levels   = 0;
-    pvar->dfrm     = 0;
-    pvar->var_t    = 0;
-    /* pvar->var_z    = 1; */   /* removed in 2.0 */
-    /* pvar->y_x      = 0; */   /* removed in 2.0 */
-
-    /*pvar->longnm   = NULL; */     /* version 1.9 */
-    pvar->longnm[0] = '\0';     /* version 2.0 */
-    pvar->vecpair  = -999;      /* version 1.9 */
-    pvar->isu      = 0;         /* version 1.9 */
+    set_var_default(pvar);
 
     /*
      * variable description
@@ -737,8 +770,18 @@ get_pvar(const GT3_Varbuf *var, const char *alias)
 }
 
 
+static void
+set_mask(char *mask, const FLOAT *data, FLOAT miss, size_t size)
+{
+    int i;
+
+    for (i = 0; i < size; i++)
+        mask[i] = (data[i] == miss) ? 0 : 1;
+}
+
+
 static int
-gaggt3_xy(struct gagrid *pgr, FLOAT *gr, int zpos)
+gaggt3_xy(struct gagrid *pgr, FLOAT *gr, char *mask, int zpos)
 {
     struct gafile *pfi = pgr->pfile;
     GT3_Varbuf *var = pfi->gtvar;
@@ -746,7 +789,7 @@ gaggt3_xy(struct gagrid *pgr, FLOAT *gr, int zpos)
     int cyc_off = 0;
     float  *fptr = (float *)var->data;
     double *dptr = (double *)var->data;
-
+    FLOAT *start;
 
     if (GT3_readVarZ(var, zpos) < 0) {
         my_gaprnt(0, "%s\n", gt3strerror());
@@ -760,6 +803,7 @@ gaggt3_xy(struct gagrid *pgr, FLOAT *gr, int zpos)
         && pgr->jsiz == var->dimlen[1]) {
 
         GT3_copyVarDouble(gr, pgr->isiz * pgr->jsiz, var, 0, 1);
+        set_mask(mask, gr, var->miss, pgr->isiz * pgr->jsiz);
         return 0;
     }
 
@@ -771,6 +815,7 @@ gaggt3_xy(struct gagrid *pgr, FLOAT *gr, int zpos)
     /*
      * for general case (i-dim can be wrapped).
      */
+    start = gr;
     for (jj = 0; jj < pgr->jsiz; jj++) {
         j = pgr->dimmin[1] + jj - 1;
 
@@ -802,7 +847,7 @@ gaggt3_xy(struct gagrid *pgr, FLOAT *gr, int zpos)
                     : fptr[i + var->dimlen[0] * j];
             }
     }
-
+    set_mask(mask, start, var->miss, gr - start);
     return 0;
 }
 
@@ -990,7 +1035,7 @@ switch_active_var(struct gafile *pfi, const struct gavar *pvar)
  * d[0..4]: X, Y, Z, T, E
  */
 int
-gaggt3(struct gagrid *pgr, FLOAT *gr, const int d[])
+gaggt3(struct gagrid *pgr, FLOAT *gr, char *mask, const int d[])
 {
     struct gafile *pfi = pgr->pfile;
     int i, ii, jj, pos[4];
@@ -1002,11 +1047,11 @@ gaggt3(struct gagrid *pgr, FLOAT *gr, const int d[])
     /*
      *  XY plane
      */
-    if (pgr->idim == 0 && pgr->jdim == 1) {
+    if (pgr->idim == XINDEX && pgr->jdim == YINDEX) {
         if (seek_time(pfi, d[TINDEX] - 1) != 0)
             return 1;
 
-        return gaggt3_xy(pgr, gr, d[ZINDEX] - 1);
+        return gaggt3_xy(pgr, gr, mask, d[ZINDEX] - 1);
     }
 
     /*
@@ -1044,6 +1089,7 @@ gaggt3(struct gagrid *pgr, FLOAT *gr, const int d[])
                     return 1;
 
             *gr++ = gaggt3_value(pgr, pos);
+            *mask++ = (*(gr - 1) == pfi->undef) ? 0 : 1;
         }
         if (pgr->jdim >= 0)
             pos[pgr->jdim]++;
@@ -1193,9 +1239,13 @@ gt3ddes(struct gafile *pfi, const char *alias)
 
     /*
      * [EDEF]
+     * A gtool3 file cannot have ensemble dimension.
      */
     pfi->dnum[EINDEX] = 1;
     my_deflin(pfi, EINDEX, 1., 1.);
+    if ((pfi->ens1 = malloc(sizeof(struct gaens))) == NULL)
+        return 1;
+    set_ensemble(pfi->ens1, "1", pfi->dnum[TINDEX], pfi->grvals[TINDEX]);
 
     /*
      * etc...
@@ -1378,7 +1428,7 @@ gagt3open(const char *arg, struct gacmn *pcm)
         frepfi(pfi, 0);
         return 1;
     }
-    if (tmpl[0] != '\0' && ntime > pfi->dnum[3]
+    if (tmpl[0] != '\0' && ntime > pfi->dnum[TINDEX]
         && gt3ddes_tmpl(pfi, tmpl, ntime) != 0) {
         frepfi(pfi, 0);
         return 1;

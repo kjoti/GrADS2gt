@@ -14,7 +14,7 @@ typedef gadouble FLOAT;
 typedef float FLOAT;
 #endif
 
-int gaggt3(struct gagrid *pgr, FLOAT *gr, const int d[]);
+int gaggt3(struct gagrid *pgr, FLOAT *gr, char *mask, const int d[]);
 int gagt3open(const char *arg, struct gacmn *pcm);
 int gagt3vopen(const char *arg, struct gacmn *pcm);
 int gagt3options(const char *arg, struct gacmn *pcm);

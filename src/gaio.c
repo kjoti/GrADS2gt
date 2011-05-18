@@ -280,11 +280,8 @@ gaint gaggrd (struct gagrid *pgrid) {
 #endif
 
 #if GTOOL3 == 1
-  if (pfi->gthist) {
-    for (i = 0; i < sz; i++)
-      gru[i] = 1;
-    return gaggt3(pgr, gr, d);
-  }
+  if (pfi->gthist)
+    return gaggt3(pgr, gr, gru, d);
 #endif
 
   /* Handle case where X varies. */
