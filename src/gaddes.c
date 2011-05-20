@@ -2970,8 +2970,8 @@ gaint i;
     GT3_freeVarbuf(pfi->gtvar);
     GT3_close(pfi->gthist);
     for (i = 1; i < pfi->vnum; i++)
-      free(pfi->gtvlist[i]); /* XXX gtvpath[0]: not 'malloc'ed */
-    free(pfi->gtvlist);
+      gree(pfi->gtvlist[i]); /* XXX gtvpath[0]: not 'malloc'ed */
+    gree(pfi->gtvlist);
   }
 #endif
   gree(pfi,"f87");

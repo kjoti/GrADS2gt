@@ -19,6 +19,9 @@
 #include "caltime.h"
 #include "debug.h"
 
+/* XXX: use galloc. */
+#define malloc(siz) galloc(siz, "gagt3")
+
 #define XINDEX 0
 #define YINDEX 1
 #define ZINDEX 2
@@ -53,18 +56,23 @@ struct opt_tdef {
 static int opt_tdef_flag;
 static struct opt_tdef opt_tdef;
 
+/* GTOPTION: edef */
+static int opt_edef_num = 1;    /* the number of ensembles */
+
 /*
  * Associated actions table.
  */
 static int opt_calendar(const char *);
 static int opt_tdefine(const char *);
+static int opt_edefine(const char *);
 struct gtoptions {
     char *name;
     int (*action)(const char *args);
 };
 static struct gtoptions opttab[] = {
     { "calendar", opt_calendar },
-    { "tdef", opt_tdefine }
+    { "tdef", opt_tdefine },
+    { "edef", opt_edefine }
 };
 
 
@@ -259,6 +267,24 @@ opt_tdefine(const char *args)
 
 
 /*
+ * "edef" option via gtoptions.
+ */
+static int
+opt_edefine(const char *args)
+{
+    char *ch;
+    int value;
+
+    ch = nxtwrd((char *)args);
+    ch = intprs(ch, &value);
+    if (value < 1)
+        value = 1;
+    opt_edef_num = value;
+    return 0;
+}
+
+
+/*
  * another version of deflin() @ gaddes.c
  */
 static int
@@ -363,6 +389,12 @@ is_shifted_axis(const GT3_Varbuf *var, int id, int gtaxid)
 }
 
 
+/*
+ * id: id of index used in GrADS.
+ * gtaxid: id of index used in GTOOL3.
+ *
+ * NOTE: gtaxid is not always identical to id.
+ */
 static int
 setup_dim(struct gafile *pfi, int id, int gtaxid)
 {
@@ -670,13 +702,13 @@ set_missing_value(struct gafile *pfi, double miss)
 
 
 static void
-set_ensemble(struct gaens *ens, const char *name,
-             int len, const gadouble *vals)
+set_ensemble(struct gaens *ens, int num,
+             int time_len, const gadouble *vals)
 {
     int i;
 
-    strlcpy(ens->name, name, 16);
-    ens->length = len;
+    snprintf(ens->name, 15, "%d", num);
+    ens->length = time_len;
     ens->gt = 1;
     gr2t(vals, 1, &ens->tinit);
 
@@ -891,7 +923,7 @@ gaggt3_value(struct gagrid *pgr, const int d[])
 
 
 static void
-expand_tmplat(char *path, const struct gafile *pfi, int tidx)
+expand_tmplat(char *path, const struct gafile *pfi, int tidx, int eidx)
 {
     struct dt dtim, dtimi;
     gaint flag;
@@ -904,7 +936,7 @@ expand_tmplat(char *path, const struct gafile *pfi, int tidx)
     gafndt_impl(path, TMPL_SIZE,
                 pfi->gtvlist[pfi->gtcurr],
                 &dtim, &dtimi, pfi->abvals[3], NULL,
-                NULL, 1, 1, &flag);
+                pfi->ens1, 1, eidx + 1, &flag);
 }
 
 
@@ -917,25 +949,32 @@ cmp_vardim(const GT3_Varbuf *var1, const GT3_Varbuf *var2)
 }
 
 
-
-/* XXX "tidx" is starting with zero (GrADS tindex - 1)  */
+/*
+ * XXX: 'tindx' and 'eidx' are starting with zero.
+ *
+ */
 static int
-seek_time(struct gafile *pfi, int tidx)
+seek_time(struct gafile *pfi, int tidx, int eidx)
 {
     if (tidx < 0 || tidx >= pfi->dnum[TINDEX]) {
         debug1("t=%d: out of range", tidx);
+        return -1;
+    }
+    if (eidx < 0 || eidx >= pfi->dnum[TINDEX]) {
+        debug1("e=%d: out of range", eidx);
         return -1;
     }
 
     /*
      * template support.
      */
-    if (pfi->tmplat && pfi->fnumc != pfi->fnums[tidx]) {
+    if (pfi->tmplat
+        && (pfi->fnumc != pfi->fnums[tidx] || pfi->fnume != eidx)) {
         char newpath[NAME_SIZE];
         GT3_File *newhist;
         GT3_Varbuf *newvar;
 
-        expand_tmplat(newpath, pfi, tidx);
+        expand_tmplat(newpath, pfi, tidx, eidx);
 
         if ((newhist = GT3_openHistFile(newpath)) == NULL
             || (newvar = GT3_getVarbuf(newhist)) == NULL) {
@@ -972,6 +1011,7 @@ seek_time(struct gafile *pfi, int tidx)
         set_missing_value(pfi, pfi->gtvar->miss);
 
         pfi->fnumc = pfi->fnums[tidx];
+        pfi->fnume = eidx;
     }
 
     if (pfi->tmplat)
@@ -1021,6 +1061,7 @@ switch_active_var(struct gafile *pfi, const struct gavar *pvar)
         pfi->gthist = NULL;
         pfi->gtvar  = NULL;
         pfi->fnumc = -1;
+        pfi->fnume = -1;
     }
 
     /* all passed */
@@ -1038,26 +1079,24 @@ int
 gaggt3(struct gagrid *pgr, FLOAT *gr, char *mask, const int d[])
 {
     struct gafile *pfi = pgr->pfile;
-    int i, ii, jj, pos[4];
+    int i, ii, jj, pos[5];
     int width, wrapping, cyc_off;
 
     if (switch_active_var(pfi, pgr->pvar) != 0)
         return 1;
+    if (seek_time(pfi, d[TINDEX] - 1, d[EINDEX] - 1) != 0)
+        return 1;
 
     /*
-     *  XY plane
+     * XY plane
      */
-    if (pgr->idim == XINDEX && pgr->jdim == YINDEX) {
-        if (seek_time(pfi, d[TINDEX] - 1) != 0)
-            return 1;
-
+    if (pgr->idim == XINDEX && pgr->jdim == YINDEX)
         return gaggt3_xy(pgr, gr, mask, d[ZINDEX] - 1);
-    }
 
     /*
-     *  generic case
+     * generic case
      */
-    for (i = 0; i < 4; i++)
+    for (i = 0; i < 5; i++)
         pos[i] = d[i] - 1;
 
     wrapping = pgr->idim == XINDEX && pfi->wrap;
@@ -1069,14 +1108,9 @@ gaggt3(struct gagrid *pgr, FLOAT *gr, char *mask, const int d[])
 
     assert(cyc_off >= 0);
 
-    if (pgr->idim != TINDEX && pgr->jdim != TINDEX)
-        /* if TIME does not vary, do seek_time once. */
-        if (seek_time(pfi, pos[TINDEX]) != 0)
-            return 1;
-
     for (jj = 0; jj < pgr->jsiz; jj++) {
-        if (pgr->jdim == TINDEX)
-            if (seek_time(pfi, pos[TINDEX]) != 0)
+        if (pgr->jdim == TINDEX || pgr->jdim == EINDEX)
+            if (seek_time(pfi, pos[TINDEX], pos[EINDEX]) != 0)
                 return 1;
 
         for (ii = 0; ii < pgr->isiz; ii++) {
@@ -1084,12 +1118,13 @@ gaggt3(struct gagrid *pgr, FLOAT *gr, char *mask, const int d[])
                 ? (cyc_off + d[0] - 1 + ii) % width
                 : d[pgr->idim] - 1 + ii;
 
-            if (pgr->idim == TINDEX)
-                if (seek_time(pfi, pos[TINDEX]) != 0)
+            if (pgr->idim == TINDEX || pgr->idim == EINDEX)
+                if (seek_time(pfi, pos[TINDEX], pos[EINDEX]) != 0)
                     return 1;
 
-            *gr++ = gaggt3_value(pgr, pos);
-            *mask++ = (*(gr - 1) == pfi->undef) ? 0 : 1;
+            *gr = gaggt3_value(pgr, pos);
+            *mask++ = (*gr  == pfi->undef) ? 0 : 1;
+            gr++;
         }
         if (pgr->jdim >= 0)
             pos[pgr->jdim]++;
@@ -1106,7 +1141,7 @@ static int
 gt3ddes(struct gafile *pfi, const char *alias)
 {
     struct gavar *pvar;
-    int rc, gtaxis;
+    int i, rc, gtaxis;
 
     if ((pfi->gthist = GT3_openHistFile(pfi->name)) == NULL
         || (pfi->gtvar = GT3_getVarbuf(pfi->gthist)) == NULL) {
@@ -1238,14 +1273,21 @@ gt3ddes(struct gafile *pfi, const char *alias)
     }
 
     /*
-     * [EDEF]
-     * A gtool3 file cannot have ensemble dimension.
+     * [EDEF] ...ensembles.
      */
-    pfi->dnum[EINDEX] = 1;
+    pfi->dnum[EINDEX] = opt_edef_num;
     my_deflin(pfi, EINDEX, 1., 1.);
-    if ((pfi->ens1 = malloc(sizeof(struct gaens))) == NULL)
+    if ((pfi->ens1 = malloc(sizeof(struct gaens)
+                            * pfi->dnum[EINDEX])) == NULL)
         return 1;
-    set_ensemble(pfi->ens1, "1", pfi->dnum[TINDEX], pfi->grvals[TINDEX]);
+    for (i = 0; i < pfi->dnum[EINDEX]; i++)
+        set_ensemble(pfi->ens1 + i,
+                     i + 1,
+                     pfi->dnum[TINDEX],
+                     pfi->grvals[TINDEX]);
+
+    /* XXX: reset the number of ensembles. */
+    opt_edef_num = 1;
 
     /*
      * etc...
@@ -1271,7 +1313,6 @@ gt3ddes_tmpl(struct gafile *pfi, const char *tmpl, int ntime)
     pfi->dnum[3] = ntime;
     strlcpy(pfi->name, tmpl, sizeof pfi->name);
 
-
     /*
      * create mapping table (fnums) of the tamplated files.
      */
@@ -1289,19 +1330,19 @@ gt3ddes_tmpl(struct gafile *pfi, const char *tmpl, int ntime)
 
         gafndt_impl(expnd[cr], TMPL_SIZE, tmpl,
                     &tdef, &tdefi, pfi->abvals[3], NULL,
-                    NULL, 1, 1, &flag);
+                    pfi->ens1, 1, 1, &flag);
 
         if (strcmp(expnd[cr], expnd[cr ^ 1]) != 0)
             fnum = i;  /* filename has changed */
 
-        /* XXX Meanings of "fnums" slightly differs from the orignal */
+        /* XXX Meanings of "fnums" slightly differs from the orignal. */
         pfi->fnums[i] = fnum;
         debug2("template map: t=%d, fnum=%d", i + 1, fnum);
     }
     assert(pfi->fnums[0] == 0);
 
     pfi->fnumc = 0;             /* already "0" has opened */
-
+    pfi->fnume = 0;
     return 0;
 }
 
@@ -1428,8 +1469,7 @@ gagt3open(const char *arg, struct gacmn *pcm)
         frepfi(pfi, 0);
         return 1;
     }
-    if (tmpl[0] != '\0' && ntime > pfi->dnum[TINDEX]
-        && gt3ddes_tmpl(pfi, tmpl, ntime) != 0) {
+    if (tmpl[0] != '\0' && gt3ddes_tmpl(pfi, tmpl, ntime) != 0) {
         frepfi(pfi, 0);
         return 1;
     }
