@@ -40,6 +40,8 @@
 #include "mfhdf.h"
 #endif
 
+#include "caltime.h"
+
 
 extern struct gamfcmn mfcmn ;
 extern FILE *descr ;
@@ -247,6 +249,37 @@ gaint gaxdfopen (char *args, struct gacmn *pcm) {
   return Success;
 }
 
+
+/* set calendar. */
+static int
+set_calendar(struct gafile *pfi, const char *name0)
+{
+    struct { const char *key; int value; } tab[] = {
+        { "gregorian", CALTIME_GREGORIAN },
+        { "standard", CALTIME_GREGORIAN },
+        { "proleptic_gregorian", CALTIME_GREGORIAN },
+        { "noleap", CALTIME_NOLEAP },
+        { "365_day", CALTIME_NOLEAP },
+        { "all_leap", CALTIME_ALLLEAP },
+        { "366_day", CALTIME_ALLLEAP },
+        { "360_day", CALTIME_360_DAY },
+        { "julian", CALTIME_JULIAN }
+    };
+    char name[32];
+    int i;
+
+    strncpy(name, name0, sizeof name - 1);
+    name[sizeof name - 1] = '\0';
+    lowcas(name);
+
+    for (i = 0; i < sizeof tab / sizeof tab[0]; i++)
+        if (strcmp(name, tab[i].key) == 0) {
+            mfcmn.cal365 = pfi->calendar = tab[i].value;
+            return 0;
+        }
+    /* not found */
+    return -1;
+}
 
 
 /* Retrieves self-describing file metadata and fills in the gafile structure. */
@@ -634,19 +667,9 @@ utUnit timeunit ;
       /* make sure it's not a 365 day calendar */
       attr = NULL;
       attr = find_att(Tcoord->longnm, pfi->attr, "calendar") ;
-      if (attr) {
-        if ((!strncasecmp((char *)attr->value,"cal365",      6)) ||
-            (!strncasecmp((char *)attr->value,"altcal365",   9)) ||
-            (!strncasecmp((char *)attr->value,"common_year",11)) ||
-            (!strncasecmp((char *)attr->value,"365_day",     7)) ||
-            (!strncasecmp((char *)attr->value,"noleap",      6))) {
-
-          gaprnt(0,"SDF Error: 365 day calendars are no longer supported by sdfopen.\n");
-          gaprnt(0,"  To open this file with GrADS, use a descriptor file with \n");
-          gaprnt(0,"  a complete TDEF entry and OPTIONS 365_day_calendar. \n");
-          gaprnt(0,"  Documentation is at http://iges.org/grads/gadoc/SDFdescriptorfile.html\n");
-          return Failure;
-        }
+      if (attr && set_calendar(pfi, (const char *)attr->value) < 0) {
+        gaprnt(0,"SDF Error: unknown calendar name.\n");
+        return Failure;
       }
       /* set dimension size */
       for (i=0;i<pfi->nsdfdims;i++) {
