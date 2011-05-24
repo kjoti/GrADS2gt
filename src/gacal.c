@@ -1,10 +1,9 @@
 /*
- *  gacal.c  -- calendar routines for GrADS.
- *
- *  $Revision: 1.4 $
- *  $Date: 2005/08/16 02:58:37 $
+ * gacal.c  -- calendar routines using caltime.c.
+ *             (moved from gautil.c)
  */
 #include "grads.h"
+#include "gatypes.h"
 #include "caltime.h"
 
 extern struct gamfcmn mfcmn;
@@ -80,14 +79,14 @@ gadouble
 t2gr(const gadouble *vals, const struct dt *dtim)
 {
     struct dt stim;
-    float mnincr, moincr, unit;
-    float rdiff;
+    gadouble mnincr, moincr, unit;
+    gadouble rdiff;
 
-    stim.yr = (int)(vals[0] + 0.1f);
-    stim.mo = (int)(vals[1] + 0.1f);
-    stim.dy = (int)(vals[2] + 0.1f);
-    stim.hr = (int)(vals[3] + 0.1f);
-    stim.mn = (int)(vals[4] + 0.1f);
+    stim.yr = (int)(vals[0] + 0.1);
+    stim.mo = (int)(vals[1] + 0.1);
+    stim.dy = (int)(vals[2] + 0.1);
+    stim.hr = (int)(vals[3] + 0.1);
+    stim.mn = (int)(vals[4] + 0.1);
     moincr = vals[5];
     mnincr = vals[6];
 
@@ -96,7 +95,7 @@ t2gr(const gadouble *vals, const struct dt *dtim)
      * then we do our calculations in minutes.  If the increment is
      * months or years, we do our calculations in months.
      */
-    if (mnincr > 0.1f) {
+    if (mnincr > 0.1) {
         rdiff = timdif(&stim, dtim);
         unit = mnincr;
     } else {
@@ -107,7 +106,7 @@ t2gr(const gadouble *vals, const struct dt *dtim)
             || dtim->hr != stim.hr
             || dtim->mn != stim.mn) {
             caltime date;
-            float minutes;
+            gadouble minutes;
 
             minutes = 24.0 * 60 * (dtim->dy - stim.dy)
                 + 60 * (dtim->hr - stim.hr)
@@ -118,7 +117,7 @@ t2gr(const gadouble *vals, const struct dt *dtim)
         }
     }
 
-    return 1.0f + rdiff / unit;
+    return 1.0 + rdiff / unit;
 }
 
 
@@ -127,13 +126,13 @@ gr2t(const gadouble *vals, gadouble gr, struct dt *dtim)
 {
     struct dt stim;
     caltime date;
-    float mnincr, moincr, diff;
+    gadouble mnincr, moincr, diff;
 
-    stim.yr = (int)(vals[0] + 0.1f);
-    stim.mo = (int)(vals[1] + 0.1f);
-    stim.dy = (int)(vals[2] + 0.1f);
-    stim.hr = (int)(vals[3] + 0.1f);
-    stim.mn = (int)(vals[4] + 0.1f);
+    stim.yr = (int)(vals[0] + 0.1);
+    stim.mo = (int)(vals[1] + 0.1);
+    stim.dy = (int)(vals[2] + 0.1);
+    stim.hr = (int)(vals[3] + 0.1);
+    stim.mn = (int)(vals[4] + 0.1);
     set_cal(&date, &stim, mfcmn.cal365);
 
     moincr = vals[5];
@@ -143,8 +142,8 @@ gr2t(const gadouble *vals, gadouble gr, struct dt *dtim)
     /* assert(moincr - (int)moincr == 0.0f); */
     /* assert(mnincr - (int)mnincr == 0.0f); */
 
-    if (mnincr > 0.1f) {
-        diff = (gr - 1.0f) * mnincr;
+    if (mnincr > 0.1) {
+        diff = (gr - 1.0) * mnincr;
         diff += (diff > 0.0) ? 0.5 : -0.5;  /* for round */
 
         if (diff > 1e6 || diff < -1e6) {
@@ -158,14 +157,14 @@ gr2t(const gadouble *vals, gadouble gr, struct dt *dtim)
         /* XXX mnincr is ignored... */
         int dmo;
 
-        diff = (gr - 1.0f) * moincr;
+        diff = (gr - 1.0) * moincr;
 
         /* round (sort of) */
-        dmo = (diff < 0.0) ? diff - 0.9999f : diff + 0.0001f;
+        dmo = (diff < 0.0) ? diff - 0.9999 : diff + 0.0001;
         ct_add_months(&date, dmo);
 
         diff -= dmo;            /* get fractional month */
-        if (diff >= 0.0001f) {
+        if (diff >= 0.0001) {
             /* small fraction is ignored */
 
             diff *= ct_num_days_in_month(&date);  /* in days */
