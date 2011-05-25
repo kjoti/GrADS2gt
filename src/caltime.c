@@ -190,6 +190,17 @@ ndays_in_years_jul(int from, int to)
 }
 
 
+static int
+set_calendar(caltime *date, int type)
+{
+    if (type < 0 || type >= CALTIME_DUMMY)
+        return -1;
+
+    date->caltype = type;
+    return 0;
+}
+
+
 /*
  * day_of_year: 1st Jan == 0
  */
@@ -350,7 +361,8 @@ ct_init_caltime(caltime *date, int type, int yr, int mo, int dy)
     if (date == NULL)
         return -1;
 
-    date->caltype = type;
+    if (set_calendar(date, type) < 0)
+        return -1;
     date->year    = yr;
     date->month   = mo - 1;
     date->day     = dy - 1;
@@ -600,7 +612,11 @@ ct_set_by_string(caltime *date, const char *input, int caltype)
         }
     }
 
-    temp.caltype = caltype;
+    if (set_calendar(&temp, caltype) < 0) {
+        /* XXX: ignore this error. */
+        temp.caltype = CALTIME_GREGORIAN;
+    }
+
     if (ct_set_date(&temp, year, mon, day) < 0
         || ct_set_time(&temp, hour, min, sec) < 0)
         return -1;
@@ -745,7 +761,7 @@ main(int argc, char **argv)
      */
     {
         char *endptr;
-        int value;
+        int value = 0;
 
         endptr = getint(&value, "hello");
         assert(endptr == NULL);
@@ -796,8 +812,8 @@ main(int argc, char **argv)
         rval = ct_set_by_string(&date, "1999-02-30", CALTIME_360_DAY);
         assert(rval == 0);
         assert(date.year == 1999);
-        assert(date.month == 2);
-        assert(date.day == 0);
+        assert(date.month == 1);
+        assert(date.day == 29);
     }
 
     return 0;
