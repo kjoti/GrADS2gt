@@ -664,13 +664,13 @@ utUnit timeunit ;
       gaprnt(2, "SDF file has no discernable time coordinate -- using default values.\n") ;
     }
     else {
-      /* make sure it's not a 365 day calendar */
       attr = NULL;
+      mfcmn.cal365 = pfi->calendar; /* XXX: set default */
       attr = find_att(Tcoord->longnm, pfi->attr, "calendar") ;
       if (attr && set_calendar(pfi, (const char *)attr->value) < 0) {
         gaprnt(0,"SDF Error: unknown calendar name.\n");
         /* return Failure; */ /* ignore this error. */
-        mfcmn.cal365 = pfi->calendar = 0;
+        mfcmn.cal365 = pfi->calendar = CALTIME_GREGORIAN;
       }
       /* set dimension size */
       for (i=0;i<pfi->nsdfdims;i++) {
