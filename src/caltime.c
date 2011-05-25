@@ -1,8 +1,10 @@
 /*
- *  caltime.c
+ * caltime.c
  */
 #include <assert.h>
+#include <ctype.h>
 #include <stdio.h>
+#include <string.h>
 #include <stdlib.h>
 
 #include "caltime.h"
@@ -38,6 +40,14 @@ static struct cal_trait all_traits[] = {
     { mon_offset_jul, ndays_in_years_jul, 365.25    }   /* for Julian */
 };
 
+static const char *nametab[] = {
+    "gregorian",
+    "noleap",
+    "all_leap",
+    "360_day",
+    "julian"
+};
+
 
 static int
 mon_offset(int yr, int mo, const int **mtbl)
@@ -57,9 +67,9 @@ mon_offset(int yr, int mo, const int **mtbl)
 
 
 /*
- *  The number of days between two years ('from' and 'to') in Gregorian.
+ * The number of days between two years ('from' and 'to') in Gregorian.
  *
- *  e.g.)
+ * e.g.)
  *     ndays_in_years(2000, 2001) returns 366.
  *     ndays_in_years(2000, 2002) returns 731.
  *     ndyas_in_years(2000, 2400) returns 146097.
@@ -86,7 +96,7 @@ ndays_in_years(int from, int to)
 }
 
 /*
- *  for 365_day (no leap)
+ * for 365_day (no leap)
  */
 static int
 mon_offset_365(int yr, int mo, const int **mtbl)
@@ -107,7 +117,7 @@ ndays_in_years_365(int from, int to)
 }
 
 /*
- *  for 366_day (all leap)
+ * for 366_day (all leap)
  */
 static int
 mon_offset_366(int yr, int mo, const int **mtbl)
@@ -128,7 +138,7 @@ ndays_in_years_366(int from, int to)
 }
 
 /*
- *  for 360_day (ideal calendar)
+ * for 360_day (ideal calendar)
  */
 static int
 mon_offset_360(int yr, int mo, const int **mtbl)
@@ -149,7 +159,7 @@ ndays_in_years_360(int from, int to)
 }
 
 /*
- *  for Julian
+ * for Julian
  */
 static int
 mon_offset_jul(int yr, int mo, const int **mtbl)
@@ -181,7 +191,7 @@ ndays_in_years_jul(int from, int to)
 
 
 /*
- *  day_of_year: 1st Jan == 0
+ * day_of_year: 1st Jan == 0
  */
 int
 ct_day_of_year(const caltime *date)
@@ -192,7 +202,7 @@ ct_day_of_year(const caltime *date)
 
 
 /*
- *  add 'num' days to current date ('date').
+ * add 'num' days to current date ('date').
  */
 caltime *
 ct_add_days(caltime *date, int num)
@@ -208,7 +218,7 @@ ct_add_days(caltime *date, int num)
 
     if (total < 0 || total >= mtbl[12]) {
         /*
-         *  changing current year.
+         * changing current year.
          */
         int nyr;
 
@@ -326,13 +336,13 @@ ct_verify_date(int type, int yr, int mo, int dy)
 
 
 /*
- *  set 'struct caltime'.
+ * set 'struct caltime'.
  *
- *  ex).
+ * ex).
  *    ct_init_caltime(&date, CALTIME_GREGORIAN, 1900, 1, 1)
  *    => 1st Jan, 1900 00:00:00
  *
- *  ct_init_caltime() returns 0 on successful end, otherwise -1.
+ * ct_init_caltime() returns 0 on successful end, otherwise -1.
  */
 int
 ct_init_caltime(caltime *date, int type, int yr, int mo, int dy)
@@ -377,9 +387,9 @@ ct_set_time(caltime *date, int hour, int min, int sec)
 
 
 /*
- *  ct_cmp() compares 'date1' and 'date2'.
+ * ct_cmp() compares 'date1' and 'date2'.
  *
- *  Return value:
+ * Return value:
  *     0  if date1 == date2
  *     1  if date1 >  date2
  *    -1  if date1 <  date2
@@ -443,10 +453,10 @@ ct_equal(const caltime *date1, const caltime *date2)
 
 
 /*
- *  ct_diff_days() returns the difference of the date.
+ * ct_diff_days() returns the difference of the date.
  *
- *  NOTE: ct_diff_days() does not take the time into account.
- *  e.g.,
+ * NOTE: ct_diff_days() does not take the time into account.
+ * e.g.,
  *     date1="1999-12-31 12:00:00" and date2=2000-1-1 00:00:00",
  *     => return 1 (not 0).
  */
@@ -519,8 +529,91 @@ ct_snprint(char *buf, size_t num, const caltime *date)
                     hour, sec / 60, sec % 60);
 }
 
+int
+ct_supported_caltypes(void)
+{
+    return CALTIME_DUMMY;
+}
+
+const char *
+ct_calendar_name(int ctype)
+{
+    return (ctype >= 0 && ctype < CALTIME_DUMMY) ? nametab[ctype] : NULL;
+}
+
+
+static char *
+getint(int *value, const char *ptr)
+{
+    int temp;
+    char *endptr;
+
+    temp = (int)strtol(ptr, &endptr, 10);
+    if (ptr == endptr)
+        return NULL;
+
+    *value = temp;
+    return endptr;
+}
+
+
+/*
+ * Note: calendar type cannot be set.
+ *
+ * YYYY[-MM[-DD]] [hh[:mm[:ss]]]
+ *
+ * ex.) ct_set_by_string(&date, "1950-1-1 00:00:00");
+ */
+int
+ct_set_by_string(caltime *date, const char *input, int caltype)
+{
+    char *ptr = (char *)input;
+    char *endptr;
+    caltime temp;
+    int year, mon = 1, day = 1, hour = 0, min = 0, sec = 0;
+
+    /* YYYY-MM-DD */
+    endptr = getint(&year, ptr);
+    if (endptr == NULL)
+        return -1; /* 'year' should be specified at least. */
+
+    if (*endptr == '-') {
+        ptr = endptr + 1;
+        endptr = getint(&mon, ptr);
+        if (endptr && *endptr == '-') {
+            ptr = endptr + 1;
+            endptr = getint(&day, ptr);
+        }
+    }
+
+    /* hh:mm:ss */
+    if (endptr && isspace(*endptr)) {
+        ptr = endptr + 1;
+        endptr = getint(&hour, ptr);
+        if (endptr && *endptr == ':') {
+            ptr = endptr + 1;
+            endptr = getint(&min, ptr);
+            if (endptr && *endptr == ':') {
+                ptr = endptr + 1;
+                endptr = getint(&sec, ptr);
+            }
+        }
+    }
+
+    temp.caltype = caltype;
+    if (ct_set_date(&temp, year, mon, day) < 0
+        || ct_set_time(&temp, hour, min, sec) < 0)
+        return -1;
+
+    *date = temp;
+    return 0;
+}
+
+
 
 #ifdef TEST_MAIN
+#include <string.h>
+
 int
 main(int argc, char **argv)
 {
@@ -532,8 +625,8 @@ main(int argc, char **argv)
     assert(ndays_in_years_jul(100, 200) == 365 * 100 + 25);
 
     /*
-     *  2038 problem test
-     *  time_t 0x7fffffff == Tue Jan 19 03:14:07 2038 (UTC)
+     * 2038 problem test
+     * time_t 0x7fffffff == Tue Jan 19 03:14:07 2038 (UTC)
      */
     {
         caltime temp, temp2;
@@ -552,7 +645,7 @@ main(int argc, char **argv)
     }
 
     /*
-     *  add & sub test.
+     * add & sub test.
      */
     {
         caltime date;
@@ -638,6 +731,75 @@ main(int argc, char **argv)
     assert(ct_verify_date(CALTIME_GREGORIAN, 2000, 1, 32) == -1);
     assert(ct_verify_date(CALTIME_GREGORIAN, 2000, 1, 31) == 0);
     assert(ct_verify_date(CALTIME_360_DAY,   2000, 1, 31) == -1);
+
+    /*
+     * calendar name.
+     */
+    assert(sizeof nametab / sizeof nametab[0] == CALTIME_DUMMY);
+    assert(ct_calendar_name(CALTIME_DUMMY) == NULL);
+    assert(strcmp(ct_calendar_name(CALTIME_GREGORIAN), "gregorian") == 0);
+    assert(strcmp(ct_calendar_name(CALTIME_360_DAY), "360_day") == 0);
+
+    /*
+     * getint
+     */
+    {
+        char *endptr;
+        int value;
+
+        endptr = getint(&value, "hello");
+        assert(endptr == NULL);
+
+        endptr = getint(&value, "   ");
+        assert(endptr == NULL);
+
+        endptr = getint(&value, "");
+        assert(endptr == NULL);
+
+        endptr = getint(&value, " 1999-12-31");
+        assert(*endptr == '-');
+        assert(value == 1999);
+        assert(strcmp(endptr, "-12-31") == 0);
+    }
+
+    /*
+     * ct_set_by_string().
+     */
+    {
+        caltime date;
+        int rval;
+
+        rval = ct_set_by_string(&date, "", CALTIME_GREGORIAN);
+        assert(rval == -1);
+
+        rval = ct_set_by_string(&date, "JAN", CALTIME_GREGORIAN);
+        assert(rval == -1);
+
+        rval = ct_set_by_string(&date, "1999-12-09 21:40:50",
+                                CALTIME_GREGORIAN);
+        assert(rval == 0);
+        assert(date.year == 1999);
+        assert(date.month == 11);
+        assert(date.day == 8);
+        assert(date.sec == 50 + 60 * (40 + 60 * 21));
+
+        rval = ct_set_by_string(&date, "1999", CALTIME_GREGORIAN);
+        assert(rval == 0);
+        assert(date.year == 1999);
+        assert(date.month == 0);
+        assert(date.day == 0);
+        assert(date.sec == 0);
+
+        rval = ct_set_by_string(&date, "1999-02-29", CALTIME_GREGORIAN);
+        assert(rval == -1);
+
+        rval = ct_set_by_string(&date, "1999-02-30", CALTIME_360_DAY);
+        assert(rval == 0);
+        assert(date.year == 1999);
+        assert(date.month == 2);
+        assert(date.day == 0);
+    }
+
     return 0;
 }
 #endif
