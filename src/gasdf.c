@@ -669,7 +669,8 @@ utUnit timeunit ;
       attr = find_att(Tcoord->longnm, pfi->attr, "calendar") ;
       if (attr && set_calendar(pfi, (const char *)attr->value) < 0) {
         gaprnt(0,"SDF Error: unknown calendar name.\n");
-        return Failure;
+        /* return Failure; */ /* ignore this error. */
+        mfcmn.cal365 = pfi->calendar = 0;
       }
       /* set dimension size */
       for (i=0;i<pfi->nsdfdims;i++) {
@@ -815,6 +816,7 @@ utUnit timeunit ;
           }
           strcpy(time_units, (char *) timeunits_attr->value);
         }
+#if 0
         /* convert unit string to a udunits format */
         if (utScan(time_units, &timeunit)) {
           gaprnt(0, "gadsdf: Error parsing time_units for SDF file.\n") ;
@@ -832,7 +834,68 @@ utUnit timeunit ;
         tvals[2] = idy ;
         tvals[3] = ihr ;
         tvals[4] = imn ;
+#endif
+        /*
+         * Use caltime instead of UDUNITS(utScan and utCalendar)
+         * to support non-gregorian calendar.
+         */
+        {
+            struct caltime base_time;
+            struct { const char *key; double value; } factor[] = {
+                { "d", 1. },
+                { "day", 1. },
+                { "days", 1. },
+                { "h", 1./ 24. },
+                { "hr", 1./ 24. },
+                { "hrs", 1./ 24. },
+                { "hour", 1./ 24. },
+                { "hours", 1./ 24. },
+                { "min", 1. / (24. * 60.) },
+                { "minute", 1. / (24. * 60.) },
+                { "minutes", 1. / (24. * 60.) },
+                { "s", 1. / (24. * 3600.) },
+                { "sec", 1. / (24. * 3600.) },
+                { "secs", 1. / (24. * 3600.) },
+                { "second", 1. / (24. * 3600.) },
+                { "seconds", 1. / (24. * 3600.) }
+            };
+            char *ptr, word[32];
+            double scale = 1.;
+            int i, ndays, nsecs;
 
+            /* get UNIT */
+            getwrd(word, time_units, sizeof word - 1);
+            lowcas(word);
+            for (i = 0; i < sizeof factor / sizeof factor[0]; i++)
+                if (strcmp(word, factor[i].key) == 0) {
+                    scale = factor[i].value;
+                    break;
+                }
+
+            /* set dfault */
+            base_time.caltype = mfcmn.cal365;
+            ct_set_date(&base_time, 1, 1, 1);
+            ct_set_time(&base_time, 0, 0, 0);
+
+            /* get BASETIME (following "since") */
+            if ((ptr = strstr(time_units, " since ")) != NULL) {
+                ptr += 7;
+                if (ct_set_by_string(&base_time, ptr, mfcmn.cal365) < 0)
+                    gaprnt(0, "gadsdf: invalid date.\n");
+            }
+
+            /* add time1(the first time). */
+            ndays = (int)(time1 * scale);
+            nsecs = (int)((time1 * scale  - ndays) * 24. * 3600.);
+            ct_add_days(&base_time, ndays);
+            ct_add_seconds(&base_time, nsecs);
+
+            tvals[0] = base_time.year;
+            tvals[1] = base_time.month + 1;
+            tvals[2] = base_time.day + 1;
+            tvals[3] = base_time.sec / 3600;
+            tvals[4] = (base_time.sec - 3600 * tvals[3]) / 60;
+        }
         /* If more than one time step, deduce increment */
         if (pfi->dnum[TINDEX] > 1) {
           temp_str = strstr(time_units, " since ") ;
