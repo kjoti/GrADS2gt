@@ -250,35 +250,53 @@ gaint gaxdfopen (char *args, struct gacmn *pcm) {
 }
 
 
-/* set calendar. */
-static int
-set_calendar(struct gafile *pfi, const char *name0)
+/*
+ * a scale of time unit conversion (from xxx to day).
+ */
+static double
+unit_scale_to_day(const char *unit, int caltype)
 {
-    struct { const char *key; int value; } tab[] = {
-        { "gregorian", CALTIME_GREGORIAN },
-        { "standard", CALTIME_GREGORIAN },
-        { "proleptic_gregorian", CALTIME_GREGORIAN },
-        { "noleap", CALTIME_NOLEAP },
-        { "365_day", CALTIME_NOLEAP },
-        { "all_leap", CALTIME_ALLLEAP },
-        { "366_day", CALTIME_ALLLEAP },
-        { "360_day", CALTIME_360_DAY },
-        { "julian", CALTIME_JULIAN }
+    struct { const char *key; double value; } tab[] = {
+        { "d", 1. },
+        { "day", 1. },
+        { "days", 1. },
+        { "h", 1./ 24. },
+        { "hr", 1./ 24. },
+        { "hrs", 1./ 24. },
+        { "hour", 1./ 24. },
+        { "hours", 1./ 24. },
+        { "min", 1. / (24. * 60.) },
+        { "minute", 1. / (24. * 60.) },
+        { "minutes", 1. / (24. * 60.) },
+        { "s", 1. / (24. * 3600.) },
+        { "sec", 1. / (24. * 3600.) },
+        { "secs", 1. / (24. * 3600.) },
+        { "second", 1. / (24. * 3600.) },
+        { "seconds", 1. / (24. * 3600.) }
     };
-    char name[32];
     int i;
+    char word[32];
+    double days_in_yr[] = { 365.2425, 365.0, 366.0, 360.0, 365.25 };
 
-    strncpy(name, name0, sizeof name - 1);
-    name[sizeof name - 1] = '\0';
-    lowcas(name);
-
+    getwrd(word, (char *)unit, sizeof word - 1);
+    lowcas(word);
     for (i = 0; i < sizeof tab / sizeof tab[0]; i++)
-        if (strcmp(name, tab[i].key) == 0) {
-            mfcmn.cal365 = pfi->calendar = tab[i].value;
-            return 0;
-        }
-    /* not found */
-    return -1;
+        if (strcmp(word, tab[i].key) == 0)
+            return tab[i].value;
+
+    /* months */
+    if (strcmp(word, "months") == 0 || strcmp(word, "month") == 0)
+        return days_in_yr[caltype] / 12;
+
+    /* years */
+    if (strcmp(word, "years") == 0
+        || strcmp(word, "year") == 0
+        || strcmp(word, "yr") == 0
+        || strcmp(word, "a") == 0)
+        return days_in_yr[caltype];
+
+    /* not found... */
+    return 1.;
 }
 
 
@@ -664,14 +682,22 @@ utUnit timeunit ;
       gaprnt(2, "SDF file has no discernable time coordinate -- using default values.\n") ;
     }
     else {
-      attr = NULL;
-      mfcmn.cal365 = pfi->calendar; /* XXX: set default */
+      /* set calendar */
+
+      if (pfi->calendar < 0 || pfi->calendar >= CALTIME_DUMMY)
+        /* For safety. (It never happens.) */
+        pfi->calendar = CALTIME_GREGORIAN;
+
       attr = find_att(Tcoord->longnm, pfi->attr, "calendar") ;
-      if (attr && set_calendar(pfi, (const char *)attr->value) < 0) {
-        gaprnt(0,"SDF Error: unknown calendar name.\n");
-        /* return Failure; */ /* ignore this error. */
-        mfcmn.cal365 = pfi->calendar = CALTIME_GREGORIAN;
+      if (attr) {
+        pfi->calendar = ct_calendar_type((char *)attr->value);
+        if (pfi->calendar == CALTIME_DUMMY) {
+          gaprnt(0, "SDF Error: unknown calendar name.\n");
+          pfi->calendar = CALTIME_GREGORIAN;
+        }
       }
+      mfcmn.cal365 = pfi->calendar;
+
       /* set dimension size */
       for (i=0;i<pfi->nsdfdims;i++) {
         if (pfi->sdfdimids[i] == Tcoord->vardimids[0]) {
@@ -836,55 +862,28 @@ utUnit timeunit ;
         tvals[4] = imn ;
 #endif
         /*
-         * Use caltime instead of UDUNITS(utScan and utCalendar)
+         * Set the first time (at t=1).
+         * Using caltime instead of UDUNITS(utScan and utCalendar)
          * to support non-gregorian calendar.
          */
         {
             struct caltime base_time;
-            struct { const char *key; double value; } factor[] = {
-                { "d", 1. },
-                { "day", 1. },
-                { "days", 1. },
-                { "h", 1./ 24. },
-                { "hr", 1./ 24. },
-                { "hrs", 1./ 24. },
-                { "hour", 1./ 24. },
-                { "hours", 1./ 24. },
-                { "min", 1. / (24. * 60.) },
-                { "minute", 1. / (24. * 60.) },
-                { "minutes", 1. / (24. * 60.) },
-                { "s", 1. / (24. * 3600.) },
-                { "sec", 1. / (24. * 3600.) },
-                { "secs", 1. / (24. * 3600.) },
-                { "second", 1. / (24. * 3600.) },
-                { "seconds", 1. / (24. * 3600.) }
-            };
-            char *ptr, word[32];
-            double scale = 1.;
-            int i, ndays, nsecs;
+            char *ptr;
+            double scale;
+            int ndays, nsecs;
 
-            /* get UNIT */
-            getwrd(word, time_units, sizeof word - 1);
-            lowcas(word);
-            for (i = 0; i < sizeof factor / sizeof factor[0]; i++)
-                if (strcmp(word, factor[i].key) == 0) {
-                    scale = factor[i].value;
-                    break;
-                }
-
-            /* set dfault */
-            base_time.caltype = mfcmn.cal365;
-            ct_set_date(&base_time, 1, 1, 1);
-            ct_set_time(&base_time, 0, 0, 0);
+            /* set dfault: 0001-01-01 00:00:00 */
+            ct_init_caltime(&base_time, pfi->calendar, 1, 1, 1);
 
             /* get BASETIME (following "since") */
             if ((ptr = strstr(time_units, " since ")) != NULL) {
                 ptr += 7;
-                if (ct_set_by_string(&base_time, ptr, mfcmn.cal365) < 0)
+                if (ct_set_by_string(&base_time, ptr, pfi->calendar) < 0)
                     gaprnt(0, "gadsdf: invalid date.\n");
             }
 
             /* add time1(the first time). */
+            scale = unit_scale_to_day(time_units, pfi->calendar);
             ndays = (int)(time1 * scale);
             nsecs = (int)((time1 * scale  - ndays) * 24. * 3600.);
             ct_add_days(&base_time, ndays);
