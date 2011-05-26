@@ -50,6 +50,10 @@
 const char *nc_inq_libvers(void);
 #endif
 
+#if GTOOL3 == 1
+#include "gtool3.h"
+#endif
+
 #if USEGADAP==1
 const char *libgadap_version(void);
 #endif
@@ -241,8 +245,12 @@ snprintf(cmd,255,"Config: v%s",GRADS_VERSION);
    gaprnt(verbose,"  o Shapefile interface DISABLED\n");
 #endif
 
- sprintf(cmd, "   o GTOOL3 interface %sABLED.\n", GTOOL3 ? "EN" : "DIS");
+ sprintf(cmd, "  o GTOOL3 interface %sABLED.\n", GTOOL3 ? "EN" : "DIS");
  gaprnt(verbose, cmd);
+#if GTOOL3 == 1
+ snprintf(cmd, 255, "      %s\n", GT3_version());
+ gaprnt(verbose, cmd);
+#endif
 
  gaprnt(verbose,"\nFor additional information please consult http://iges.org/grads\n\n");
 
