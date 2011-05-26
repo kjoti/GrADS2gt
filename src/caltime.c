@@ -1,12 +1,21 @@
 /*
- * caltime.c
+ * caltime.c - date and time module supporting some kind of calendars.
+ *
+ * supporting calendars:
+ *     gregorian (proleptic_gregorian)
+ *     noleap
+ *     all_leap
+ *     360_day
+ *     julian
+ *
+ * XXX: 'gregorian' in this module is actually 'proleptic_gregorian',
+ * ignores leap days on October in 1582.
  */
 #include <assert.h>
 #include <ctype.h>
 #include <stdio.h>
-#include <string.h>
 #include <stdlib.h>
-
+#include <string.h>
 #include "caltime.h"
 
 typedef int  (*FUNC1)(int, int, const int **);
@@ -38,14 +47,6 @@ static struct cal_trait all_traits[] = {
     { mon_offset_366, ndays_in_years_366, 366.0     },  /* for all leap */
     { mon_offset_360, ndays_in_years_360, 360.0     },  /* for 360_day */
     { mon_offset_jul, ndays_in_years_jul, 365.25    }   /* for Julian */
-};
-
-static const char *nametab[] = {
-    "gregorian",
-    "noleap",
-    "all_leap",
-    "360_day",
-    "julian"
 };
 
 
@@ -198,17 +199,6 @@ set_calendar(caltime *date, int type)
 
     date->caltype = type;
     return 0;
-}
-
-
-/*
- * day_of_year: 1st Jan == 0
- */
-int
-ct_day_of_year(const caltime *date)
-{
-    return all_traits[date->caltype].mon_offset(date->year, date->month, NULL)
-        +  date->day;
 }
 
 
@@ -506,6 +496,17 @@ ct_diff_seconds(const caltime *date2, const caltime *date1)
 }
 
 
+/*
+ * day_of_year: 1st Jan == 0
+ */
+int
+ct_day_of_year(const caltime *date)
+{
+    return all_traits[date->caltype].mon_offset(date->year, date->month, NULL)
+        +  date->day;
+}
+
+
 /* returns the number of days in current year */
 int
 ct_num_days_in_year(const caltime *date)
@@ -539,18 +540,6 @@ ct_snprint(char *buf, size_t num, const caltime *date)
                     : "%04d-%02d-%02d %02d:%02d:%02d",
                     date->year, date->month + 1, date->day + 1,
                     hour, sec / 60, sec % 60);
-}
-
-int
-ct_supported_caltypes(void)
-{
-    return CALTIME_DUMMY;
-}
-
-const char *
-ct_calendar_name(int ctype)
-{
-    return (ctype >= 0 && ctype < CALTIME_DUMMY) ? nametab[ctype] : NULL;
 }
 
 
@@ -587,7 +576,7 @@ ct_set_by_string(caltime *date, const char *input, int caltype)
     /* YYYY-MM-DD */
     endptr = getint(&year, ptr);
     if (endptr == NULL)
-        return -1; /* 'year' should be specified at least. */
+        return -1; /* 'year' must be specified. */
 
     if (*endptr == '-') {
         ptr = endptr + 1;
@@ -625,6 +614,53 @@ ct_set_by_string(caltime *date, const char *input, int caltype)
     return 0;
 }
 
+
+/*
+ * get a ID of calendar type from a calendar name (defined in CF).
+ *
+ * ex.) ctype = cf_calendar_type("noleap");
+ */
+int
+ct_calendar_type(const char *name)
+{
+    struct { const char *key; int value; } tab[] = {
+        { "gregorian", CALTIME_GREGORIAN },
+        { "standard", CALTIME_GREGORIAN },
+        { "proleptic_gregorian", CALTIME_GREGORIAN },
+        { "noleap", CALTIME_NOLEAP },
+        { "365_day", CALTIME_NOLEAP },
+        { "all_leap", CALTIME_ALLLEAP },
+        { "366_day", CALTIME_ALLLEAP },
+        { "360_day", CALTIME_360_DAY },
+        { "julian", CALTIME_JULIAN }
+    };
+    int i;
+
+    if (!name)
+        return CALTIME_DUMMY;
+
+    for (i = 0; i < sizeof tab / sizeof tab[0]; i++)
+        if (strcasecmp(name, tab[i].key) == 0)
+            return tab[i].value;
+
+    return CALTIME_DUMMY;
+}
+
+
+const char *
+ct_calendar_name(int ctype)
+{
+    static const char *nametab[] = {
+        "gregorian",
+        "noleap",
+        "all_leap",
+        "360_day",
+        "julian"
+    };
+    return (ctype >= 0 && ctype < CALTIME_DUMMY)
+        ? nametab[ctype]
+        : NULL;
+}
 
 
 #ifdef TEST_MAIN
@@ -751,7 +787,6 @@ main(int argc, char **argv)
     /*
      * calendar name.
      */
-    assert(sizeof nametab / sizeof nametab[0] == CALTIME_DUMMY);
     assert(ct_calendar_name(CALTIME_DUMMY) == NULL);
     assert(strcmp(ct_calendar_name(CALTIME_GREGORIAN), "gregorian") == 0);
     assert(strcmp(ct_calendar_name(CALTIME_360_DAY), "360_day") == 0);
@@ -814,6 +849,25 @@ main(int argc, char **argv)
         assert(date.year == 1999);
         assert(date.month == 1);
         assert(date.day == 29);
+    }
+
+    {
+        int type;
+
+        type = ct_calendar_type("");
+        assert(type == CALTIME_DUMMY);
+
+        type = ct_calendar_type("gregorian");
+        assert(type == CALTIME_GREGORIAN);
+
+        type = ct_calendar_type("noleap");
+        assert(type == CALTIME_NOLEAP);
+
+        type = ct_calendar_type("360_day");
+        assert(type == CALTIME_360_DAY);
+
+        type = ct_calendar_type("julian");
+        assert(type == CALTIME_JULIAN);
     }
 
     return 0;
