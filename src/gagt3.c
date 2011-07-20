@@ -58,6 +58,7 @@ static struct opt_tdef opt_tdef;
 
 /* GTOPTION: edef */
 static int opt_edef_num = 1;    /* the number of ensembles */
+static char ename_format[16] = "%d"; /* printf-format for ensembles */
 
 /*
  * Associated actions table.
@@ -267,6 +268,61 @@ opt_tdefine(const char *args)
 
 
 /*
+ * check edef-option (printf-format).
+ *
+ * ex.)
+ *   run%02d ... ok.
+ *   run%s   ... NG.
+ */
+static int
+check_ename_format(const char *fmt)
+{
+    char *p = (char *)fmt;
+    int count = 0;
+    char *endptr;
+
+    while (*p) {
+        if (*p == '\\') {
+            p += 2;
+            continue;
+        }
+
+        if (*p != '%') {
+            p++;
+            continue;
+        }
+
+        if (count > 0)
+            return -1;
+
+        /* skip '%' */
+        ++p;
+
+        /* skip width if any */
+        strtol(p, &endptr, 0);
+        p = endptr;
+
+        switch (*p) {
+        case 'd':
+        case 'i':
+        case 'o':
+        case 'u':
+        case 'x':
+        case 'X':
+            count++;
+            break;
+        case '%':
+            break;
+        default:
+            return -1;
+        }
+        p++;
+    }
+    return 0;
+}
+
+
+/*
  * "edef" option via gtoptions.
  */
 static int
@@ -280,6 +336,22 @@ opt_edefine(const char *args)
     if (value < 1)
         value = 1;
     opt_edef_num = value;
+
+    /* set a printf-format. */
+    if ((ch = nxtwrd(ch))) {
+        char fmt[16];
+
+        assert(sizeof fmt == sizeof ename_format);
+        getwrd(fmt, ch, sizeof fmt - 1);
+
+        if (check_ename_format(fmt) < 0) {
+            my_gaprnt(0, "%s: invalid edef argument.\n", fmt);
+            return 1;
+        }
+        strcpy(ename_format, fmt);
+    } else
+        strcpy(ename_format, "%d");
+
     return 0;
 }
 
@@ -707,7 +779,7 @@ set_ensemble(struct gaens *ens, int num,
 {
     int i;
 
-    snprintf(ens->name, 15, "%d", num);
+    snprintf(ens->name, 15, ename_format, num);
     ens->length = time_len;
     ens->gt = 1;
     gr2t(vals, 1, &ens->tinit);
@@ -716,6 +788,13 @@ set_ensemble(struct gaens *ens, int num,
         ens->grbcode[i] = -999;
 }
 
+
+static void
+reset_ensemble(void)
+{
+    opt_edef_num = 1;
+    strcpy(ename_format, "%d");
+}
 
 
 static void
@@ -1287,7 +1366,7 @@ gt3ddes(struct gafile *pfi, const char *alias)
                      pfi->grvals[TINDEX]);
 
     /* XXX: reset the number of ensembles. */
-    opt_edef_num = 1;
+    reset_ensemble();
 
     /*
      * etc...
