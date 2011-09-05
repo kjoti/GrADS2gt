@@ -1,5 +1,5 @@
 /*
- * gagt3.h
+ * gagt3.h -- add-on code for GrADS to handle the GTOOL3 format.
  */
 #ifndef GAGT3_H
 #define GAGT3_H
@@ -18,4 +18,5 @@ int gaggt3(struct gagrid *pgr, FLOAT *gr, char *mask, const int d[]);
 int gagt3open(const char *arg, struct gacmn *pcm);
 int gagt3vopen(const char *arg, struct gacmn *pcm);
 int gagt3options(const char *arg, struct gacmn *pcm);
-#endif
+
+#endif /* !GAGT3_H */

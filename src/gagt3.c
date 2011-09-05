@@ -866,7 +866,7 @@ get_pvar(const GT3_Varbuf *var, const char *alias)
     lowcas(pvar->abbrv);
 
     /*
-     *  XXX pvar->levels is not always identical to var->dimlen[2].
+     * XXX pvar->levels is not always identical to var->dimlen[2].
      */
     gtaxis = 0;
     if (!is_shifted_axis(var, XINDEX, gtaxis))
