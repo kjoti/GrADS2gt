@@ -1,4 +1,4 @@
-/* Copyright (C) 1988-2010 by Brian Doty and the
+/* Copyright (C) 1988-2011 by Brian Doty and the
    Institute of Global Environment and Society (IGES).
    See file COPYRIGHT for more information.   */
 
@@ -93,7 +93,7 @@ gaint gabufr_load2mem(const char * path, gabufr_dset * dset) {
   fseeko(datafile, 0, SEEK_END);
   bytesleft = filesize = ftello(datafile);
   fseeko(datafile, 0, SEEK_SET);
-  if (GABUFR_DEBUG) printf("filesize is %lld\n", filesize);
+  if (GABUFR_DEBUG) printf("filesize is %ld\n", filesize);
 
   pos = filebuf = malloc(filesize);
   if (filebuf == NULL) {
@@ -103,7 +103,7 @@ gaint gabufr_load2mem(const char * path, gabufr_dset * dset) {
 
   while (bytesleft > 0) {
     bytesread = fread(pos, 1, bytesleft, datafile);
-    if (GABUFR_DEBUG) printf("read %lld bytes\n", bytesleft);
+    if (GABUFR_DEBUG) printf("read %ld bytes\n", bytesleft);
     if (ferror(datafile)) {
       printf("Low level read error on BUFR file %s\n", path);
       free(filebuf);
@@ -713,12 +713,12 @@ gabufr_msg * gabufr_parsehdr(unsigned char * section0) {
                           msg->section4,
                           msg->end);
 
- if (GABUFR_DEBUG) printf("lengths: %d / %d / %d / %d (total %d)\n",
-                          msg->section1 - msg->section0,
-                          msg->section3 - msg->section1,
-                          msg->section4 - msg->section3,
-                          msg->end      - msg->section4,
-                          msg->end      - msg->section0);
+ if (GABUFR_DEBUG) printf("lengths: %ld / %ld / %ld / %ld (total %ld)\n",
+                          (galint)(msg->section1 - msg->section0),
+                          (galint)(msg->section3 - msg->section1),
+                          (galint)(msg->section4 - msg->section3),
+                          (galint)(msg->end      - msg->section4),
+                          (galint)(msg->end      - msg->section0));
 
   msg->tbl_inf.bufr_edition = gagby(msg->section0, 7, 1);
   msg->tbl_inf.master_tbl_num = gagby(msg->section1, 3, 1);

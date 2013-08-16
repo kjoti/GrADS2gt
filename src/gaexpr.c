@@ -1,4 +1,4 @@
-/*  Copyright (C) 1988-2010 by Brian Doty and the
+/*  Copyright (C) 1988-2011 by Brian Doty and the
     Institute of Global Environment and Society (IGES).
     See file COPYRIGHT for more information.   */
 
@@ -507,7 +507,6 @@ char *uval1,*uval2;
 
   err2:
     gaprnt (0,"Operation error:  Incompatable grids \n");
-    gaprnt (1,"  Dimension ranges aren't equivalent\n");
     snprintf(pout,255,"  Dimension = %i\n",i);
     gaprnt (2, pout);
     snprintf(pout,255,"  1st grid range = %i %i   2nd = %i %i \n",
@@ -799,9 +798,9 @@ size_t sz;
       pvar = &vfake;
       vfake.levels = -999;
       vfake.vecpair = -999;
-      if (cmpwrd(name,"lon")) vfake.offset = 0;
-      if (cmpwrd(name,"lat")) vfake.offset = 1;
-      if (cmpwrd(name,"lev")) vfake.offset = 2;
+      if (cmpwrd(name,"lon")) {vfake.offset = 0; snprintf(vfake.abbrv,5,"lon");}
+      if (cmpwrd(name,"lat")) {vfake.offset = 1; snprintf(vfake.abbrv,5,"lat");}
+      if (cmpwrd(name,"lev")) {vfake.offset = 2; snprintf(vfake.abbrv,5,"lev");}
       if (pfi->type==2 || pfi->type==3) {
         snprintf(pout,255,"Data Request Error:  Predefined variable %s\n", vnam);
         gaprnt (0,pout);
@@ -1153,7 +1152,7 @@ gadouble gmin1,gmax1,gmin2,gmax2,fuz1,fuz2,fuzz;
 gadouble (*conv1) (gadouble *, gadouble);
 gadouble (*conv2) (gadouble *, gadouble);
 gadouble *vals1, *vals2;
-gaint i1,i2,i,siz1,siz2;
+gaint i1,i2,i,siz1,siz2,rc;
 struct dt dtim1,dtim2;
 
   if (dim<0) return(0);
@@ -1182,27 +1181,36 @@ struct dt dtim1,dtim2;
     siz2 = pgr2->jsiz;
   } else return (1);
 
-  if (siz1 != siz2) return(1);
+  if (siz1 != siz2) {
+    gaprnt(0,"Error in gagchk: axis sizes are not the same\n");
+    return(1);
+  }
+
   gmin1 = pgr1->dimmin[dim];
   gmax1 = pgr1->dimmax[dim];
   gmin2 = pgr2->dimmin[dim];
   gmax2 = pgr2->dimmax[dim];
 
   if (dim==3) {                         /* Dimension is time.      */
+    rc=0;
     gr2t (vals1, gmin1, &dtim1);
     gr2t (vals2, gmin2, &dtim2);
-    if (dtim1.yr != dtim2.yr) return (1);
-    if (dtim1.mo != dtim2.mo) return (1);
-    if (dtim1.dy != dtim2.dy) return (1);
-    if (dtim1.hr != dtim2.hr) return (1);
-    if (dtim1.mn != dtim2.mn) return (1);
+    if (dtim1.yr != dtim2.yr) rc=1;
+    if (dtim1.mo != dtim2.mo) rc=1;
+    if (dtim1.dy != dtim2.dy) rc=1;
+    if (dtim1.hr != dtim2.hr) rc=1;
+    if (dtim1.mn != dtim2.mn) rc=1;
     gr2t (vals1, gmax1, &dtim1);
     gr2t (vals2, gmax2, &dtim2);
-    if (dtim1.yr != dtim2.yr) return (1);
-    if (dtim1.mo != dtim2.mo) return (1);
-    if (dtim1.dy != dtim2.dy) return (1);
-    if (dtim1.hr != dtim2.hr) return (1);
-    if (dtim1.mn != dtim2.mn) return (1);
+    if (dtim1.yr != dtim2.yr) rc=1;
+    if (dtim1.mo != dtim2.mo) rc=1;
+    if (dtim1.dy != dtim2.dy) rc=1;
+    if (dtim1.hr != dtim2.hr) rc=1;
+    if (dtim1.mn != dtim2.mn) rc=1;
+    if (rc) {
+      gaprnt(0,"Error in gagchk: time axis endpoint values are not equivalent\n");
+      return (1);
+    }
     return (0);
   }
 
@@ -1212,9 +1220,17 @@ struct dt dtim1,dtim2;
   fuz2=fabs(conv2(vals2,gmax2)-conv2(vals2,gmin2))*FUZZ_SCALE;
   fuzz=(fuz1+fuz2)*0.5;
 
-  if ( fabs((conv1(vals1,gmin1)) - (conv2(vals2,gmin2))) > fuzz ) return (1);
-  if ( fabs((conv1(vals1,gmax1)) - (conv2(vals2,gmax2))) > fuzz ) return (1);
-  if (i1!=i2) return (1);
+  rc=0;
+  if ( fabs((conv1(vals1,gmin1)) - (conv2(vals2,gmin2))) > fuzz ) rc=1;
+  if ( fabs((conv1(vals1,gmax1)) - (conv2(vals2,gmax2))) > fuzz ) rc=1;
+  if (rc) {
+    gaprnt(0,"Error in gagchk: axis endpoint values are not equivalent\n");
+    return (1);
+  }
+  if (i1!=i2) {
+    gaprnt(0,"Error in gagchk: one axis is linear and the other is non-linear\n");
+    return (1);
+  }
   if (i1) return (0);                   /* If linear then matches  */
 
   /* Nonlinear, but endpoints match.  Check every grid point for a
@@ -1222,9 +1238,9 @@ struct dt dtim1,dtim2;
 
   for (i=0; i<siz1; i++) {
     if (fabs((conv1(vals1,gmin1+(gadouble)i)) - (conv2(vals2,gmin2+(gadouble)i))) > fuzz ) {
+      gaprnt(0,"Error in gagchk: axis values are not all the same\n");
       return (1);
     }
-
   }
   return (0);
 }

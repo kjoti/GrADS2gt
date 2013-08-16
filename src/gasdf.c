@@ -1,4 +1,4 @@
-/*  Copyright (C) 1988-2010 by Brian Doty and the
+/*  Copyright (C) 1988-2011 by Brian Doty and the
     Institute of Global Environment and Society (IGES).
     See file COPYRIGHT for more information.   */
 
@@ -266,7 +266,7 @@ gaint len,noname,notinit,nolength;
 gaint i,j,c,rc,flag,numdvars,e,t;
 gaint iyr,imo,idy,ihr,imn,isec,ispress,isDatavar ;
 gaint xdimid,ydimid,zdimid,tdimid,edimid ;
-gaint istart,icount;
+gaint istart,icount,havesf,haveao;
 char *ch,*utname,*pos=NULL,*pos1=NULL,*pos2=NULL;
 char *time_units=NULL,*trunc_units=NULL,*temp_str ;
 utUnit timeunit ;
@@ -346,6 +346,8 @@ utUnit timeunit ;
 
   /* Look for scale factor or slope attribute */
   if (parms.needunpack) {
+    havesf = 0;
+    haveao = 0;
     attr = NULL;
     attr = find_att("ALL", pfi->attr, "scale_factor") ;
     if (!attr) {
@@ -357,8 +359,8 @@ utUnit timeunit ;
       if ((pfi->scattr = (char *)galloc(sz,"scattr1")) == NULL) goto err1;
       strncpy(pfi->scattr,attr->name,len);
       *(pfi->scattr+len) = '\0';
-      /* set the packflg to 1, meaning only scale factor has been retrieved */
-      pfi->packflg=1;
+      havesf = 1;
+      if (!strncmp(pfi->scattr, "NULL", 4) || !strncmp(pfi->scattr, "null", 4)) havesf = 0;
     }
     /* Look for add offset or intercept attribute */
     attr = NULL;
@@ -372,8 +374,14 @@ utUnit timeunit ;
       if ((pfi->ofattr = (char *)galloc(sz,"ofattr1")) == NULL) goto err1;
       strncpy(pfi->ofattr,attr->name,len);
       *(pfi->ofattr+len) = '\0';
-      /* Set the packflg to 2, meaning scale factor and offset have been retrieved */
-      pfi->packflg=2;
+      haveao = 1;
+      if (!strncmp(pfi->ofattr, "NULL", 4) || !strncmp(pfi->ofattr, "null", 4)) haveao = 0;
+    }
+    /* set the packflg */
+    if (havesf) {
+      pfi->packflg = haveao == 1 ? 2 : 1 ;
+    } else {
+      pfi->packflg = haveao == 1 ? 3 : 0 ;
     }
   }
 
@@ -384,6 +392,8 @@ utUnit timeunit ;
       rc = findX(pfi, &Xcoord);
       if ((rc==Failure) || (Xcoord == NULL)) {
         gaprnt(0, "gadsdf: SDF file has no discernable X coordinate.\n") ;
+        gaprnt(0,"  To open this file with GrADS, use a descriptor file with an XDEF entry.\n");
+        gaprnt(0,"  Documentation is at http://iges.org/grads/gadoc/SDFdescriptorfile.html\n");
         return Failure ;
       }
     }
@@ -435,6 +445,8 @@ utUnit timeunit ;
       rc = findY(pfi, &Ycoord);
       if ((rc==Failure) || (Ycoord == NULL)) {
         gaprnt(0, "gadsdf: SDF file has no discernable Y coordinate.\n") ;
+        gaprnt(0,"  To open this file with GrADS, use a descriptor file with a YDEF entry.\n");
+        gaprnt(0,"  Documentation is at http://iges.org/grads/gadoc/SDFdescriptorfile.html\n");
         return Failure ;
       }
     }
@@ -1408,6 +1420,7 @@ gaint isdvar(struct gafile *pfi, struct gavar *var,
   }
 
   if (hasX || hasY || hasZ || hasT || hasE) {
+
     /* Check if any of var's dimids do not match the 5 grid dimids */
     for (i=0 ; i<var->nvardims; i++) {
       if (var->vardimids[i] != xdimid &&
@@ -1440,7 +1453,7 @@ gaint isdvar(struct gafile *pfi, struct gavar *var,
         var->varnm[attr->len-1] = '\0';
       }
       else {
-        strncpy(var->varnm,(char*)attr->value,(size_t)attr->len);
+        strncpy(var->varnm,(char*)attr->value,127);
         var->varnm[127] = '\0';
       }
     }

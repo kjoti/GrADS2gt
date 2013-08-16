@@ -1,4 +1,4 @@
-/*  Copyright (C) 1988-2010 by Brian Doty and the
+/*  Copyright (C) 1988-2011 by Brian Doty and the
     Institute of Global Environment and Society (IGES).
     See file COPYRIGHT for more information.   */
 
@@ -244,7 +244,7 @@ void gxmove (gadouble x, gadouble y) {        /* Move to x,y   */
 
 void gxdraw (gadouble x, gadouble y){        /* Draw to x,y   */
 gadouble xnew,ynew;
-gaint pos;
+gaint pos=0;
   if ( x<clminx || x>clmaxx || y<clminy || y>clmaxy ) {
     if (!cflag) {
       bdterp (oldx,oldy,x,y,&xnew,&ynew);
@@ -931,6 +931,22 @@ gaint siz,i,j,pos,ilo,ihi,jlo,jhi,jj;
     maskx = (gaint)(rxsize*100.0);
     gxmaskclear();
   }
+  maskflg = 1;
+
+  /* do clipping for the mask */
+  if (xlo<clminx && xhi<clminx) return;
+  if (xlo>clmaxx && xhi>clmaxx) return;
+  if (ylo<clminy && yhi<clminy) return;
+  if (ylo>clmaxy && yhi>clmaxy) return;
+
+  if (xlo<clminx) xlo=clminx;
+  if (xhi>clmaxx) xhi=clmaxx;
+  if (ylo<clminy) ylo=clminy;
+  if (yhi>clmaxy) yhi=clmaxy;
+
+  /* convert to virtual page coordinates */
+  gxvcon(xlo,ylo,&xlo,&ylo);
+  gxvcon(xhi,yhi,&xhi,&yhi);
 
   ilo = (gaint)(xlo*100.0);
   ihi = (gaint)(xhi*100.0);
@@ -938,8 +954,8 @@ gaint siz,i,j,pos,ilo,ihi,jlo,jhi,jj;
   jhi = (gaint)(yhi*100.0);
   if (ilo<0) ilo = 0;
   if (ihi<0) ihi = 0;
-  if (ilo>maskx) ilo = maskx;
-  if (ihi>maskx) ihi = maskx;
+  if (ilo>=maskx) ilo = maskx-1;
+  if (ihi>=maskx) ihi = maskx-1;
   for (j=jlo; j<=jhi; j++) {
     jj = j*maskx;
     for (i=ilo; i<=ihi; i++) {
@@ -947,7 +963,6 @@ gaint siz,i,j,pos,ilo,ihi,jlo,jhi,jj;
       if (pos>=0 && pos<masksize) *(mask+pos) = '1';
     }
   }
-  maskflg = 1;
 }
 
 /* Given a rectangular area, check to see if it overlaps with any existing
@@ -959,6 +974,14 @@ gaint i,j,ilo,ihi,jlo,jhi,jj,pos;
   if (maskflg == -888) return(0);
   if (mask==NULL) return (0);
   if (maskflg==0) return (0);
+
+  /* If query region is partially or completely outside of clip area, indicate an overlap */
+
+  if (xlo<clminx || xhi>clmaxx || ylo<clminy || yhi>clmaxy) return(1);
+
+  /* convert to virtual page coordinates */
+  gxvcon(xlo,ylo,&xlo,&ylo);
+  gxvcon(xhi,yhi,&xhi,&yhi);
 
   ilo = (gaint)(xlo*100.0);
   ihi = (gaint)(xhi*100.0);

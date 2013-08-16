@@ -1,4 +1,4 @@
-/*  Copyright (C) 1988-2010 by Brian Doty and the
+/*  Copyright (C) 1988-2011 by Brian Doty and the
     Institute of Global Environment and Society (IGES).
     See file COPYRIGHT for more information.   */
 
@@ -487,9 +487,9 @@ char monam[5];
     if (*ch>='0' && *ch<='9') {
       /* use fullyear only if year 1 = 0001*/
       if(*(ch+2)>='0' && *(ch+2)<='9') {
-        mfcmn.fullyear=1;
+        mfcmn.fullyear=1;   /* 4-digit year */
       } else {
-        mfcmn.fullyear=0;
+        mfcmn.fullyear=0;   /* 2-digit year */
       }
       ch = intprs (ch,&val);
     } else {
@@ -1496,7 +1496,9 @@ void gagfre (struct gagrid *pgr) {
 void gasfre (struct gastn *stn) {
 gaint i;
   if (stn==NULL) return;
-  if (stn->tvals) gree(stn->tvals,"f237");
+  if (stn->tvals) {
+    gree(stn->tvals,"f237");
+  }
   if (stn->rpt) {
     for (i=0; i<BLKNUM; i++) {
       if (stn->blks[i] != NULL) gree(stn->blks[i],"f238");
@@ -1955,6 +1957,23 @@ size_t sz;
   return (fnout);
 }
 
+/* Byte swap requested number of 2 byte elements */
+
+void gabswp2 (void *r, gaint cnt) {
+gaint i;
+char *ch1,*ch2,cc1,cc2;
+
+  ch1 = (char *)r;
+  ch2 = ch1+1;
+  for (i=0; i<cnt; i++) {
+    cc1 = *ch1;
+    cc2 = *ch2;
+    *ch1 = cc2;
+    *ch2 = cc1;
+    ch1+=2; ch2+=2;
+  }
+}
+
 /* Byte swap requested number of 4 byte elements */
 
 void gabswp (void *r, gaint cnt) {
@@ -2319,7 +2338,6 @@ gaint i;
   i = 0;
   if (*(mrec+i)=='\n' || *(mrec+i)=='\0') return (1);
   getwrd (ens->name, mrec+i, 15);
-  lowcas(ens->name);
   return(0);
 
 }

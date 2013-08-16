@@ -1,4 +1,4 @@
-/*  Copyright (C) 1988-2010 by Brian Doty and the
+/*  Copyright (C) 1988-2011 by Brian Doty and the
     Institute of Global Environment and Society (IGES).
     See file COPYRIGHT for more information.   */
 
@@ -39,11 +39,11 @@
 #endif
 
 void gatmlb (struct gacmn *);    /* time label*/
-void gxqdrgb (gaint, gaint *, gaint *, gaint *); /* query default color rgb values */
 static char pout[256];           /* Build error msgs here */
 static struct mapprj mpj;        /* Common map projection structure */
 static gadouble wxymin,wxymax;   /* wx symbol limits */
 #if USESHP==1
+gaint s2shpwrt (SHPHandle, DBFHandle, struct dbfld *);
 gaint gxshplin (SHPHandle, DBFHandle, struct dbfld *);
 gaint gxclvert(FILE *);
 static struct dbfld *dbanch=NULL;  /* Anchor for shapefile data base fields */
@@ -158,12 +158,18 @@ gaint proj;
           else if (pcm->gout2a ==  3) gaplvl (pcm);       /* grid */
           else if (pcm->gout2a ==  6) gafgrd (pcm);       /* fgrid */
           else if (pcm->gout2a ==  7) gafwrt (pcm);       /* fwrite */
+          else if (pcm->gout2a == 10) gacntr (pcm,2,0);   /* grfill */
           else if (pcm->gout2a == 12) gagtif (pcm,0);     /* geotiff */
           else if (pcm->gout2a == 13 && pcm->kmlflg==1) gagtif (pcm,1);  /* kml image output */
-          else if (pcm->gout2a == 13 && pcm->kmlflg==2) gakml (pcm);     /* kml contours */
+          else if (pcm->gout2a == 13 && pcm->kmlflg>1)  gakml (pcm);     /* kml contours or polygons */
           else if (pcm->gout2a == 14) gacntr (pcm,3,0);   /* imap */
           else if (pcm->gout2a == 15) gashpwrt (pcm);     /* shapefile */
-          else gacntr (pcm,2,0);                          /* grfill */
+          else if (pcm->gout2a == 16) gacntr (pcm,4,0);   /* gxshad2   */
+          else if (pcm->gout2a == 17) gacntr (pcm,5,0);   /* gxshad2b  */
+          else {
+            gaprnt (0,"Internal logic error: invalid gout2a value\n");
+            return;
+          }
         }
         else {
           if (pcm->gout2b == 3) gaplvl (pcm);
@@ -1042,8 +1048,14 @@ char lab[20];
               gxconv (rlon,rpt->lat,&x,&y,2);
               if (dequal(rpt2->val,0.0,1e-12)==0 && dequal(rpt->val,0.0,1e-12)==0)
                 dir = 0.0;
-              else
-                dir = atan2(rpt2->val,rpt->val) + gxaarw(rpt->lon,rpt->lat);
+              else {
+                dir = gxaarw(rpt->lon,rpt->lat);
+                if (dir<-900.0) {
+                  gaprnt(0,"Error: vector/barb not compatible with the current map projection\n");
+                  return;
+                }
+                dir = dir + atan2(rpt2->val,rpt->val);
+              }
               spd = hypot(rpt->val,rpt2->val);
               if (pcm->goutstn==2) {
                 hemflg = 0;
@@ -1257,7 +1269,7 @@ struct garpt *rpt, *rpt1;
 struct gagrid *pgr;
 gadouble vals[10];
 char udefs[10];
-gaint i,num;
+gaint i,num,rc;
 
   gamscl (pcm);       /* Do map level scaling */
   gawmap (pcm, 1);    /* Draw map */
@@ -1316,7 +1328,8 @@ gaint i,num;
         else udefs[i] = 0;
       }
     }
-    gasmdl (pcm,rpt1,vals,udefs);
+    rc = gasmdl (pcm,rpt1,vals,udefs);
+    if (rc) return;
     rpt1 = rpt1->rpt;
   }
 
@@ -1333,7 +1346,7 @@ gaint i,num;
 
 /* Plot an individual station model */
 
-void gasmdl (struct gacmn *pcm, struct garpt *rpt, gadouble *vals, char *udefs) {
+gaint gasmdl (struct gacmn *pcm, struct garpt *rpt, gadouble *vals, char *udefs) {
 gaint num,icld,i,col,ivis,itop,ibot,ii,hemflg;
 gadouble x,y;
 gadouble spd,dir,roff,scl,rad,t,digsiz,msize,plen,wrad;
@@ -1346,7 +1359,7 @@ char ch[20],len;
   num = pcm->numgrd;
 
   /* If no winds, just return */
-  if ( *udefs==0 || *(udefs+1)==0) return;
+  if ( *udefs==0 || *(udefs+1)==0) return(0);
 
   /* Plot */
   gxconv (rpt->lon,rpt->lat,&x,&y,2);
@@ -1549,10 +1562,16 @@ char ch[20],len;
   }
 
   /* Plot wind barb */
-  if (dequal(*vals,0.0,1e-12)==0 && dequal(*(vals+1),0.0,1e-12)==0)
+  if (dequal(*vals,0.0,1e-12)==0 && dequal(*(vals+1),0.0,1e-12)==0) {
     dir = 0.0;
-  else
-    dir = atan2(*(vals+1),*vals) + gxaarw(rpt->lon,rpt->lat);
+  } else {
+    dir = gxaarw(rpt->lon,rpt->lat);
+    if (dir<-900.0) {
+      gaprnt(0,"Error: vector/barb not compatible with current map projection\n");
+      return (1);
+    }
+    dir = dir + atan2(*(vals+1),*vals);
+  }
   spd = hypot(*vals,*(vals+1));
   orad = wndexit (spd*cos(dir), spd*sin(dir), x, y, rad, xlo, xhi, ylo, yhi);
   if (orad<-990.0) {
@@ -1564,6 +1583,7 @@ char ch[20],len;
     wrad = orad;
   }
   gabarb (x, y, plen, pcm->digsiz*2.5, wrad, dir, spd, hemflg);
+  return(0);
 }
 
 /* Find exit radius for the wind barb */
@@ -1941,12 +1961,13 @@ char stid[10];
 
 void gas1d (struct gacmn *pcm, gadouble cmin, gadouble cmax, gaint dim, gaint rotflg,
             struct gagrid *pgr, struct gastn *stn) {
-gadouble x1,x2,xt1,xt2,yt1,yt2;
+gadouble x1,x2,y1,y2,xt1,xt2,yt1,yt2;
 gadouble cint,cmn,cmx;
 gaint axmov;
 
   idiv = 1; jdiv = 1;   /* No grid expansion factor */
   gxrset(3);            /* Reset all scaling        */
+  gxrsmapt();           /* Reset map type */
 
   /* Set plot area limits */
 
@@ -2019,13 +2040,56 @@ gaint axmov;
      vals are used for t2gr as gr2t.                 */
 
   if (pgr!=NULL) {
+    y1 = cmn; y2 = cmx;
     if (dim==3) {
       x1 = t2gr(pgr->ivals,&(pcm->tmin));
       x2 = t2gr(pgr->ivals,&(pcm->tmax));
+      if (pcm->log1d > 1) {
+        if (cmn<=0.0 || cmx<=0.0) {
+          gaprnt (1,"Cannot use log scaling when coordinates <= 0\n");
+          gaprnt (1,"Linear scaling used\n");
+        } else {
+          if (rotflg) { gxproj(galogx); gxback(gaalogx); }
+          else { gxproj(galogy); gxback(gaalogy); }
+          y1 = log10(cmn); y2 = log10(cmx);
+        }
+      }
     } else {
       x1 = pcm->dmin[dim];
       x2 = pcm->dmax[dim];
-      if (dim==2 && pcm->zlog) {
+      if (pcm->log1d) {  /* Only one kind of 1D scaling at a time */
+        if (pcm->log1d == 1) {
+          if (x1<=0.0 || x2<=0.0) {
+            gaprnt (1,"Cannot use log scaling when coordinates <= 0\n");
+            gaprnt (1,"Linear scaling used\n");
+          } else {
+            if (rotflg) { gxproj(galogy); gxback(gaalogy); }
+            else { gxproj(galogx); gxback(gaalogx); }
+            x1 = log10(x1); x2 = log10(x2);
+          }
+        }
+        if (pcm->log1d == 2) {
+          if (cmn<=0.0 || cmx<=0.0) {
+            gaprnt (1,"Cannot use log scaling when coordinates <= 0\n");
+            gaprnt (1,"Linear scaling used\n");
+          } else {
+            if (rotflg) { gxproj(galogx); gxback(gaalogx); }
+            else { gxproj(galogy); gxback(gaalogy); }
+            y1 = log10(cmn); y2 = log10(cmx);
+          }
+        }
+        if (pcm->log1d == 3) {
+          if (cmn<=0.0 || cmx<=0.0 || x1<=0.0 || x2<=0.0) {
+            gaprnt (1,"Cannot use log scaling when coordinates <= 0\n");
+            gaprnt (1,"Linear scaling used\n");
+          } else {
+            gxproj(galog2); gxback(gaalog2);
+            y1 = log10(cmn); y2 = log10(cmx);
+            x1 = log10(x1); x2 = log10(x2);
+          }
+        }
+      }
+      else if (dim==2 && pcm->zlog) {
         if (x1<=0.0 || x2<=0.0) {
           gaprnt (1,"Cannot use log scaling when coordinates <= 0\n");
           gaprnt (1,"Linear scaling used\n");
@@ -2041,7 +2105,7 @@ gaint axmov;
           x2 = log(x2);
         }
       }
-      if (dim==1 && pcm->coslat) {
+      else if (dim==1 && pcm->coslat) {
         if (x1 < -90.0 || x2 > 90.0) {
           gaprnt (1,"Cannot use cos lat scaling when coordinates exceed -90 to 90\n");
           gaprnt (1,"Linear scaling used\n");
@@ -2065,8 +2129,8 @@ gaint axmov;
       pcm->yab2gr = pgr->iabgr;
       pcm->ygrval = pgr->ivals;
       pcm->yabval = pgr->iavals;
-      xt1 = cmn; xt2 = cmx; yt1 = x1; yt2 = x2;
-      if (pcm->xflip) {xt1 = cmx; xt2 = cmn;}
+      xt1 = y1; xt2 = y2; yt1 = x1; yt2 = x2;
+      if (pcm->xflip) {xt1 = y2; xt2 = y1;}
       if (pcm->yflip) {yt1 = x2; yt2 = x1;}
     } else {
       pcm->xdim = dim;
@@ -2075,9 +2139,9 @@ gaint axmov;
       pcm->xab2gr = pgr->iabgr;
       pcm->xgrval = pgr->ivals;
       pcm->xabval = pgr->iavals;
-      xt1 = x1; xt2 = x2; yt1 = cmn; yt2 = cmx;
+      xt1 = x1; xt2 = x2; yt1 = y1; yt2 = y2;
       if (pcm->xflip) {xt1 = x2; xt2 = x1;}
-      if (pcm->yflip) {yt1 = cmx; yt2 = cmn;}
+      if (pcm->yflip) {yt1 = y2; yt2 = y1;}
     }
     gxscal (pcm->xsiz1,pcm->xsiz2,pcm->ysiz1,pcm->ysiz2,xt1,xt2,yt1,yt2);
     if (rotflg) {
@@ -2177,6 +2241,7 @@ gadouble x1,x2,y1,y2,xt1,xt2,yt1,yt2;
 gaint idim,jdim;
 
   gxrset (3);       /* Reset all scaling */
+  gxrsmapt();       /* Reset map type */
 
   /* Set up linear level scaling (level 1) and map level scaling
      (level 2).  If no map drawn, just do linear level scaling.  */
@@ -2344,7 +2409,7 @@ size_t sz;
 
   gxclip (pcm->xsiz1-0.01, pcm->xsiz2+0.01, pcm->ysiz1, pcm->ysiz2);
 
-  /* Allocate some buffer areas */
+ /* Allocate some buffer areas */
 
   sz = sizeof(gadouble)*pgr1->isiz;
   u  = (gadouble *)galloc(sz,"gridu");
@@ -2979,11 +3044,13 @@ char *umask, *vmask, *cmask=NULL;
   gxclip (pcm->xsiz1, pcm->xsiz2, pcm->ysiz1, pcm->ysiz2);
 
   if (flag) {
-    gxstrm (u,v,c,pgru->isiz,pgru->jsiz,umask,vmask,cmask,
-       flag,pcm->shdlvs,pcm->shdcls,pcm->shdcnt,pcm->strmden);
+    gxstrm (u,v,c,pgru->isiz,pgru->jsiz,umask,vmask,cmask,flag,
+      pcm->shdlvs,pcm->shdcls,pcm->shdcnt,pcm->strmden,
+      pcm->strmarrd,pcm->strmarrsz, pcm->strmarrt);
   } else {
-    gxstrm (u,v,NULL,pgru->isiz,pgru->jsiz,umask,vmask,0,
-       flag,pcm->shdlvs,pcm->shdcls,pcm->shdcnt,pcm->strmden);
+    gxstrm (u,v,NULL,pgru->isiz,pgru->jsiz,umask,vmask,0,flag,
+      pcm->shdlvs,pcm->shdcls,pcm->shdcnt,pcm->strmden,
+      pcm->strmarrd,pcm->strmarrsz, pcm->strmarrt);
   }
 
   gxclip (0.0, pcm->xsiz, 0.0, pcm->ysiz);
@@ -3116,6 +3183,10 @@ char *umask,*vmask,*cmask=NULL;
       gxconv ((gadouble)i,(gadouble)j,&x,&y,3);
       gxgrmp ((gadouble)i,(gadouble)j,&lon,&lat);
       adj = gxaarw (lon, lat);
+      if (adj < -900.0) {
+        gaprnt(0,"Error: vector/barb not compatible with current map projection\n");
+        return;
+      }
       hemflg = 0;
       if (hflg==0 && lon<0.0) hemflg = 1;
       if (hflg==1 && lat<0.0) hemflg = 1;
@@ -3441,6 +3512,7 @@ char *rmask,*mmask=NULL,lab[20];
 }
 
 /* Writes out a shapefile */
+
 void gashpwrt (struct gacmn *pcm) {
 #if USESHP==1
 FILE *fp=NULL;
@@ -3490,10 +3562,8 @@ struct dbfld *fld=NULL,*newfld=NULL,*nextfld;
     stn = pcm->result[0].stn;
     /* shapefile type is always point for station data */
     if (pcm->shptype!=1) {
-      if (pcm->shptype==2) {
-        gaprnt(0,"Error in gashpwrt: Shapefile output type for station data ");
-        gaprnt(0,"must be \"point\", but is set to \"line\"\n");
-      }
+      gaprnt(0,"Error in gashpwrt: Incorrect shapefile output type for station data \n");
+      gaprnt(0,"   You must use the -pt option with the 'set shp' command \n");
       error = 1;
       goto cleanup;
     }
@@ -3533,13 +3603,18 @@ struct dbfld *fld=NULL,*newfld=NULL,*nextfld;
       error = 1; goto cleanup;
     }
   }
-  else {
+  else if (pcm->shptype==2) {
     if ((sfid = SHPCreate(fnroot,SHPT_ARCM))==NULL) {
       gaprnt(0,"Error in gashpwrt: Unable to create shapefile for contour lines\n");
       error = 1; goto cleanup;
     }
   }
-
+  else {
+    if ((sfid = SHPCreate(fnroot,SHPT_POLYGONM))==NULL) {
+      gaprnt(0,"Error in gashpwrt: Unable to create shapefile for polygons\n");
+      error = 1; goto cleanup;
+    }
+  }
   /* Set up the list of data base fields. */
 
   /* Allocate a new field, the GrADS version, set it as the anchor in the local chain */
@@ -3586,6 +3661,7 @@ struct dbfld *fld=NULL,*newfld=NULL,*nextfld;
      grid points: longitude, latitude, and grid value
      station points: longitude, latitude, stid, and station value
      contours: contour value
+     polygons:
   */
 
   width = pcm->dblen;
@@ -3627,9 +3703,29 @@ struct dbfld *fld=NULL,*newfld=NULL,*nextfld;
         fld->next = NULL;
       }
     }
-  } else {
+  } else if  (pcm->shptype==2) {
     /* add contour value */
     snprintf(fldname,11,"CNTR_VALUE");
+    if ((fld = newdbfld (fldname, FTDouble, width, prec, 1, NULL)) != NULL) {
+      dblast->next = fld;
+      dblast = fld;
+      fld->next = NULL;
+    }
+  } else {
+    /* add polygon index number and range values */
+    snprintf(fldname,11,"INDEX");
+    if ((fld = newdbfld (fldname, FTDouble, width, prec, 1, NULL)) != NULL) {
+      dblast->next = fld;
+      dblast = fld;
+      fld->next = NULL;
+    }
+    snprintf(fldname,11,"MIN_VALUE");
+    if ((fld = newdbfld (fldname, FTDouble, width, prec, 1, NULL)) != NULL) {
+      dblast->next = fld;
+      dblast = fld;
+      fld->next = NULL;
+    }
+    snprintf(fldname,11,"MAX_VALUE");
     if ((fld = newdbfld (fldname, FTDouble, width, prec, 1, NULL)) != NULL) {
       dblast->next = fld;
       dblast = fld;
@@ -3796,7 +3892,8 @@ struct dbfld *fld=NULL,*newfld=NULL,*nextfld;
     }
 
   }
-  else {
+  /* Write out contour lines */
+  else if (pcm->shptype==2) {
     /* Call gacntr() to create buffered contour lines */
     rc = gacntr (pcm, 0, 1);
     if (rc) {
@@ -3812,8 +3909,34 @@ struct dbfld *fld=NULL,*newfld=NULL,*nextfld;
     else if (rc==-1) {
       error = 1;
     }
+
     /* release the contour buffer from memory */
     gxcrel();
+
+  }
+  /* Write out polygons */
+  else {
+    s2setbuf(1);    /* turn on polygon buffering */
+    s2setdraw(1);   /* disable drawing of polygons to display */
+
+    /* call gacntr() to create shaded polygons with gxshad2 */
+    rc = gacntr (pcm,4,1);
+    if (rc) {
+      error = 1; goto cleanup;
+    }
+
+    /* call routine in gxshad2.c to write out polygon vertices and values */
+    rc = s2shpwrt(sfid,dbfid,dbanch);
+    if (rc>0) {
+      snprintf(pout,511,"%d polygons written to shapefile %s\n",rc,fnroot);
+      gaprnt(2,pout);
+    }
+    else if (rc==-1) {
+      error = 1;
+    }
+    s2frepbuf();    /* release the polygon buffer from memory */
+    s2setbuf(0);    /* turn off polygon buffering */
+    s2setdraw(0);   /* restore drawing of polygons */
 
   }
 
@@ -3879,6 +4002,7 @@ cleanup:
    flag = 1 for dynamic fields (values vary with shape)
 
 */
+#if USESHP==1
 struct dbfld* newdbfld (char *fldname, DBFFieldType dbtype, gaint len, gaint prec,
                         gaint flag, char *val) {
   gaint sz;
@@ -3914,9 +4038,9 @@ struct dbfld* newdbfld (char *fldname, DBFFieldType dbtype, gaint len, gaint pre
     return NULL;
   }
 }
+#endif
 
-
-/* Writes out a KML file containing output from contouring routine */
+/* Writes out a KML file containing output from contour/shade2 routine */
 
 void gakml (struct gacmn *pcm) {
   FILE *kmlfp=NULL;
@@ -3966,46 +4090,111 @@ void gakml (struct gacmn *pcm) {
     goto cleanup;
   }
 
-  /* Call gacntr() to create buffered contour lines */
-  rc = gacntr (pcm, 0, 1);
-  if (rc) goto cleanup;
+  if (pcm->kmlflg==2) {
+    rc = gacntr (pcm, 0, 1);     /* Call gacntr() to create buffered contour lines for KML file */
+    if (rc) goto cleanup;
+  }
+  else if (pcm->kmlflg==3) {
+    s2setbuf(1);                 /* turn on polygon buffering */
+    s2setdraw(1);                /* disable drawing polygons to display */
+    rc = gacntr (pcm, 4, 1);     /* Call gacntr() to create buffered polygons for KML file */
+    if (rc) goto cleanup;
 
-  /* write out headers */
+  } else {
+    gaprnt(9,"logic errror in subroutine gakml\n");
+    goto cleanup;
+  }
+
+
+
+  /* write out KML headers */
   snprintf(pout,255,"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
   if ((fwrite(pout,sizeof(char),strlen(pout),kmlfp))!=strlen(pout)) {err=1; goto cleanup;}
   snprintf(pout,255,"<kml xmlns=\"http://www.opengis.net/kml/2.2\">\n");
   if ((fwrite(pout,sizeof(char),strlen(pout),kmlfp))!=strlen(pout)) {err=1; goto cleanup;}
   snprintf(pout,255,"  <Document id=\"Created by GrADS-"GRADS_VERSION"\">\n");
   if ((fwrite(pout,sizeof(char),strlen(pout),kmlfp))!=strlen(pout)) {err=1; goto cleanup;}
-  /* write out the contour colors as a set of Style tags */
-  for (i=0; i<pcm->cntrcnt; i++) {
-    snprintf(pout,255,"    <Style id=\"%d\">\n      <LineStyle>\n",pcm->cntrcols[i]);
-    if ((fwrite(pout,sizeof(char),strlen(pout),kmlfp))!=strlen(pout)) {err=1; goto cleanup;}
-    /* get rgb values for this color */
-    if (pcm->cntrcols[i]<16) {
-      gxqdrgb(pcm->cntrcols[i],&r,&g,&b);         /* default color */
+
+  /* Contours */
+  if (pcm->kmlflg==2) {
+    /* write out the contour colors as a set of Style tags with LineStyle */
+    for (i=0; i<pcm->cntrcnt; i++) {
+      snprintf(pout,255,"    <Style id=\"%d\">\n      <LineStyle>\n",pcm->cntrcols[i]);
+      if ((fwrite(pout,sizeof(char),strlen(pout),kmlfp))!=strlen(pout)) {err=1; goto cleanup;}
+      /* get rgb values for this color */
+      if (pcm->cntrcols[i]<16) {
+        gxqdrgb(pcm->cntrcols[i],&r,&g,&b);         /* default color */
+      }
+      else {
+        gxqrgb(pcm->cntrcols[i],&r,&g,&b);          /* user-defined color */
+        if (r==-999) r = g = b = 0;
+      }
+      snprintf(pout,255,"        <color>ff%02x%02x%02x</color>\n",b,g,r);
+      if ((fwrite(pout,sizeof(char),strlen(pout),kmlfp))!=strlen(pout)) {err=1; goto cleanup;}
+      snprintf(pout,255,"        <width>%d</width>\n",pcm->cthick);
+      if ((fwrite(pout,sizeof(char),strlen(pout),kmlfp))!=strlen(pout)) {err=1; goto cleanup;}
+      snprintf(pout,255,"      </LineStyle>\n    </Style>\n");
+      if ((fwrite(pout,sizeof(char),strlen(pout),kmlfp))!=strlen(pout)) {err=1; goto cleanup;}
     }
-    else {
-      gxqrgb(pcm->cntrcols[i],&r,&g,&b);          /* user-defined color */
-      if (r==-999) r = g = b = 0;
+    /* write out the locations of the contour vertices */
+    rc = gxclvert(kmlfp);
+    if (rc>0) {
+      if (pcm->kmlname)
+        snprintf(pout,511,"%d contours written to KML file %s\n",rc,pcm->kmlname);
+      else
+        snprintf(pout,511,"%d contours written to KML file grads.kml\n",rc);
+      gaprnt(2,pout);
     }
-    snprintf(pout,255,"        <color>ff%02x%02x%02x</color>\n",b,g,r);
-    if ((fwrite(pout,sizeof(char),strlen(pout),kmlfp))!=strlen(pout)) {err=1; goto cleanup;}
-    snprintf(pout,255,"        <width>%d</width>\n",pcm->cthick);
-    if ((fwrite(pout,sizeof(char),strlen(pout),kmlfp))!=strlen(pout)) {err=1; goto cleanup;}
-    snprintf(pout,255,"      </LineStyle>\n    </Style>\n");
-    if ((fwrite(pout,sizeof(char),strlen(pout),kmlfp))!=strlen(pout)) {err=1; goto cleanup;}
+    else err=1;
   }
-  /* write out the locations of the contour vertices */
-  rc = gxclvert(kmlfp);
-  if (rc>0) {
-    if (pcm->kmlname)
-      snprintf(pout,511,"%d contours written to KML file %s\n",rc,pcm->kmlname);
-    else
-      snprintf(pout,511,"%d contours written to KML file grads.kml\n",rc);
-    gaprnt(2,pout);
+  /* Polygons */
+  else {
+    /* write out the polygon colors as a set of Style tags with LineStyle and PolyStyle */
+    for (i=0; i<pcm->shdcnt; i++) {
+      snprintf(pout,255,"    <Style id=\"%d\">\n",pcm->shdcls[i]);
+      if ((fwrite(pout,sizeof(char),strlen(pout),kmlfp))!=strlen(pout)) {err=1; goto cleanup;}
+      snprintf(pout,255,"      <LineStyle>\n");
+      if ((fwrite(pout,sizeof(char),strlen(pout),kmlfp))!=strlen(pout)) {err=1; goto cleanup;}
+      /* get rgb values for this color */
+      if (pcm->shdcls[i]>=0 && pcm->shdcls[i]<16) {
+        gxqdrgb(pcm->shdcls[i],&r,&g,&b);         /* default color */
+      }
+      else {
+        gxqrgb(pcm->shdcls[i],&r,&g,&b);          /* user-defined color */
+        if (r==-999) r = g = b = 0;
+      }
+      snprintf(pout,255,"        <color>ff%02x%02x%02x</color>\n",b,g,r);
+      if ((fwrite(pout,sizeof(char),strlen(pout),kmlfp))!=strlen(pout)) {err=1; goto cleanup;}
+      snprintf(pout,255,"        <width>0</width>\n");
+      if ((fwrite(pout,sizeof(char),strlen(pout),kmlfp))!=strlen(pout)) {err=1; goto cleanup;}
+      snprintf(pout,255,"      </LineStyle>\n");
+      if ((fwrite(pout,sizeof(char),strlen(pout),kmlfp))!=strlen(pout)) {err=1; goto cleanup;}
+      snprintf(pout,255,"      <PolyStyle>\n");
+      if ((fwrite(pout,sizeof(char),strlen(pout),kmlfp))!=strlen(pout)) {err=1; goto cleanup;}
+      snprintf(pout,255,"        <color>ff%02x%02x%02x</color>\n",b,g,r);
+      if ((fwrite(pout,sizeof(char),strlen(pout),kmlfp))!=strlen(pout)) {err=1; goto cleanup;}
+      snprintf(pout,255,"        <fill>1</fill>\n");
+      if ((fwrite(pout,sizeof(char),strlen(pout),kmlfp))!=strlen(pout)) {err=1; goto cleanup;}
+      snprintf(pout,255,"      </PolyStyle>\n");
+      if ((fwrite(pout,sizeof(char),strlen(pout),kmlfp))!=strlen(pout)) {err=1; goto cleanup;}
+      snprintf(pout,255,"    </Style>\n");
+      if ((fwrite(pout,sizeof(char),strlen(pout),kmlfp))!=strlen(pout)) {err=1; goto cleanup;}
+    }
+
+    /* write out the locations of the polygon vertices */
+    /* call routine in gxshad2.c to write out polygon vertices and values */
+    rc = s2polyvert(kmlfp);
+    if (rc>0) {
+      if (pcm->kmlname)
+        snprintf(pout,511,"%d polygons written to KML file %s\n",rc,pcm->kmlname);
+      else
+        snprintf(pout,511,"%d polygons written to KML file grads.kml\n",rc);
+      gaprnt(2,pout);
+    }
+    else err=1;
+
   }
-  else err=1;
+
   /* write out footers */
   snprintf(pout,255,"  </Document>\n</kml>\n");
   if ((fwrite(pout,sizeof(char),strlen(pout),kmlfp))!=strlen(pout)) {err=1; goto cleanup;}
@@ -4013,7 +4202,13 @@ void gakml (struct gacmn *pcm) {
   gagsav (24,pcm,NULL);
 
  cleanup:
-  gxcrel();                    /* release storage used by the contouring package */
+  if (pcm->kmlflg==2) {
+    gxcrel();       /* release storage used by the contouring package */
+  } else {
+    s2frepbuf();    /* release the polygon buffer from memory */
+    s2setbuf(0);    /* turn off polygon buffering */
+    s2setdraw(0);   /* restore drawing of polygons */
+  }
   if (kmlfp) fclose(kmlfp);    /* close the file */
   if (err) gaprnt(0,"Error from fwrite when writing KML file\n");
   return;
@@ -4880,10 +5075,11 @@ size_t sz;
    1  shaded contours
    2  grfill
    3  imap
+   4,5  gxshad2
 
    shpflg:
    0  no shapefile
-   1  (only with filflg=0) contours for shapefile output
+   1  line or shaded contours for shapefile output
 
    return code ignored in all cases except when shpflg=1, in which case
    rc=0 contours created
@@ -4911,6 +5107,17 @@ size_t sz;
     gaprnt (0,"Invalid dimension and/or scaling environment for gxout imap\n");
     gaprnt (0,"   Mproj latlon or scaled required; x/y varying plot required\n");
     return 1;
+  }
+
+  /* check if user-provided contour levels are strictly increasing for shaded output */
+  if (filflg && pcm->cflag) {
+    for (i=1; i<pcm->cflag; i++) {
+      if (pcm->clevs[i] <= pcm->clevs[i-1]) {
+        gaprnt(2,"Invalid user-specified contour levels for shaded output.\n");
+        gaprnt(2,"   Contour levels must be strictly increasing.\n");
+        return 1;
+      }
+    }
   }
 
   /* flip axes for Z-T plots (skip this for shapefile output )*/
@@ -5071,6 +5278,10 @@ size_t sz;
       } else if (filflg==3) {
         gaimap (rrr,isz,jsz,pcm->shdlvs,pcm->shdcls,pcm->shdcnt,rrrmask,
                     pcm->xsiz1,pcm->xsiz2,pcm->ysiz1,pcm->ysiz2);
+      } else if (filflg==4) {
+        gxshad2 (rrr,isz,jsz,pcm->shdlvs,pgr->rmax,pcm->shdcls,pcm->shdcnt,rrrmask);
+      } else if (filflg==5) {
+        gxshad2b (rrr,isz,jsz,pcm->shdlvs,pgr->rmax,pcm->shdcls,pcm->shdcnt,rrrmask);
       }
     }
     else {
@@ -5081,9 +5292,13 @@ size_t sz;
       } else if (filflg==3) {
         gaimap (pgr->grid,pgr->isiz,pgr->jsiz,pcm->shdlvs,pcm->shdcls,pcm->shdcnt,
              pgr->umask, pcm->xsiz1,pcm->xsiz2,pcm->ysiz1,pcm->ysiz2);
+      } else if (filflg==4) {
+        gxshad2 (pgr->grid,pgr->isiz,pgr->jsiz,pcm->shdlvs,pgr->rmax,pcm->shdcls,pcm->shdcnt,pgr->umask);
+      } else if (filflg==5) {
+        gxshad2b (pgr->grid,pgr->isiz,pgr->jsiz,pcm->shdlvs,pgr->rmax,pcm->shdcls,pcm->shdcnt,pgr->umask);
       }
     }
-    if (pgr->idim==0 && pgr->jdim==1) gawmap (pcm, 0);
+    if (pgr->idim==0 && pgr->jdim==1 && shpflg==0) gawmap (pcm, 0);
   }
   else {
     gxwide (pcm->cthick);
@@ -5274,6 +5489,12 @@ size_t sz;
   else if (filflg==3) {
     gagsav (26,pcm,pgr);
   }
+  else if (filflg==4) {
+    gagsav (27,pcm,pgr);
+  }
+  else if (filflg==5) {
+    gagsav (28,pcm,pgr);
+  }
   else {
     if (shpflg==0) gagsav (1,pcm,pgr);
   }
@@ -5352,7 +5573,7 @@ char lab[30],olab[30],*chlb=NULL;
     vmin = pcm->dmin[dim];
     vmax = pcm->dmax[dim];
   }
-  if (axis && pcm->xlabs) {
+  if (axis && pcm->xlabs) {  /* doesn't allow only one label? */
     vmin = 1.0;
     vmax = (gadouble)pcm->ixlabs;
     vincr = 1.0;
@@ -5488,6 +5709,7 @@ char lab[30],olab[30],*chlb=NULL;
         x = (v*m)+b;
         if (dim==2 && pcm->zlog) gxconv(v,pos,&x,&tt,2);
         else if (dim==1 && pcm->coslat) gxconv(v,pos,&x,&tt,2);
+        else if (pcm->log1d) gxconv(v,pos,&x,&tt,2);
         if (x<pcm->xsiz1-0.05 || x>pcm->xsiz2+0.05) {
           i++;
           continue;
@@ -5512,6 +5734,7 @@ char lab[30],olab[30],*chlb=NULL;
         y = (v*m)+b;
         if (dim==2 && pcm->zlog) gxconv(pcm->xsiz1,v,&tt,&y,2);
         else if (dim==1 && pcm->coslat) gxconv(pcm->xsiz1,v,&tt,&y,2);
+        else if (pcm->log1d) gxconv(pcm->xsiz1,v,&tt,&y,2);
         if (y<pcm->ysiz1-0.05 || y>pcm->ysiz2+0.05) {
           i++;
           continue;
@@ -6573,6 +6796,37 @@ void gaalny (gadouble xin, gadouble yin, gadouble *xout, gadouble *yout) {
   *xout = xin;
   *yout = pow(2.71829,yin);
 }
+
+void galogx (gadouble xin, gadouble yin, gadouble *xout, gadouble *yout) {
+  *xout = log10(xin);
+  *yout = yin;
+}
+
+void galogy (gadouble xin, gadouble yin, gadouble *xout, gadouble *yout) {
+  *xout = xin;
+  *yout = log10(yin);
+}
+
+void galog2 (gadouble xin, gadouble yin, gadouble *xout, gadouble *yout) {
+  *xout = log10(xin);
+  *yout = log10(yin);
+}
+
+void gaalogx (gadouble xin, gadouble yin, gadouble *xout, gadouble *yout) {
+  *xout = pow(10.0,xin);
+  *yout = yin;
+}
+
+void gaalogy (gadouble xin, gadouble yin, gadouble *xout, gadouble *yout) {
+  *xout = xin;
+  *yout = pow(10.0,yin);
+}
+
+void gaalog2 (gadouble xin, gadouble yin, gadouble *xout, gadouble *yout) {
+  *xout = pow(10.0,xin);
+  *yout = pow(10.0,yin);
+}
+
 
 /* cos lat scaling */
 

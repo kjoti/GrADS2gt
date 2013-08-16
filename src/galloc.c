@@ -48,6 +48,7 @@ static char *ptrs[LISTSIZE];
 static size_t lens[LISTSIZE];
 static char cbuf[LISTSIZEB];
 static int first = 1;
+static char msg[501];
 
 void *galloc (size_t, char *);
 void gree (char *, char *);
@@ -84,7 +85,7 @@ size_t llen;
     /* if hard-coded limit of ptrs has been exceeded,
        trip the flag to stop memory tracking */
     if (!buferr) {
-      printf ("Galloc memory tracking buffers exceeded. \n");
+      gaprnt(2,"Galloc memory tracking buffers exceeded. \n");
       buferr = 1;
     }
     return(mem);
@@ -120,7 +121,10 @@ char *mmm;
     i++;
   }
   if (i>LISTSIZE-2) {
-    if (verbo) printf ("!*!*!      freeing unallocated space! %s %p\n",ch,mem);
+    if (verbo) {
+      snprintf(msg,500,"!*!*!      freeing unallocated space! %s %p\n",ch,mem);
+      gaprnt(2,msg);
+    }
   }
   else {
     /* reset this pointer to NULL */
@@ -132,18 +136,26 @@ char *mmm;
     for (j=0; j<8; j++) if (*(mmm+j)!='A') flag = 1;
     if (flag) {
       if (verbo) {
-        printf ("Overlay!!! -->");
-        for (j=0; j<8; j++) printf("%c",*(mmm+j));       /* show the overlay */
-        printf ("<-- -->");
-        for (j=0; j<8; j++) printf("%c",cbuf[i*8+j]);    /* show the galloc tag */
-        printf ("<-- %s\n",ch);                           /* show the gree tag */
+        gaprnt(2,"Overlay!!! -->");
+        for (j=0; j<8; j++) {
+          snprintf(msg,500,"%c",*(mmm+j));        /* show the overlay */
+          gaprnt(2,msg);
+        }
+        gaprnt(2,"<-- -->");
+        for (j=0; j<8; j++) {
+          snprintf(msg,500,"%c",cbuf[i*8+j]);    /* show the galloc tag */
+          gaprnt(2,msg);
+        }
+        snprintf(msg,500,"<-- %s\n",ch);                           /* show the gree tag */
+        gaprnt(2,msg);
       }
     }
     if (cbuf[i*8+4]=='?') {
       if (verbo) {
-        printf ("Freeing %i %p %s ",i,mem,ch);
-        for (j=0; j<8; j++) printf("%c",cbuf[i*8+j]);
-        printf ("<--\n");
+        snprintf(msg,500,"Freeing %i %p %s ",i,mem,ch);
+        gaprnt(2,msg);
+        for (j=0; j<8; j++) {snprintf(msg,500,"%c",cbuf[i*8+j]); gaprnt(2,msg);}
+        gaprnt(2,"<--\n");
       }
     }
   }
@@ -159,23 +171,24 @@ size_t len;
 char *mmm;
 
   if (buferr) {
-     printf ("Mem tracking buffer was exceeded. \n");
+    gaprnt(2,"Mem tracking buffer was exceeded. \n");
   }
   for (i=0; i<LISTSIZE; i++) {
     if (ptrs[i]!=NULL) {
       /* list the index, ptr, length, and name of each allocated memory chunk */
-      printf ("pos=%i  ptr=%p  len=%ld  type=",i,ptrs[i],lens[i]);
-      for (j=0; j<8; j++) printf("%c",cbuf[i*8+j]);
+      snprintf(msg,500,"pos=%i  ptr=%p  len=%ld  type=",i,ptrs[i],lens[i]);
+      gaprnt(2,msg);
+      for (j=0; j<8; j++) { snprintf(msg,500,"%c",cbuf[i*8+j]); gaprnt(2,msg);}
       len = lens[i];
       mmm = ptrs[i] + len;
       flag = 0;
       for (j=0; j<8; j++) if (*(mmm+j)!='A') flag = 1;
-      if (verbo && flag) printf ("   *** Overlay *** ");
-      printf ("\n");
+      if (verbo && flag) gaprnt(2,"   *** Overlay *** ");
+      gaprnt(2,"\n");
     }
   }
   if (buferr) {
-     printf ("Mem tracking buffer was exceeded. \n");
+    gaprnt(2,"Mem tracking buffer was exceeded. \n");
   }
 }
 
@@ -185,7 +198,7 @@ void gsee (char *mem) {
 int i,j,flag,len;
 char *mmm;
   if (buferr) {
-     printf ("Mem tracking buffer was exceeded. \n");
+    gaprnt(2,"Mem tracking buffer was exceeded. \n");
   }
   i = 0;
   while (1) {
@@ -194,27 +207,30 @@ char *mmm;
     i++;
   }
   if (i>LISTSIZE-1) {
-    if (verbo) printf ("unallocated space! %p\n",mem);
-/*     getchar();              /\* Wait if requested    *\/ */
+    if (verbo) {
+      snprintf(msg,500,"unallocated space! %p\n",mem);
+      gaprnt(2,msg);
+    }
   } else {
     len = lens[i];
     mmm = mem + len;
     flag = 0;
-    if (verbo) printf("pos=%d  ptr=%p  len=%i  tag=",i,mem,len);
+    if (verbo) {
+      snprintf(msg,500,"pos=%d  ptr=%p  len=%i  tag=",i,mem,len);
+      gaprnt(2,msg);
+    }
     for (j=0; j<8; j++) if (*(mmm+j)!='A') flag = 1;
     if (verbo) {
-      for (j=0; j<8; j++) printf("%c",cbuf[i*8+j]);
+      for (j=0; j<8; j++) {snprintf(msg,500,"%c",cbuf[i*8+j]); gaprnt(2,msg);}
       if (flag) {
-        printf ("   * * * Overlay!!! * * *");
-        printf ("-->");
-        for (j=0; j<8; j++) printf("%c",*(mmm+j));
-        printf ("<--");
+        gaprnt(2,"   * * * Overlay!!! * * * -->");
+        for (j=0; j<8; j++) {snprintf(msg,500,"%c",*(mmm+j)); gaprnt(2,msg);}
+        gaprnt(2,"<--");
       }
-      printf("\n");
+      gaprnt(2,"\n");
     }
-/*       getchar();              /\* Wait if requested    *\/ */
   }
   if (buferr) {
-     printf ("Mem tracking buffer was exceeded. \n");
+    gaprnt(2,"Mem tracking buffer was exceeded. \n");
   }
 }

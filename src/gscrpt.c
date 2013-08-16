@@ -1,4 +1,4 @@
-/*  Copyright (C) 1988-2010 by Brian Doty and the
+/*  Copyright (C) 1988-2011 by Brian Doty and the
     Institute of Global Environment and Society (IGES).
     See file COPYRIGHT for more information.   */
 
@@ -3606,6 +3606,7 @@ gaint gsdelim (char ch) {
   if (ch==' ') return (1);
   if (ch==';') return (1);
   if (ch==',') return (1);
+  if (ch==':') return (1);
   return (0);
 }
 

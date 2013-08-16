@@ -1,4 +1,4 @@
-/*  Copyright (C) 1988-2010 by Brian Doty and the
+/*  Copyright (C) 1988-2011 by Brian Doty and the
     Institute of Global Environment and Society (IGES).
     See file COPYRIGHT for more information.   */
 
@@ -26,8 +26,8 @@ void *galloc(size_t,char *);
 void gree();
 char *intprs (char *, gaint *);
 char *getdbl (char *, gadouble *);
-void gaprnt (gaint, char *);
 gaint gxclvert (FILE *);
+gaint dequal(gadouble, gadouble, gadouble);
 
 /* For buffering contour lines, when label masking is in use */
 
@@ -58,7 +58,7 @@ gaint gxshplin (SHPHandle, DBFHandle, struct dbfld *);
 
 static struct gxclbuf *clbufanch=NULL;  /* Anchor for contour line buffering for masking */
 static struct gxclbuf *clbuflast=NULL;  /* Last clbuf struct in chain */
-static char pout[256];           /* Build error msgs here */
+static char pout[512];                  /* Build strings for KML here */
 
 /* Contour labels get buffered here when not using label masking  */
 
@@ -139,7 +139,8 @@ if (lwksiz<iw*jw*2) {                  /* If storage inadaquate then */
     printf ("Error in GXCLEV: Unable to allocate storage \n");
     return;
   }
-  fwksiz = iw*jw;                      /* Size of coord pair buffer */
+  fwksiz = (iw+1)*(jw+1);              /* Size of coord pair buffer */
+  if (fwksiz<500) fwksiz=500;          /* Insure big enough for small grids */
   sz = fwksiz*sizeof(gadouble);
   fwk = (gadouble *)galloc(sz,"fwk");    /* Allocate fwk   */
   if (lwk==NULL) {
@@ -207,10 +208,22 @@ for (j=jb;j<je;j++){                   /* Loop through the rows      */
     l1++; l2++;
   }
 }
+
+/* Short (two point) lines in  upper right corner may hae been missed */
+
+l1 = lwk+iw*je+ie-1;                   /* Upper right corner flags   */
+l2 = lwk+iw*jw+iw*(je-1)+ie;
+if (*l1 && *l2) {
+  gxcflw (ie,je-1,4,2);                /* Follow it one way */
+  xystrt = fwk + fwkmid;               /* Terminate other direction */
+  rc = gxcspl(0,pcntr);                /* Output it */
+  if (rc) goto merr;
+}
+
 return;
 
 merr:
-  printf ("mem err fix this error handling bad bad\n");
+  printf ("Error in line contouring: Memory allocation for Label Buffering\n");
   return;
 }
 
@@ -245,8 +258,8 @@ p2=p1+1; p4=p1+iss; p3=p4+1;
 l1=lwk+iww*j+i; l4=l1+iww*jww;         /* Pointers to flags          */
 l2=l4+1; l3=l1+iww;
 xy = fwk + fwkmid;                     /* Start in middle of buffer  */
-xyllim = fwk+4;                        /* Buffer limits              */
-xyulim = fwk+(fwksiz-4);
+xyllim = fwk+6;                        /* Buffer limits              */
+xyulim = fwk+(fwksiz-6);
 
 if (iside==1) goto side1;              /* Jump in based on side      */
 if (iside==2) goto side2;
@@ -382,7 +395,7 @@ gadouble sx1,sx2,sy1,sy2,d0,d1,d2,xt1,xt2,yt1,yt2;
 gadouble t,t2,t3,tint,x,y,ax,bx,ay,by;
 gadouble del,kurv,cmax,dacum,dcmin,c1,c2;
 gadouble mslope,tslope,xlb=0.0,ylb=0.0;
-gaint i,icls,nump,labflg;
+gaint i,icls,nump=0,labflg;
 gadouble *xy;
 size_t sz;
 
@@ -447,9 +460,36 @@ if (pcntr->mask && !frombuf) {
   if (pcntr->ltype && clabel[0]) {
     for (xy=xystrt+2; xy<xyend-1; xy+=2) {
       dacum += hypot(*xy-*(xy-2),*(xy+1)-*(xy-1));
-      c1 = (*(xy+1)-*(xy-1))*(*(xy+3)-*(xy+1));
-      c2 = fabs(*(xy+1)-*(xy-1))+fabs(*(xy+3)-*(xy+1));
-      if ( c1<0.0 && c2<0.02 && dacum>dcmin ){
+      /* c1 = (thisY - prevY) * (nextY - thisY) */
+      if (dequal(*(xy+1),*(xy-1),1e-12)==0 || dequal(*(xy+3),*(xy+1),1e-12)==0)
+        c1 = 0.0;
+      else
+        c1 = (*(xy+1)-*(xy-1))*(*(xy+3)-*(xy+1));
+      /* c2 = abs(thisY - prevY) + abs(nextY - thisY) */
+      if ( dequal(*(xy+1),*(xy-1),1e-12)==0 ) {
+        if ( dequal(*(xy+3),*(xy+1),1e-12)==0 ) {
+          /* thisY = prevY = nextY. Check if true for X coords too */
+          if (dequal(*(xy),*(xy-2),1e-12)==0 && dequal(*(xy+2),*(xy),1e-12)==0 ) {
+            /* Duplicate point. Set c2 artificially high so label is not drawn */
+            c2 = 99;
+          }
+          else
+            c2 = 0.0;
+        }
+        else
+          c2 = fabs(*(xy+3)-*(xy+1));
+      }
+      else {
+        if ( dequal(*(xy+3),*(xy+1),1e-12)==0 )
+          c2 = fabs(*(xy+1)-*(xy-1));
+        else
+          c2 = fabs(*(xy+1)-*(xy-1)) + fabs(*(xy+3)-*(xy+1));
+      }
+      /* Plot the label...
+         if slope is zero or has changed sign,
+         if contour doesn't bend too much,
+         and if not too close to another label */
+      if ( c1<=0.0 && c2<0.02 && dacum>dcmin ){
         if (!gxqclab (*xy,*(xy+1),pcntr->labsiz)) {
           if (pcntr->shpflg==0) gxpclab (*xy,*(xy+1),0.0,gxqclr(),pcntr);
           dacum=0.0;
@@ -457,8 +497,32 @@ if (pcntr->mask && !frombuf) {
       }
     }
     dacum += hypot(*xyend-*(xyend-2),*(xyend+1)-*(xyend-1));
+    /* for closed contours, check the joining point */
     if (icls) {
-      if ((*(xyend+1)-*(xystrt+3))*(*(xyend-1)-*(xyend+1))<0.0 && dacum>dcmin ){
+      /* c1 = (endY - secondY) * (prevY - endY) */
+      if (dequal(*(xyend+1),*(xystrt+3),1e-12)==0 ||
+          dequal(*(xyend-1),*(xyend+1),1e-12)==0 )
+        c1=0.0;
+      else
+        c1 = (*(xyend+1)-*(xystrt+3))*(*(xyend-1)-*(xyend+1));
+      /* c2 = abs(endY - prevY) + abs(secondY - endY) */
+      if (dequal(*(xyend+1),*(xyend-1),1e-12)==0) {
+        if (dequal(*(xystrt+3),*(xyend+1),1e-12)==0) {
+          /* thisY = prevY = nextY
+             Duplicate point. Set c2 artificially high so label is not drawn */
+          c2 = 99;
+        }
+        else
+          c2 = fabs(*(xystrt+3)-*(xyend+1));
+      }
+      else {
+        if (dequal(*(xystrt+3),*(xyend+1),1e-12)==0)
+          c2 = fabs(*(xyend+1)-*(xyend-1));
+        else
+          c2 = fabs(*(xyend+1)-*(xyend-1)) + fabs(*(xystrt+3)-*(xyend+1));
+      }
+      /* same criteria apply as for non-closed contours */
+      if (c1<=0.0 && c2<0.02 && dacum>dcmin){
         if (!gxqclab (*xy,*(xy+1),pcntr->labsiz)) {
           if (pcntr->shpflg==0) gxpclab (*xyend,*(xyend+1),0.0,gxqclr(),pcntr);
         }
@@ -568,12 +632,15 @@ gxplot (*x1,*y1,3);                    /* Start output with pen up   */
 
 /* Loop through the various points in the line                       */
 
-while (x3 < xyend+2) {                 /* Loop to end of the line    */
+x3+=2; y3+=2;
+while (x3 < xyend+3) {                 /* Loop to end of the line    */
 
-  do {                                 /* Find next valid point      */
+  d2 = hypot ((*x3-*x2),(*y3-*y2));    /* Distance to next point     */
+  while (d2<0.01 && x3<xyend+3) {      /* Skip points too close      */
     x3+=2; y3+=2;                      /* Check next point           */
     d2 = hypot ((*x3-*x2),(*y3-*y2));  /* Distance to next point     */
-  } while (d2<0.01);                   /* Skip points too close      */
+  }
+  if (x3 >= xyend+3) break;            /* Went too far?              */
 
   if (!frombuf) {
 
@@ -638,6 +705,7 @@ while (x3 < xyend+2) {                 /* Loop to end of the line    */
   d0=d1; d1=d2; xt1=xt2; yt1=yt2;      /* Carry calcs forward        */
   x0=x1; x1=x2; x2=x3;                 /* Update pointers            */
   y0=y1; y1=y2; y2=y3;
+  x3+=2; y3+=2;
 }
 gxplot (*xyend,*(xyend+1),2);          /* Last point                 */
 
@@ -662,22 +730,23 @@ return(0);
    masking is in use, this routine should not be called.  */
 
 void gxclab (gadouble csize, gaint flag, gaint colflg) {
-gadouble x,y,xy[10],xd1,xd2,yd1,yd2,llen,w;
+gadouble x,y,xy[10],xd1,xd2,yd1,yd2,w,h,buff;
 gaint i,lablen,colr,bcol,fcol;
 
 if (!flag) { gxlabn=0; return; }
 colr = gxqclr();
 for (i=0; i<gxlabn; i++ ) {
   lablen=strlen(gxlabv[i]);
-  llen = csize*lablen/2.0;
   bcol = gxqbck();
+  h = csize*1.2;                     /* set label height */
+  w = 0.2;
+  gxchln (gxlabv[i],lablen,csize,&w);
   if (gxlabs[i]==0.0) {
-    x=gxlabx[i]-llen;
-    y=gxlaby[i]-(csize/2.0);
+    x = gxlabx[i] - (w/2.0);
+    y = gxlaby[i] - (h/2.0);
     gxcolr (bcol);
-    w = 0.2;
-    gxchln (gxlabv[i],lablen,csize,&w);
-    gxrecf (x, x+w+csize*0.1, y-0.02, y+csize*1.44);
+    buff=h*0.2;     /* add a buffer above and below the string, already padded in X */
+    gxrecf (x, x+w, y-buff, y+h+buff);
     if (colflg>-1) fcol = colflg;
     else fcol = gxlabc[i];
     if (fcol==gxqbck()) {
@@ -685,18 +754,18 @@ for (i=0; i<gxlabn; i++ ) {
       else gxcolr(0);
     }
     else gxcolr (fcol);
-    gxchpl (gxlabv[i],lablen,x,y,csize*1.2,csize,0.0);
+    gxchpl (gxlabv[i],lablen,x,y,h,csize,0.0);
   } else {
-    xd1 = (csize/2.0)*sin(gxlabs[i]);
-    xd2 = llen*cos(gxlabs[i]);
-    yd1 = (csize/2.0)*cos(gxlabs[i]);
-    yd2 = llen*sin(gxlabs[i]);
+    xd1 = (h/2.0)*sin(gxlabs[i]);
+    xd2 = (w/2.0)*cos(gxlabs[i]);
+    yd1 = (h/2.0)*cos(gxlabs[i]);
+    yd2 = (w/2.0)*sin(gxlabs[i]);
     x = gxlabx[i] - xd2 + xd1;
     y = gxlaby[i] - yd2 - yd1;
-    xd1 = (csize/2.0*1.6)*sin(gxlabs[i]);
-    xd2 = 1.1*llen*cos(gxlabs[i]);
-    yd1 = (csize/2.0*1.6)*cos(gxlabs[i]);
-    yd2 = 1.1*llen*sin(gxlabs[i]);
+    xd1 = (h/2.0*1.6)*sin(gxlabs[i]);
+    xd2 = 1.1*(w/2.0)*cos(gxlabs[i]);
+    yd1 = (h/2.0*1.6)*cos(gxlabs[i]);
+    yd2 = 1.1*(w/2.0)*sin(gxlabs[i]);
     xy[0] = gxlabx[i] - xd2 + xd1;
     xy[1] = gxlaby[i] - yd2 - yd1;
     xy[2] = gxlabx[i] - xd2 - xd1;
@@ -716,7 +785,7 @@ for (i=0; i<gxlabn; i++ ) {
       else gxcolr(0);
     }
     else gxcolr (fcol);
-    gxchpl (gxlabv[i],lablen,x,y,csize*1.2,csize,gxlabs[i]*180.0/3.1416);
+    gxchpl (gxlabv[i],lablen,x,y,h,csize,gxlabs[i]*180.0/3.1416);
   }
 }
 gxcolr (colr);
@@ -784,7 +853,7 @@ struct gxcntr lcntr;
 gaint gxshplin (SHPHandle sfid, DBFHandle dbfid, struct dbfld *dbanch) {
 gaint i,rc,ival;
 struct dbfld *fld;
-struct gxclbuf *pclbuf, *p2;
+struct gxclbuf *pclbuf=NULL, *p2;
 gaint shpid,*pstart=NULL,nParts,nFields;
 SHPObject *shp;
 gadouble x,y,*lons=NULL,*lats=NULL,*vals=NULL,lon,lat,val,dval;
@@ -795,21 +864,26 @@ gadouble x,y,*lons=NULL,*lats=NULL,*vals=NULL,lon,lat,val,dval;
  *pstart = 0;
  shpid=0;
  pclbuf = clbufanch;
+ if (pclbuf==NULL) {
+   printf("Error in gxshplin: contour buffer is empty\n");
+   rc = -1;
+   goto cleanup;
+ }
  while (pclbuf) {
    if (pclbuf->lxy) {
      /* allocate memory for lons and lats of the vertices in contour line */
      if ((lons = (gadouble*)galloc (pclbuf->len*sizeof(gadouble),"shplons"))==NULL) {
-       gaprnt(0,"Error in gxshplin: unable to allocate memory for lon array\n");
+       printf("Error in gxshplin: unable to allocate memory for lon array\n");
        rc = -1;
        goto cleanup;
      }
      if ((lats = (gadouble*)galloc (pclbuf->len*sizeof(gadouble),"shplats"))==NULL) {
-       gaprnt(0,"Error in gxshplin: unable to allocate memory for lat array\n");
+       printf("Error in gxshplin: unable to allocate memory for lat array\n");
        rc = -1;
        goto cleanup;
      }
      if ((vals = (gadouble*)galloc (pclbuf->len*sizeof(gadouble),"shpvals"))==NULL) {
-       gaprnt(0,"Error in gxshplin: unable to allocate memory for val array\n");
+       printf("Error in gxshplin: unable to allocate memory for val array\n");
        rc = -1;
        goto cleanup;
      }
@@ -827,8 +901,7 @@ gadouble x,y,*lons=NULL,*lats=NULL,*vals=NULL,lon,lat,val,dval;
      i = SHPWriteObject(sfid,-1,shp);
      SHPDestroyObject(shp);
      if (i!=shpid) {
-       snprintf(pout,511,"Error in gxshplin: SHPWriteObject returned %d, shpid=%d\n",i,shpid);
-       gaprnt(0,pout);
+       printf("Error in gxshplin: SHPWriteObject returned %d, shpid=%d\n",i,shpid);
        rc = -1;
        goto cleanup;
      }
@@ -901,19 +974,19 @@ struct gxclbuf *pclbuf,*p2;
  while (pclbuf) {
    if (pclbuf->lxy) {
      /* write out headers for each contour */
-     snprintf(pout,511,"  <Placemark>\n");
+     snprintf(pout,511,"    <Placemark>\n");
      if ((fwrite(pout,sizeof(char),strlen(pout),kmlfp))!=strlen(pout)) {err=1; goto cleanup;}
-     snprintf(pout,511,"    <styleUrl>#%d</styleUrl>\n",pclbuf->color);
+     snprintf(pout,511,"      <styleUrl>#%d</styleUrl>\n",pclbuf->color);
      if ((fwrite(pout,sizeof(char),strlen(pout),kmlfp))!=strlen(pout)) {err=2; goto cleanup;}
-     snprintf(pout,511,"    <name>%g</name>\n",pclbuf->val);
+     snprintf(pout,511,"      <name>%g</name>\n",pclbuf->val);
      if ((fwrite(pout,sizeof(char),strlen(pout),kmlfp))!=strlen(pout)) {err=3; goto cleanup;}
-     snprintf(pout,511,"    <LineString>\n");
+     snprintf(pout,511,"      <LineString>\n");
      if ((fwrite(pout,sizeof(char),strlen(pout),kmlfp))!=strlen(pout)) {err=4; goto cleanup;}
-     snprintf(pout,511,"      <altitudeMode>clampToGround</altitudeMode>\n");
+     snprintf(pout,511,"        <altitudeMode>clampToGround</altitudeMode>\n");
      if ((fwrite(pout,sizeof(char),strlen(pout),kmlfp))!=strlen(pout)) {err=5; goto cleanup;}
-     snprintf(pout,511,"      <tessellate>1</tessellate>\n");
+     snprintf(pout,511,"        <tessellate>1</tessellate>\n");
      if ((fwrite(pout,sizeof(char),strlen(pout),kmlfp))!=strlen(pout)) {err=6; goto cleanup;}
-     snprintf(pout,511,"      <coordinates>\n        ");
+     snprintf(pout,511,"        <coordinates>\n          ");
      if ((fwrite(pout,sizeof(char),strlen(pout),kmlfp))!=strlen(pout)) {err=7; goto cleanup;}
      /* get x,y values and convert them to lon,lat */
      j=1;
@@ -921,11 +994,12 @@ struct gxclbuf *pclbuf,*p2;
        x = *(pclbuf->lxy+(2*i));
        y = *(pclbuf->lxy+(2*i+1));
        gxxy2w (x,y,&lon,&lat);
-       if (lon>180) lon = lon-360;
+       if (lat>90)  lat = 90;
+       if (lat<-90) lat = -90;
        snprintf(pout,511,"%g,%g,0 ",lon,lat);
        if ((fwrite(pout,sizeof(char),strlen(pout),kmlfp))!=strlen(pout)) {err=8; goto cleanup;}
        if (j==6 || i==(pclbuf->len-1)) {
-         if (j==6) snprintf(pout,511,"\n        ");
+         if (j==6) snprintf(pout,511,"\n          ");
          else snprintf(pout,511,"\n");
          if ((fwrite(pout,sizeof(char),strlen(pout),kmlfp))!=strlen(pout)) {err=9; goto cleanup;}
          j=0;
@@ -933,7 +1007,7 @@ struct gxclbuf *pclbuf,*p2;
        j++;
      }
      /* write out footers for each contour */
-     snprintf(pout,511,"      </coordinates>\n    </LineString>\n  </Placemark>\n");
+     snprintf(pout,511,"        </coordinates>\n      </LineString>\n    </Placemark>\n");
      if ((fwrite(pout,sizeof(char),strlen(pout),kmlfp))!=strlen(pout)) {err=10; goto cleanup;}
      c++;
    }
@@ -960,32 +1034,40 @@ struct gxclbuf *pclbuf,*p2;
    Currently, rot is assumed to be zero.  */
 
 void gxpclab (gadouble xpos, gadouble ypos, gadouble rot, gaint ccol, struct gxcntr *pcntr) {
-gadouble x,y,llen,w,csize;
-gaint lablen,bcol,fcol,scol,swid;
+  gadouble x,y,w,h,csize,buff;
+  gaint lablen,bcol,fcol,scol,swid;
 
   csize = pcntr->labsiz;
-  lablen=strlen(clabel);
-  llen = csize*lablen/2.0;
+  lablen = strlen(clabel);
   bcol = gxqbck();
-  x = xpos-llen;
-  y = ypos-(csize/2.0);
+  h = csize*1.2;                          /* set label height */
   w = 0.2;
-  gxchln (clabel,lablen,csize,&w);
+  gxchln (clabel,lablen,csize,&w);        /* get label width */
+  buff=h*0.05;                            /* set a small buffer around the label */
+  x = xpos-(w/2.0);                       /* adjust reference point */
+  y = ypos-(h/2.0);
   scol = gxqclr();
   if (pcntr->labcol > -1) fcol = pcntr->labcol;
   else fcol = ccol;
   gxcolr (fcol);
   swid = gxqwid();
+  /* if contour label thickness is set to -999, then we draw a fat version of the label
+     in the background color and then overlay a thin version of the label in desired color.
+     This will only work with hershey fonts, since the boldness of cairo fonts is not
+     controlled by the thickness setting for contour labels. */
   if (pcntr->labwid > -1) gxwide(pcntr->labwid);
   if (pcntr->labwid == -999) {
+    /* invoke settings for fat background label */
      gxwide(12); gxcolr(bcol);
   }
-  gxchpl (clabel,lablen,x,y,csize*1.2,csize,0.0);
+  /* draw the label */
+  gxchpl (clabel,lablen,x,y,h,csize,0.0);
   if (pcntr->labwid == -999) {
-     gxwide(1); gxcolr(fcol);
-     gxchpl (clabel,lablen,x,y,csize*1.2,csize,0.0);
+    /* overlay a thin label in foreground color */
+    gxwide(1); gxcolr(fcol);
+    gxchpl (clabel,lablen,x,y,h,csize,0.0);
   }
-  gxmaskrec (x, x+w+csize*0.1, y-0.02, y+csize*1.44);
+  gxmaskrec (x-buff, x+w+buff, y-buff, y+h+buff);
   gxcolr (scol);
   gxwide (swid);
 }
@@ -993,15 +1075,16 @@ gaint lablen,bcol,fcol,scol,swid;
 /* query if the contour label will overlay another, if using masking */
 
 int gxqclab (gadouble xpos, gadouble ypos, gadouble csize) {
-gadouble lablen,x,y,w,llen;
+gadouble lablen,x,y,w,h,buff;
 gaint rc;
   lablen=strlen(clabel);
-  llen = csize*lablen/2.0;
-  x=xpos-llen;
-  y=ypos-(csize/2.0);
   w = 0.2;
+  h = csize*1.2;
   gxchln (clabel,lablen,csize,&w);
-  rc = gxmaskrq (x+0.02, x+w+csize*0.1-0.02, y, y+csize*1.44-0.02);
+  x = xpos-(w/2.0);
+  y = ypos-(h/2.0);
+  buff = h*1.0;
+  rc = gxmaskrq (x-buff, x+w+buff, y-buff, y+h+buff);
   return (rc);
 }
 

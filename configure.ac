@@ -1,16 +1,16 @@
 dnl
-dnl configure.ac: 
+dnl configure.ac:
 dnl
-dnl  Source file for GrADS auto-configuration script. 
+dnl  Source file for GrADS auto-configuration script.
 dnl  Run autoreconf to generate a configure script from this file
-dnl  See acinclude.m4 for definitions of the GA_xxx macros   
+dnl  See acinclude.m4 for definitions of the GA_xxx macros
 
 # The version number
 # below is the "master" version that will appear in all code, etc.
-AC_INIT(GrADS, [2.0.a9], [jma@iges.org])
+AC_INIT(GrADS, [2.0.0], [jma@iges.org])
 
 # Require autoconf 2.52 (comes with Mac OS X 10.2) or newer
-AC_PREREQ(2.52) 
+AC_PREREQ(2.52)
 
 # Supporting scripts are in etc/
 AC_CONFIG_AUX_DIR(etc)
@@ -22,12 +22,12 @@ AM_INIT_AUTOMAKE([1.6 no-define no-dependencies])
 
 AM_CONFIG_HEADER([src/config.h])
 
-# The following macro prevents annoying interactions between CVS and 
-# automake, which result in make attempting to invoke autotools 
+# The following macro prevents annoying interactions between CVS and
+# automake, which result in make attempting to invoke autotools
 # even when the configure script is up to date
-AM_MAINTAINER_MODE 
+AM_MAINTAINER_MODE
 
-# binaries go to ./bin by default, rather than /usr/bin. 
+# binaries go to ./bin by default, rather than /usr/bin.
 AC_PREFIX_DEFAULT(`pwd`)
 
 # ----------------------------------------------------
@@ -79,7 +79,7 @@ AC_CANONICAL_HOST()
 # ----------------------------------------------------
 
 echo Host machine:   "$host"
-case "$host" in 
+case "$host" in
 
   alpha-*-osf*)
     # Option needed for IEEE floating points
@@ -221,12 +221,12 @@ echo ------------------------------------
 GA_SET_SUPPLIBS([. ..])
 
 
-AC_ARG_ENABLE([dyn-supplibs], 
+AC_ARG_ENABLE([dyn-supplibs],
 [  --enable-dyn-supplibs   Use dynamic system libraries to support optional features when
-                          required libs are not present in "supplibs" directory. [[default=yes]] 
+                          required libs are not present in "supplibs" directory. [[default=yes]]
   --disable-dyn-supplibs  Do not use system libraries; look only in GrADS "supplibs" directory.
-                          Use this option to maximize binary portability. 
-],, 
+                          Use this option to maximize binary portability.
+],,
 [enableval=yes])
 case "${enableval}" in
   yes)
@@ -246,7 +246,7 @@ else
 fi
 
 
-AC_ARG_VAR(SUPPLIBS, 
+AC_ARG_VAR(SUPPLIBS,
            [Custom path (must be absolute) to a GrADS supplib distribution])
 
 
@@ -304,27 +304,27 @@ if test $use_gui = "yes" ; then
   else
     AC_DEFINE(USEFREQ, 0, [Use GetFile from freq])
   fi
-  GA_SET_INCLUDE_VAR([gui_inc],[libsx]) 
+  GA_SET_INCLUDE_VAR([gui_inc],[libsx])
   AC_SUBST(gui_inc)
   AC_SUBST(gui_libs)
-  AC_DEFINE(USEGUI, 1, [Enable GUI widgets]) 
+  AC_DEFINE(USEGUI, 1, [Enable GUI widgets])
   echo "+ GUI enabled"
 else
-  AC_DEFINE(USEGUI, 0, [Enable GUI widgets]) 
+  AC_DEFINE(USEGUI, 0, [Enable GUI widgets])
   echo  "- GUI disabled"
 fi
 
 # look for libraries to support command line editing
 echo
 if test "$with_readline" != "no" ; then
-  # check if supplibs directory exists 
-  if test "Z$ga_supplib_dir" != "Z" ; then 
+  # check if supplibs directory exists
+  if test "Z$ga_supplib_dir" != "Z" ; then
     echo "Checking in supplibs for libraries to support command line editing ..."
     readline_libadd=""
     GA_SET_FLAGS([" " readline])
     AC_CHECK_HEADER(readline.h,
     [ AC_CHECK_HEADER(history.h,
-      [ AC_CHECK_LIB(readline, tgetent, 
+      [ AC_CHECK_LIB(readline, tgetent,
         [ use_readline=yes
           GA_SET_INCLUDE_VAR([readline_inc],[""])
           GA_SET_LIB_VAR([readline_libs],[readline])
@@ -353,36 +353,36 @@ if test "$with_readline" != "no" ; then
       echo
       echo "Checking in system locations for libraries to support command line editing ..."
       GA_LIB_READLINE([use_readline=yes readline_libs=""])
-    fi 
+    fi
   fi
 fi
 if test $use_readline = "yes" ; then
   AC_SUBST(readline_inc)
   AC_SUBST(readline_libs)
-  AC_DEFINE(READLINE, 1, [Enable command line editing]) 
+  AC_DEFINE(READLINE, 1, [Enable command line editing])
   echo "+ Command line editing enabled"
 else
-  AC_DEFINE(READLINE, 0, [Enable command line editing]) 
+  AC_DEFINE(READLINE, 0, [Enable command line editing])
   echo "- Command line editing disabled"
 fi
 
 # look for libraries to support geotiff
 echo
 if test "$with_geotiff" != "no" ; then
-  # check if supplibs directory exists 
-  if test "Z$ga_supplib_dir" != "Z" ; then 
+  # check if supplibs directory exists
+  if test "Z$ga_supplib_dir" != "Z" ; then
     echo "Checking in supplibs for libraries to support geotiff ..."
     GA_SET_FLAGS([tiff])
-    AC_CHECK_HEADERS([tiff.h tiffio.h], 
-    [ AC_CHECK_LIB([tiff], [main], 
-      [ have_tiff=yes 
+    AC_CHECK_HEADERS([tiff.h tiffio.h],
+    [ AC_CHECK_LIB([tiff], [main],
+      [ have_tiff=yes
       ])
     ])
     GA_UNSET_FLAGS
     if test "$have_tiff" = "yes" ; then
       GA_SET_FLAGS([geotiff])
       AC_CHECK_HEADER(geotiffio.h,
-      [ AC_CHECK_LIB([geotiff], [main], 
+      [ AC_CHECK_LIB([geotiff], [main],
         [ use_geotiff=yes
           GA_SET_INCLUDE_VAR([geotiff_inc], [tiff geotiff])
           GA_SET_LIB_VAR([geotiff_libs], [tiff geotiff])
@@ -400,75 +400,75 @@ if test "$with_geotiff" != "no" ; then
       geotiff_libs="$GEOTIFF_LIBS"
       geotiff_inc=$GEOTIFF_CFLAGS
       use_geotiff='yes'
-    ]) 
+    ])
   fi
 fi
 if test "$use_geotiff" != "yes" ; then
   AC_DEFINE(GEOTIFF, 0, [Enable geotiff])
-  echo "- geotiff disabled" 
+  echo "- geotiff disabled"
 else
   AC_SUBST(geotiff_inc)
   AC_SUBST(geotiff_libs)
   AC_DEFINE(GEOTIFF, 1, [Enable geotiff])
-  echo "+ geotiff enabled" 
+  echo "+ geotiff enabled"
 fi
 
 # look for libraries to support shapefiles
 echo
 if test "$with_shp" != "no" ; then
-  # check if supplibs directory exists 
-  if test "Z$ga_supplib_dir" != "Z" ; then 
+  # check if supplibs directory exists
+  if test "Z$ga_supplib_dir" != "Z" ; then
     echo "Checking in supplibs for libraries to support shapefiles ..."
     GA_SET_FLAGS([shapelib shp])
-    AC_CHECK_HEADERS([shapefil.h], 
-    [ AC_CHECK_LIB([shp], [main], 
-      [ use_shp=yes 
+    AC_CHECK_HEADERS([shapefil.h],
+    [ AC_CHECK_LIB([shp], [main],
+      [ use_shp=yes
         GA_SET_INCLUDE_VAR([shp_inc], [shapelib shp])
         GA_SET_LIB_VAR([shp_libs], [shp])
       ])
-    ])    
+    ])
     GA_UNSET_FLAGS
   fi
   # here's where we could add a macro to look outside supplibs for shapelib
 fi
 if test "$use_shp" != "yes" ; then
   AC_DEFINE(USESHP, 0, [Enable shapefile])
-  echo "- shapefile disabled" 
+  echo "- shapefile disabled"
 else
   AC_SUBST(shp_inc)
   AC_SUBST(shp_libs)
   AC_DEFINE(USESHP, 1, [Enable shapefile])
-  echo "+ shapefile enabled" 
+  echo "+ shapefile enabled"
 fi
 
 
 # look for libraries to support printim
 echo
 if test "$with_printim" != "no" ; then
-  # check if supplibs directory exists 
-  if test "Z$ga_supplib_dir" != "Z" ; then 
+  # check if supplibs directory exists
+  if test "Z$ga_supplib_dir" != "Z" ; then
     echo "Checking in supplibs for libraries to support printim ..."
     GA_SET_FLAGS([zlib])
-    AC_CHECK_HEADERS([zlib.h], 
-    [ AC_CHECK_LIB([z], [compress], 
-      [ have_zlib=yes 
+    AC_CHECK_HEADERS([zlib.h],
+    [ AC_CHECK_LIB([z], [compress],
+      [ have_zlib=yes
       ])
     ])
     GA_UNSET_FLAGS
     GA_SET_FLAGS([libpng12])
-    AC_CHECK_LIB([png12], [main], 
-    [ have_libpng=yes 
+    AC_CHECK_LIB([png12], [main],
+    [ have_libpng=yes
     ])
     GA_UNSET_FLAGS
     GA_SET_FLAGS([])
-    AC_CHECK_LIB([jpeg], [main], 
-    [ have_jpeg=yes 
+    AC_CHECK_LIB([jpeg], [main],
+    [ have_jpeg=yes
     ])
     GA_UNSET_FLAGS
     if test "$have_zlib" = "yes" -a "$have_libpng" = "yes" ; then
       GA_SET_FLAGS([gd])
       AC_CHECK_HEADER(gd.h,
-      [ AC_CHECK_LIB([gd], [gdImageCreate], 
+      [ AC_CHECK_LIB([gd], [gdImageCreate],
         [ use_printim=yes
           GA_SET_INCLUDE_VAR([printim_inc], [gd])
 	  if test "$have_jpeg" = "yes" ; then
@@ -486,7 +486,7 @@ if test "$with_printim" != "no" ; then
     echo
     echo "Checking in system locations for libraries to support printim ..."
     GA_CHECK_LIB_GD(
-    [ use_printim=yes 
+    [ use_printim=yes
       printim_libs=$GD_LIBS
       printim_inc=$GD_CFLAGS
     ])
@@ -494,49 +494,49 @@ if test "$with_printim" != "no" ; then
 fi
 if test "$use_printim" != "yes" ; then
   AC_DEFINE(GXPNG, 0, [Enable printim using zlib, libpng, and libgd])
-  echo "- printim disabled (Warning: gxtran will not be built)" 
+  echo "- printim disabled (Warning: gxtran will not be built)"
 else
   extra_utils="$extra_utils gxtran"
   AC_SUBST(printim_inc)
   AC_SUBST(printim_libs)
   AC_DEFINE(GXPNG, 1, [Enable printim using zlib, libpng, and libgd])
-  echo "+ printim enabled" 
+  echo "+ printim enabled"
 fi
 
 # look for libraries to support grib2
 echo
 if test "$with_grib2" != "no" ; then
-  # check if supplibs directory exists 
-  if test "Z$ga_supplib_dir" != "Z" ; then 
+  # check if supplibs directory exists
+  if test "Z$ga_supplib_dir" != "Z" ; then
     echo "Checking in supplibs for libraries to support grib2 ..."
     if test "$have_zlib" = "no" ; then
       GA_SET_FLAGS([zlib])
-      AC_CHECK_HEADERS([zlib.h], 
-      [ AC_CHECK_LIB([z], [compress], 
-        [ have_zlib=yes 
+      AC_CHECK_HEADERS([zlib.h],
+      [ AC_CHECK_LIB([z], [compress],
+        [ have_zlib=yes
         ])
       ])
       GA_UNSET_FLAGS
     fi
     if test "$have_libpng" = "no" ; then
       GA_SET_FLAGS([libpng12])
-      AC_CHECK_LIB([png12], [main], 
-      [ have_libpng=yes 
+      AC_CHECK_LIB([png12], [main],
+      [ have_libpng=yes
       ])
       GA_UNSET_FLAGS
     fi
     if test "$have_zlib" = "yes" -a "$have_libpng" = "yes" ; then
       have_libjasper=no
       GA_SET_FLAGS([])
-      AC_CHECK_LIB([jasper], [main], 
-      [ have_libjasper=yes 
+      AC_CHECK_LIB([jasper], [main],
+      [ have_libjasper=yes
       ])
       GA_UNSET_FLAGS
       if test "$have_libjasper" = "yes" ; then
         GA_SET_FLAGS([grib2c])
         AC_CHECK_HEADER(grib2.h,
-        [ AC_CHECK_LIB([grib2c], [main], 
-          [ use_grib2=yes 
+        [ AC_CHECK_LIB([grib2c], [main],
+          [ use_grib2=yes
             GA_SET_INCLUDE_VAR([grib2_inc], [grib2c])
             GA_SET_LIB_VAR([grib2_libs], [grib2c jasper png12 z])
           ])
@@ -550,25 +550,25 @@ if test "$with_grib2" != "no" ; then
     echo
     echo "Checking in system locations for grib2 libraries ..."
     GA_CHECK_LIB_GRIB2(
-    [ use_grib2=yes 
+    [ use_grib2=yes
       grib2_libs=$G2_LIBS
     ])
   fi
 fi
 if test "$use_grib2" != "yes" ; then
   AC_DEFINE(GRIB2, 0, [Enable grib2])
-  echo "- grib2 disabled " 
+  echo "- grib2 disabled "
 else
   extra_utils="$extra_utils grib2scan"
   AC_SUBST(grib2_inc)
   AC_SUBST(grib2_libs)
   AC_DEFINE(GRIB2, 1, [Enable grib2])
-  echo "+ grib2 enabled" 
+  echo "+ grib2 enabled"
 fi
 
 # check if user wants support for self-describing files?
 echo
-if test "$with_sdf" = "no" ; then 
+if test "$with_sdf" = "no" ; then
   AC_DEFINE(USENETCDF, 0, [Enable netcdf])
   AC_DEFINE(USEHDF, 0, [Enable hdf4])
   echo No support for self-describing files:
@@ -578,32 +578,32 @@ if test "$with_sdf" = "no" ; then
   echo "- OPeNDAP disabled"
 else
   # look for libraries to support hdf4
-  # check if supplibs directory exists 
-  if test "Z$ga_supplib_dir" != "Z" ; then 
+  # check if supplibs directory exists
+  if test "Z$ga_supplib_dir" != "Z" ; then
     echo "Checking in supplibs for libraries to support hdf4 ..."
     # look for zlib
     if test "$have_zlib" = "no" ; then
       GA_SET_FLAGS([zlib])
-      AC_CHECK_HEADERS([zlib.h], 
-      [ AC_CHECK_LIB([z], [compress], 
-        [ have_zlib=yes 
+      AC_CHECK_HEADERS([zlib.h],
+      [ AC_CHECK_LIB([z], [compress],
+        [ have_zlib=yes
         ])
       ])
       GA_UNSET_FLAGS
     fi
     # look for udunits
     GA_SET_FLAGS([udunits])
-    AC_CHECK_HEADERS([udunits.h], 
-    [ AC_CHECK_LIB([udunits], [utInit], 
-      [ have_udunits=yes 
+    AC_CHECK_HEADERS([udunits.h],
+    [ AC_CHECK_LIB([udunits], [utInit],
+      [ have_udunits=yes
       ])
     ])
-    GA_UNSET_FLAGS	
+    GA_UNSET_FLAGS
     # look for jpeg
     if test "$have_jpeg" = "no" ; then
       GA_SET_FLAGS([])
-      AC_CHECK_LIB([jpeg], [main], 
-      [ have_jpeg=yes 
+      AC_CHECK_LIB([jpeg], [main],
+      [ have_jpeg=yes
       ])
       GA_UNSET_FLAGS
     fi
@@ -611,9 +611,9 @@ else
       GA_SET_FLAGS([hdf])
       AC_CHECK_LIB([sz], [main],
       [ AC_CHECK_HEADER([mfhdf.h],
-        [ AC_CHECK_LIB([df], [main], 
+        [ AC_CHECK_LIB([df], [main],
           [ AC_CHECK_LIB([mfhdf], [main],
-            [ use_hdf=yes 
+            [ use_hdf=yes
               GA_SET_INCLUDE_VAR([hdf_inc], [hdf udunits])
               GA_SET_LIB_VAR([hdf_libs], [mfhdf df udunits sz jpeg z])
             ])
@@ -638,7 +638,7 @@ else
 
   if test $use_hdf != "yes" ; then
     AC_DEFINE(USEHDF, 0, [Enable hdf4])
-    echo "- hdf4 disabled"  
+    echo "- hdf4 disabled"
   else
     AC_SUBST(hdf_inc)
     AC_SUBST(hdf_libs)
@@ -647,16 +647,16 @@ else
   fi
 
   # look for libraries to support hdf5
-  # check if supplibs directory exists 
-  echo 
-  if test "Z$ga_supplib_dir" != "Z" ; then 
+  # check if supplibs directory exists
+  echo
+  if test "Z$ga_supplib_dir" != "Z" ; then
     echo "Checking in supplibs for libraries to support hdf5 ..."
     # look for zlib
     if test "$have_zlib" = "no" ; then
       GA_SET_FLAGS([zlib])
-      AC_CHECK_HEADERS([zlib.h], 
-      [ AC_CHECK_LIB([z], [compress], 
-        [ have_zlib=yes 
+      AC_CHECK_HEADERS([zlib.h],
+      [ AC_CHECK_LIB([z], [compress],
+        [ have_zlib=yes
         ])
       ])
       GA_UNSET_FLAGS
@@ -664,8 +664,8 @@ else
     # look for jpeg
     if test "$have_jpeg" = "no" ; then
       GA_SET_FLAGS([])
-      AC_CHECK_LIB([jpeg], [main], 
-      [ have_jpeg=yes 
+      AC_CHECK_LIB([jpeg], [main],
+      [ have_jpeg=yes
       ])
       GA_UNSET_FLAGS
     fi
@@ -673,10 +673,10 @@ else
       GA_SET_FLAGS([hdf5])
       AC_CHECK_LIB([sz], [main],
       [ AC_CHECK_HEADER([hdf5.h],
-        [ AC_CHECK_LIB([hdf5], [main], 
-          [ use_hdf5=yes 
+        [ AC_CHECK_LIB([hdf5], [main],
+          [ use_hdf5=yes
             GA_SET_INCLUDE_VAR([hdf5_inc], [hdf5])
-            GA_SET_LIB_VAR([hdf5_libs], [hdf5 sz jpeg z])
+            GA_SET_LIB_VAR([hdf5_libs], [hdf5 sz z])
           ])
         ])
       ])
@@ -697,7 +697,7 @@ else
 
   if test $use_hdf5 != "yes" ; then
     AC_DEFINE(USEHDF5, 0, [Enable hdf5])
-    echo "- hdf5 disabled"  
+    echo "- hdf5 disabled"
   else
     AC_SUBST(hdf5_inc)
     AC_SUBST(hdf5_libs)
@@ -705,15 +705,15 @@ else
     echo "+ hdf5 enabled"
 
     # now that we have hdf5, look for libraries to support netcdf-4
-    # check if supplibs directory exists 
-    echo 
-    if test "Z$ga_supplib_dir" != "Z" ; then 
+    # check if supplibs directory exists
+    echo
+    if test "Z$ga_supplib_dir" != "Z" ; then
       echo "Checking in supplibs for libraries to support netcdf-4 ..."
       if test "$have_udunits" = "no" ; then
         GA_SET_FLAGS([udunits])
-        AC_CHECK_HEADERS([udunits.h], 
-        [ AC_CHECK_LIB([udunits], [utInit], 
-          [ have_udunits=yes 
+        AC_CHECK_HEADERS([udunits.h],
+        [ AC_CHECK_LIB([udunits], [utInit],
+          [ have_udunits=yes
           ])
         ])
         GA_UNSET_FLAGS
@@ -723,7 +723,7 @@ else
         GA_SET_FLAGS([netcdf])
         AC_CHECK_HEADER([netcdf.h],
         [ AC_CHECK_LIB([netcdf], [main],
-          [ AC_CHECK_LIB([hdf5_hl], [main], 
+          [ AC_CHECK_LIB([hdf5_hl], [main],
             [ AC_CHECK_LIB(curl,main,
               [ use_nc4="yes"
                 GA_SET_INCLUDE_VAR(nc_inc, [udunits netcdf])
@@ -743,7 +743,7 @@ else
     if test "$use_nc4" != "yes" -a "$ga_dyn_supplibs" = "yes" ; then
         GA_CHECK_UDUNITS(
         [ AC_CHECK_NETCDF(
-          [ use_nc4=yes 
+          [ use_nc4=yes
             LDFLAGS="$LDFLAGS $NC_LDFLAGS"
             nc_libs="$NC_LIBS $UDUNITS_LIBS"
             nc_inc="$NC_CFLAGS $UDUNITS_CFLAGS"
@@ -755,7 +755,7 @@ else
     if test $use_nc4 != "yes" ; then
       AC_DEFINE(USENETCDF, 0, [Enable netcdf])
       AC_DEFINE(HAVENETCDF4, 0, [Enable netcdf4])
-      echo "- netcdf-4 disabled"  
+      echo "- netcdf-4 disabled"
     else
       AC_DEFINE(USENETCDF, 1, [Enable netcdf])
       AC_DEFINE(HAVENETCDF4, 1, [Enable netcdf4])
@@ -772,15 +772,15 @@ else
   # check if we've already enabled netcdf-4
   echo
   if test $use_nc4 != "yes" ; then
-    # check if supplibs directory exists 
-    if test "Z$ga_supplib_dir" != "Z" ; then 
+    # check if supplibs directory exists
+    if test "Z$ga_supplib_dir" != "Z" ; then
       if test $use_nc != "yes" ; then
         echo "Checking in supplibs for libraries to support netcdf-3 ..."
         if test "$have_udunits" = "no" ; then
           GA_SET_FLAGS([udunits])
-          AC_CHECK_HEADERS([udunits.h], 
-          [ AC_CHECK_LIB([udunits], [utInit], 
-            [ have_udunits=yes 
+          AC_CHECK_HEADERS([udunits.h],
+          [ AC_CHECK_LIB([udunits], [utInit],
+            [ have_udunits=yes
             ])
           ])
           GA_UNSET_FLAGS
@@ -801,10 +801,10 @@ else
       if test $use_nc != "yes"  -a "$ga_dyn_supplibs" = "yes" ; then
         echo
         echo "Checking in system locations for libraries to support netcdf-3 ..."
-        # check for netcdf 3 
+        # check for netcdf 3
         GA_CHECK_UDUNITS(
         [ AC_CHECK_NETCDF(
-          [ use_nc=yes 
+          [ use_nc=yes
             LDFLAGS="$LDFLAGS $NC_LDFLAGS"
             nc_libs="$NC_LIBS $UDUNITS_LIBS"
           ],,
@@ -824,13 +824,13 @@ else
   fi
 
   # look for libraries to support OPeNDAP station data interface
-  # check if supplibs directory exists 
+  # check if supplibs directory exists
   echo
-  if test "$with_gadap" = "no" ; then 
+  if test "$with_gadap" = "no" ; then
     AC_DEFINE(USEGADAP, 0, [Enable OPeNDAP for station data])
     echo "- OPeNDAP for station data disabled"
   else
-    if test "Z$ga_supplib_dir" != "Z" ; then 
+    if test "Z$ga_supplib_dir" != "Z" ; then
       echo "Checking in supplibs for libraries to support OPeNDAP station data access ..."
       GA_SET_FLAGS([gadap])
       AC_CHECK_HEADER(gadap.h,
@@ -853,14 +853,14 @@ else
     #  here's where you would add code for looking outside of supplibs
     if test $use_gadap = "yes" ; then
       # add linking options
-      if test "$is_darwin" = "yes" ; then 
+      if test "$is_darwin" = "yes" ; then
         dap_extra_libs="-lpthread -lm -liconv"
       else
         dap_extra_libs="-lpthread -lm -ldl -lrt"
       fi
       # merge gadap and extras
       dap_libs="$gadap_libs $dap_extra_libs"
-      # 
+      #
       AC_SUBST(gadap_inc)
       AC_SUBST(dap_libs)
       AC_DEFINE(USEGADAP, 1, [Enable OPeNDAP for station data])
@@ -910,7 +910,7 @@ build_info="Built `date` for ${host}"
    echo "   GrADS "AC_PACKAGE_VERSION ":" $build_info
    echo \
 "  +=========================================================================+"
-   echo     
+   echo
    echo "  +-------------------------------+"
    echo "  |                               |"
    echo "  |  GrADS will be built with:    |"
@@ -919,51 +919,51 @@ if test "$use_gui" = "yes" ; then
    echo "  |  + GUI enabled                |"
 else
    echo "  |  - GUI disabled               |"
-fi 
+fi
 if test "$use_readline" = "yes" ; then
    echo "  |  + readline enabled           |"
 else
    echo "  |  - readline disabled          |"
-fi 
+fi
 if test "$use_geotiff" = "yes" ; then
    echo "  |  + geotiff enabled            |"
 else
    echo "  |  - geotiff disabled           |"
-fi 
+fi
 if test "$use_shp" = "yes" ; then
    echo "  |  + shapefile enabled          |"
 else
    echo "  |  - shapefile disabled         |"
-fi 
+fi
 if test "$use_printim" = "yes" ; then
    echo "  |  + printim enabled            |"
 else
    echo "  |  - printim disabled           |"
-fi 
+fi
 if test "$use_grib2" = "yes" ; then
    echo "  |  + grib2 enabled              |"
 else
    echo "  |  - grib2 disabled             |"
-fi 
+fi
 if test "$use_hdf" = "yes" ; then
    echo "  |  + hdf4 enabled               |"
 else
    echo "  |  - hdf4 disabled              |"
-fi 
+fi
 if test "$use_hdf5" = "yes" ; then
    echo "  |  + hdf5 enabled               |"
 else
    echo "  |  - hdf5 disabled              |"
-fi 
+fi
 if test "$use_nc4" = "yes" ; then
    echo "  |  + netcdf-4 enabled           |"
 else
   if test "$use_nc" = "yes" ; then
      echo "  |  + netcdf-3 enabled           |"
-  else 
+  else
      echo "  |  - netcdf disabled            |"
-  fi 
-fi 
+  fi
+fi
 
 
 if test "$use_gadap" = "yes" -o "$use_dap" = "yes" ; then

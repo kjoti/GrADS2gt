@@ -1,4 +1,4 @@
-/*  Copyright (C) 1988-2010 by Brian Doty and the
+/*  Copyright (C) 1988-2011 by Brian Doty and the
     Institute of Global Environment and Society (IGES).
     See file COPYRIGHT for more information.   */
 
@@ -154,6 +154,17 @@ void gxwdln (void) {
 
 void gxdbat (void) {
   batch = 1;
+}
+
+/* Query default color rgb values*/
+
+void gxqdrgb (gaint clr, gaint *r, gaint *g, gaint *b) {
+  if (clr>=0 && clr<16) {
+    *r = reds[clr];
+    *g = greens[clr];
+    *b = blues[clr];
+  }
+  return;
 }
 
 /* Routine to specify user X stuff (geom string, window name).  Must be
@@ -519,7 +530,8 @@ gaint i;
 }
 
 /* Examine X event queue.  Flag tells us if we should wait for an
-   event.  Any GrADS events (mouse-button presses) are queued.  */
+   event.  Any GrADS events (mouse-button presses) are queued.
+   If flag is 2, wait for any event, not just a mouse event.  */
 
 void gxdeve (gaint flag) {
 struct gevent *geve, *geve2;
@@ -607,6 +619,7 @@ gaint i,j,ii,rc,wflg,button,eflg,idm,rdrflg;
         xscl = (gadouble)(width)/xsize;
         yscl = (gadouble)(height)/ysize;
         rdrflg = 1;
+        if (flag==2) wflg = 0;
       }
       break;
     }
@@ -877,10 +890,6 @@ void gxdswp (void) {
   return;
 }
 
-gaint gxqfil (void) {
-  return (1);
-}
-
 void gxdfil (gadouble *xy, gaint n) {
 gadouble *pt;
 gaint i;
@@ -909,6 +918,7 @@ XPoint *pnt;
 void gxdxsz (gaint xx, gaint yy) {
   if (batch) return;
   XResizeWindow (display, win, xx, yy);
+  gxdeve(2);
 }
 
 /* set hardware background color */
@@ -2738,6 +2748,10 @@ mf*/
    window display, sometimes background */
 
 void gxdssv (int frame) {
+  if (batch) {
+    printf("Error: the screen command does not work in batch mode\n");
+    return;
+  }
   if (frame<0 || frame>199) return;
   if (!pfilld[frame]) {
     pmaps[frame] = XCreatePixmap (display, win, width, height, depth);
@@ -2752,11 +2766,19 @@ void gxdssv (int frame) {
 }
 
 void gxdssh (int cnt) {
+  if (batch) {
+    printf("Error: the screen command does not work in batch mode\n");
+    return;
+  }
   if (cnt<0 || cnt>199) return;
   if (pfilld[cnt]) XCopyArea (display, pmaps[cnt], drwbl, gc, 0, 0, width, height, 0, 0);
 }
 
 void gxdsfr (int frame) {
+  if (batch) {
+    printf("Error: the screen command does not work in batch mode\n");
+    return;
+  }
   if (frame<0 || frame>199) return;
   if (pfilld[frame]) {
     XFreePixmap (display, pmaps[frame]);

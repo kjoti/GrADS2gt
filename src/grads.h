@@ -1,4 +1,4 @@
-/*  Copyright (C) 1988-2010 by Brian Doty and the
+/*  Copyright (C) 1988-2011 by Brian Doty and the
     Institute of Global Environment and Society (IGES).
     See file COPYRIGHT for more information.   */
 
@@ -164,6 +164,9 @@ struct gacmn {
   gaint hemflg;                /* -1; auto  0; nhem  1; shem */
   gaint miconn;                /* Connect line graph accross missing    */
   gaint strmden;               /* Streamline density indicator  */
+  gadouble strmarrd;           /* Streamline distance between arrowheads */
+  gadouble strmarrsz;          /* Streamline arrowhead size */
+  gaint strmarrt;              /* Streamline arrowhead type */
   gaint mdlblnk,mdldig3;       /* Station model plot opts */
   char *prstr;                 /* Format string for gxout print */
   gaint prlnum;                /* Number of values per record */
@@ -181,6 +184,7 @@ struct gacmn {
   gaint rotate;                /* Rotate plot from default orientation  */
   gaint xflip, yflip;          /* Flip X or Y axes                      */
   gaint zlog;                  /* Z coordinate in log scale */
+  gaint log1d;                 /* Log scaling for 1D plots              */
   gaint coslat;                /* Lat coordinate scaled as cos lat */
   gaint mproj;                 /* Map projection -- used for X,Y plot   */
                                /*  only.  0 = no map.                   */
@@ -338,7 +342,7 @@ struct gastat {
 
 
 /* Description of a data file.                                        */
-struct gafile {
+  struct gafile {
   struct gafile *pforw;      /* Forward pointer to next gafile block.
                                 List is anchored within gastat.       */
   gaint fseq;                /* Unique sequence number for cache detection */
@@ -854,7 +858,11 @@ gaint gaqury (char *, char *, struct gacmn *);
 gaint gahelp (char *, struct gacmn *);
 gaint gaset (char *, char *, struct gacmn *);
 void set_nc_cache(size_t);
+#if USESHP==1
+SHPHandle gaopshp (char *);
+DBFHandle gaopdbf (char *);
 struct dbfld* parsedbfld (char *);
+#endif
 gaint gacoll (char *, struct gacmn *);
 gaint gadspl (char *, struct gacmn *);
 gaint gaspcl (char *, struct gacmn *);
@@ -1068,7 +1076,7 @@ void gawsym (struct gacmn *);
 void gasmrk (struct gacmn *);
 void gabarb (gadouble, gadouble, gadouble, gadouble, gadouble, gadouble, gadouble, gaint);
 void gapmdl (struct gacmn *);
-void gasmdl (struct gacmn *, struct garpt *, gadouble *, char *);
+gaint gasmdl (struct gacmn *, struct garpt *, gadouble *, char *);
 gadouble wndexit (gadouble, gadouble, gadouble, gadouble, gadouble, gadouble *,
                                    gadouble *, gadouble *, gadouble *);
 void gapprf (struct gacmn *);
@@ -1081,6 +1089,12 @@ void galnx (gadouble, gadouble, gadouble *, gadouble *);
 void galny (gadouble, gadouble, gadouble *, gadouble *);
 void gaalnx (gadouble, gadouble, gadouble *, gadouble *);
 void gaalny (gadouble, gadouble, gadouble *, gadouble *);
+void galogx (gadouble, gadouble, gadouble *, gadouble *);
+void galogy (gadouble, gadouble, gadouble *, gadouble *);
+void galog2 (gadouble, gadouble, gadouble *, gadouble *);
+void gaalogx (gadouble, gadouble, gadouble *, gadouble *);
+void gaalogy (gadouble, gadouble, gadouble *, gadouble *);
+void gaalog2 (gadouble, gadouble, gadouble *, gadouble *);
 void gaclx (gadouble, gadouble, gadouble *, gadouble *);
 void gacly (gadouble, gadouble, gadouble *, gadouble *);
 void gaaclx (gadouble, gadouble, gadouble *, gadouble *);
@@ -1186,6 +1200,7 @@ void gapby (gaint, unsigned char *, gaint, gaint);
 void gapbb (gaint, unsigned char *, gaint, gaint);
 char *gafndt (char *, struct dt *, struct dt *, gadouble *,
               struct gachsub *, struct gaens *, gaint, gaint, gaint *);
+void gabswp2 (void *, gaint);
 void gabswp (void *, gaint);
 void gabswp8 (void *, gaint);
 void gahswp (struct rpthdr *);
