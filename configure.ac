@@ -7,7 +7,7 @@ dnl  See acinclude.m4 for definitions of the GA_xxx macros
 
 # The version number
 # below is the "master" version that will appear in all code, etc.
-AC_INIT(GrADS, [2.0.0], [jma@iges.org])
+AC_INIT(GrADS, [2.0.1], [jma@iges.org])
 
 # Require autoconf 2.52 (comes with Mac OS X 10.2) or newer
 AC_PREREQ(2.52)

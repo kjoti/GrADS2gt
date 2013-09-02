@@ -1717,7 +1717,7 @@ gaint g2var_match (gribfield *gfld, struct gafile *pfi, gaint sp, gaint sp2) {
       rc4 = dequal(pvar->units[3],(gadouble)sp,1e-8);               /* Statistical Process */
       rc5 = dequal(pvar->units[4],(gadouble)sp2,1e-8);              /* Spatial Process     */
       rc6 = dequal(pvar->units[8],(gadouble)gfld->ipdtmpl[9],1e-8); /* LTYPE1     */
-      if (rc1==0 && rc2==0 && rc3==0 && rc4==0 && rc5==0) {   /* all the above match */
+      if (rc1==0 && rc2==0 && rc3==0 && rc4==0 && rc5==0 && rc6==0) {   /* all the above match */
         /* get a Z value for level 1 */
         conv = pfi->ab2gr[2];
         z = conv(pfi->abvals[2],lev1);
