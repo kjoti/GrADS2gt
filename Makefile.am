@@ -1,6 +1,6 @@
 # Adding this will suppress the requirement for INSTALL, et c., files.
 AUTOMAKE_OPTIONS = foreign
-ACLOCAL_AMFLAGS = -I m4 
+ACLOCAL_AMFLAGS = -I m4
 
 ##############################################################
 #
