@@ -1,6 +1,6 @@
 /*
 
-    Copyright (C) 1997-2010 by Arlindo da Silva <dasilva@opengrads.org>
+    Copyright (C) 1997-2011 by Arlindo da Silva <dasilva@opengrads.org>
     All Rights Reserved.
 
     This program is free software; you can redistribute it and/or modify

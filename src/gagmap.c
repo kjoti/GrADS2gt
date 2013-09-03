@@ -1,4 +1,4 @@
-/*  Copyright (C) 1988-2010 by Brian Doty and the
+/*  Copyright (C) 1988-2011 by Brian Doty and the
     Institute of Global Environment and Society (IGES).
     See file COPYRIGHT for more information.   */
 
@@ -76,7 +76,7 @@ gaint gribmap (void) {
  char *ch=NULL;
  gaint ret,ierr,flag,rcgr,record;
  gaint rc,i,e,tmin=0,tmax=0,told,tcur,fnum,didmatch=0;
- gaint sp,ioff,eoff,it,write_map;
+ gaint sp,sp2,ioff,eoff,it,write_map;
  struct gafile *pfi;
  struct dt dtim,dtimi;
  struct gaens *ens;
@@ -306,7 +306,7 @@ gaint gribmap (void) {
        /* see how we did */
        if (rc==50) {
          printf (" grib1map error: I/O error reading GRIB file\n");
-         printf ("                possible cause is premature EOF\n");
+         printf ("                 possible cause is premature EOF\n");
          break;
        }
        if (rc>1 && rc!=98) {
@@ -504,9 +504,10 @@ gaint gribmap (void) {
 
            /* get statistical process type from grib field */
            sp = g2sp(gfld);
+           sp2 = g2sp2(gfld);
 
            /* print out useful codes from grib2 field */
-           if (verb) g2prnt(gfld,record,n+1,sp);
+           if (verb) g2prnt(gfld,record,n+1,sp,sp2);
 
            /* Check grid properties */
            rc = g2grid_check(gfld,pfi,record,n+1);
@@ -528,7 +529,7 @@ gaint gribmap (void) {
            it = (it-1)*pfi->trecs;  /* number of records per time */
 
            /* Check if the variable is a match */
-           ioff = g2var_match(gfld,pfi,sp);
+           ioff = g2var_match(gfld,pfi,sp,sp2);
            if (ioff==-999) {
              if (verb) printf("\n");
              fflush(stdout);
@@ -687,9 +688,10 @@ gaint gribmap (void) {
 
            /* get statistical process type from grib field */
            sp = g2sp(gfld);
+           sp2 = g2sp2(gfld);
 
            /* print out useful codes from grib2 field */
-           if (verb) g2prnt(gfld,record,n+1,sp);
+           if (verb) g2prnt(gfld,record,n+1,sp,sp2);
 
            /* Check grid properties */
            rc = g2grid_check(gfld,pfi,record,n+1);
@@ -711,7 +713,7 @@ gaint gribmap (void) {
            it = (it-1)*pfi->trecs;  /* number of records per time */
 
            /* Check if the variable is a match */
-           ioff = g2var_match(gfld,pfi,sp);
+           ioff = g2var_match(gfld,pfi,sp,sp2);
            if (ioff==-999) {
              if (verb) printf("\n");
              fflush(stdout);
@@ -895,6 +897,7 @@ gaint gribhdr (struct grhdr *ghdr) {
    ghdr->btim.mn = *(pfi->abvals[3]+4);
    if (no_min) ghdr->btim.mn = 0;
  } else {
+   /* get reference (base) time */
    ghdr->btim.yr = gagby(rec,12,1);
    ghdr->btim.mo = gagby(rec,13,1);
    ghdr->btim.dy = gagby(rec,14,1);
@@ -913,9 +916,11 @@ gaint gribhdr (struct grhdr *ghdr) {
      if (ghdr->btim.yr<50) ghdr->btim.yr += 2000;
    }
  }
- ghdr->ftu = gagby(rec,17,1);
- ghdr->tri = gagby(rec,20,1);
+ ghdr->ftu = gagby(rec,17,1);    /* forecast time unit */
+ ghdr->tri = gagby(rec,20,1);    /* time range indicator */
+ /* get P1 and P2 */
  if (ghdr->tri==10) {
+   /* P1 occupies octets 19 and 20; product valid at reference time + P1 */
    ghdr->p1 = gagby(rec,18,2);
    ghdr->p2 = 0;
  } else {
@@ -923,22 +928,24 @@ gaint gribhdr (struct grhdr *ghdr) {
    ghdr->p2 = gagby(rec,19,1);
  }
 
- ghdr->fcstt = ghdr->p1;
+ ghdr->fcstt = ghdr->p1;             /* set P1 as forecast time */
  if (ghdr->tri>1 && ghdr->tri<6)
-   ghdr->fcstt=ghdr->p2;
- if ((tauave) && ghdr->tri==3)
-   ghdr->fcstt=ghdr->p1;
+   ghdr->fcstt = ghdr->p2;           /* product considered valid at reference time + P2 */
+ if ((tauave) && (ghdr->tri==3 || ghdr->tri==7))
+   ghdr->fcstt = ghdr->p1;           /* Valid time for averages is beginning of period, use P1 */
+
+ /* populate a dt structure with the time to add to base time */
  atim.yr=0; atim.mo=0; atim.dy=0; atim.hr=0; atim.mn=0;
  if      (ghdr->ftu== 0) atim.mn = ghdr->fcstt;
- else if (ghdr->ftu==13) atim.mn = ghdr->fcstt*15;  /* 15-minute incr */
- else if (ghdr->ftu==14) atim.mn = ghdr->fcstt*30;  /* 30-minute incr */
  else if (ghdr->ftu== 1) atim.hr = ghdr->fcstt;
- else if (ghdr->ftu==10) atim.hr = ghdr->fcstt*3;   /* added 3Hr incr */
- else if (ghdr->ftu==11) atim.hr = ghdr->fcstt*6;   /* added 6Hr incr */
- else if (ghdr->ftu==12) atim.hr = ghdr->fcstt*12;  /* added 12Hr incr */
  else if (ghdr->ftu== 2) atim.dy = ghdr->fcstt;
  else if (ghdr->ftu== 3) atim.mo = ghdr->fcstt;
  else if (ghdr->ftu== 4) atim.yr = ghdr->fcstt;
+ else if (ghdr->ftu==10) atim.hr = ghdr->fcstt*3;   /* 3Hr incr */
+ else if (ghdr->ftu==11) atim.hr = ghdr->fcstt*6;   /* 6Hr incr */
+ else if (ghdr->ftu==12) atim.hr = ghdr->fcstt*12;  /* 12Hr incr */
+ else if (ghdr->ftu==13) atim.mn = ghdr->fcstt*15;  /* 15-minute incr */
+ else if (ghdr->ftu==14) atim.mn = ghdr->fcstt*30;  /* 30-minute incr */
  else ghdr->fcstt = -999;
 
  /*  if notau != 0 then FORCE the valid DTG to be the base DTG */
@@ -946,7 +953,10 @@ gaint gribhdr (struct grhdr *ghdr) {
 
  /*  add the forecast time to the time of this grib field */
  if (ghdr->fcstt>-900) {
-   timadd(&(ghdr->btim),&atim);
+   if (ghdr->tri==7)
+     timsub(&(ghdr->btim),&atim);
+   else
+     timadd(&(ghdr->btim),&atim);
    ghdr->dtim.yr = atim.yr;
    ghdr->dtim.mo = atim.mo;
    ghdr->dtim.dy = atim.dy;
@@ -1047,7 +1057,7 @@ gaint gribhdr (struct grhdr *ghdr) {
 gaint gribrec (struct grhdr *ghdr, struct gafile *pfi, struct gaindx *pindx,
              gaint tmin, gaint tmax, gaint e) {
  gadouble (*conv) (gadouble *, gadouble);
- gadouble z,t;
+ gadouble z,t,v1,delta;
  struct gavar *pvar;
  gaint i,ioff,iz,it,joff,nsiz,flag,eoff;
 
@@ -1140,9 +1150,16 @@ gaint gribrec (struct grhdr *ghdr, struct gafile *pfi, struct gaindx *pindx,
    return(34);
  }
 
+ /* set threshold for time stamp matches */
+ v1 = *(pfi->abvals[3]+5);  /* v1 is non-zero if time axis unit is months */
+ if (v1>0)
+   delta = 0.36;  /* large for monthly data, ~10 days */
+ else
+   delta = 0.01;  /* small for minutes data, the old default */
+
  /* Check if valid time is within grid time limits */
  t = t2gr(pfi->abvals[3],&(ghdr->dtim));
- if (t<0.99 || t>((gafloat)(pfi->dnum[3])+0.01)) {
+ if (t<(1.0-delta) || t>((gafloat)(pfi->dnum[3])+delta)) {
    if (verb) {
      printf("%s","----- Time out of bounds: ");
      gribpr(ghdr);
@@ -1150,9 +1167,9 @@ gaint gribrec (struct grhdr *ghdr, struct gafile *pfi, struct gaindx *pindx,
    return(36);
  }
 
- /* Check if valid time is an integer */
+ /* Check if valid time is an integer (+/- the designated threshold) */
  it = (gaint)(t+0.01);
- if (fabs((gafloat)it - t)>0.01) {
+ if (fabs((gafloat)it - t) > delta) {
    if (verb) {
      printf("----- Time non-integral. %g %g: ",(gafloat)it,t);
      gribpr(ghdr);
@@ -1500,7 +1517,7 @@ gaint g2time_check (gribfield *gfld, g2int *listsec1, struct gafile *pfi,
   struct dt tref,tfld,tvalid;
   gaint it,tfield;
   gafloat t;
-
+  gadouble v1,delta;
   /* Get reference time from Section 1 of GRIB message */
   tref.yr = listsec1[5];
   tref.mo = listsec1[6];
@@ -1518,8 +1535,8 @@ gaint g2time_check (gribfield *gfld, g2int *listsec1, struct gafile *pfi,
     tvalid.mn = tref.mn;
   }
   else {
-    /* For fields at a point in time (PDT<8) */
-    if (gfld->ipdtnum < 8) {
+    /* For fields at a point in time (PDT<8 or PDT=15) */
+    if (gfld->ipdtnum < 8 || gfld->ipdtnum==15) {
       if      (gfld->ipdtmpl[7]== 0) tfld.mn = gfld->ipdtmpl[8];
       else if (gfld->ipdtmpl[7]== 1) tfld.hr = gfld->ipdtmpl[8];
       else if (gfld->ipdtmpl[7]== 2) tfld.dy = gfld->ipdtmpl[8];
@@ -1642,15 +1659,20 @@ gaint g2time_check (gribfield *gfld, g2int *listsec1, struct gafile *pfi,
     }
   }
   /* Check if valid time is within grid limits */
+  v1 = *(pfi->abvals[3]+5);  /* v1 is non-zero if time axis unit is months */
+  if (v1>0)
+    delta = 0.36;  /* large for monthly data, ~10 days */
+  else
+    delta = 0.01;  /* small for minutes data, the old default */
   t = t2gr(pfi->abvals[3],&tvalid);
-  if (t<0.99 || t>((gafloat)(pfi->dnum[3])+0.01)) {
+  if (t<(1.0-delta) || t>((gafloat)(pfi->dnum[3])+delta)) {
     if (verb) printf("valid time %4d%02d%02d%02d:%02d (t=%g) is outside grid limits",
            tvalid.yr,tvalid.mo,tvalid.dy,tvalid.hr,tvalid.mn,t);
     return(-99);
   }
-  /* Check if valid time is an integer */
+  /* Check if valid time is an integer (+/- the designated threshold) */
   it = (gaint)(t+0.01);
-  if (fabs((gafloat)it - t)>0.01) {
+  if (fabs((gafloat)it - t) > delta) {
     if (verb) printf("valid time %4d%02d%02d%02d:%02d (t=%g) has non-integer grid index",
            tvalid.yr,tvalid.mo,tvalid.dy,tvalid.hr,tvalid.mn,t);
     return(-99);
@@ -1667,11 +1689,11 @@ gaint g2time_check (gribfield *gfld, g2int *listsec1, struct gafile *pfi,
 /* Loops over variables in descriptor file, looking for match to current grib2 field.
    If variables match, returns offset, if not, returns -999 */
 
-gaint g2var_match (gribfield *gfld, struct gafile *pfi, gaint sp) {
+gaint g2var_match (gribfield *gfld, struct gafile *pfi, gaint sp, gaint sp2) {
   struct gavar *pvar;
   gadouble lev1,lev2,z;
   gadouble (*conv) (gadouble *, gadouble);
-  gaint rc1,rc2,rc3,rc4,rc5;
+  gaint rc1,rc2,rc3,rc4,rc5,rc6;
   gaint i,ioff,iz;
 
   /* Get level values from grib field */
@@ -1692,10 +1714,10 @@ gaint g2var_match (gribfield *gfld, struct gafile *pfi, gaint sp) {
       rc1 = dequal(pvar->units[0],(gadouble)gfld->discipline,1e-8); /* discipline */
       rc2 = dequal(pvar->units[1],(gadouble)gfld->ipdtmpl[0],1e-8); /* category   */
       rc3 = dequal(pvar->units[2],(gadouble)gfld->ipdtmpl[1],1e-8); /* number     */
-      rc4 = dequal(pvar->units[3],(gadouble)sp,1e-8);               /* SP         */
-      rc5 = dequal(pvar->units[8],(gadouble)gfld->ipdtmpl[9],1e-8); /* LTYPE1     */
-      if (rc1==0 && rc2==0 && rc3==0 && rc4==0 && rc5==0) {   /* all the above match */
-
+      rc4 = dequal(pvar->units[3],(gadouble)sp,1e-8);               /* Statistical Process */
+      rc5 = dequal(pvar->units[4],(gadouble)sp2,1e-8);              /* Spatial Process     */
+      rc6 = dequal(pvar->units[8],(gadouble)gfld->ipdtmpl[9],1e-8); /* LTYPE1     */
+      if (rc1==0 && rc2==0 && rc3==0 && rc4==0 && rc5==0 && rc6==0) {   /* all the above match */
         /* get a Z value for level 1 */
         conv = pfi->ab2gr[2];
         z = conv(pfi->abvals[2],lev1);
@@ -1714,10 +1736,10 @@ gaint g2var_match (gribfield *gfld, struct gafile *pfi, gaint sp) {
       rc1 = dequal(pvar->units[0],(gadouble)gfld->discipline,1e-8); /* discipline */
       rc2 = dequal(pvar->units[1],(gadouble)gfld->ipdtmpl[0],1e-8); /* category   */
       rc3 = dequal(pvar->units[2],(gadouble)gfld->ipdtmpl[1],1e-8); /* number     */
-      rc4 = dequal(pvar->units[3],(gadouble)sp,1e-8);               /* SP         */
-      rc5 = dequal(pvar->units[8],(gadouble)gfld->ipdtmpl[9],1e-8); /* LTYPE1     */
-      if (rc1==0 && rc2==0 && rc3==0 && rc4==0 && rc5==0) {   /* all the above match */
-
+      rc4 = dequal(pvar->units[3],(gadouble)sp,1e-8);               /* Statistical Process */
+      rc5 = dequal(pvar->units[4],(gadouble)sp2,1e-8);              /* Spatial Process     */
+      rc6 = dequal(pvar->units[8],(gadouble)gfld->ipdtmpl[9],1e-8); /* LTYPE1     */
+      if (rc1==0 && rc2==0 && rc3==0 && rc4==0 && rc5==0 && rc6==0) {   /* all the above match */
         /* check if level value(s) match those given in descriptor file */
         if (
             (pvar->units[9] < -900)                /* LVAL not given */
@@ -1837,12 +1859,20 @@ gaint g2sp (gribfield *gfld) {
   if (gfld->ipdtnum == 10) sp = gfld->ipdtmpl[24];
   if (gfld->ipdtnum == 11) sp = gfld->ipdtmpl[26];
   if (gfld->ipdtnum == 12) sp = gfld->ipdtmpl[25];
+  if (gfld->ipdtnum == 15) sp = gfld->ipdtmpl[15];
   if (sp==255) sp = -999;
   return(sp);
 }
+gaint g2sp2(gribfield *gfld) {
+  gaint sp2;
+  sp2 = -999;
+  if (gfld->ipdtnum == 15) sp2 = gfld->ipdtmpl[16];
+  if (sp2==255) sp2 = -999;
+  return(sp2);
+}
 
 /* prints out relevant info from a grib2 record */
-void g2prnt (gribfield *gfld, gaint r, g2int f, gaint sp) {
+void g2prnt (gribfield *gfld, gaint r, g2int f, gaint sp, gaint sp2) {
   /* print record/field number */
   printf("%d.%ld: ",r,f);
   /* print level info */
@@ -1860,8 +1890,12 @@ void g2prnt (gribfield *gfld, gaint r, g2int f, gaint sp) {
   /* print variable info */
   if (sp==-999)
     printf("var=%ld,%ld,%ld ",gfld->discipline,gfld->ipdtmpl[0],gfld->ipdtmpl[1]);
-  else
-    printf("var=%ld,%ld,%ld,%d ",gfld->discipline,gfld->ipdtmpl[0], gfld->ipdtmpl[1],sp);
+  else {
+    if (sp2==-999)
+      printf("var=%ld,%ld,%ld,%d ",gfld->discipline,gfld->ipdtmpl[0], gfld->ipdtmpl[1],sp);
+    else
+      printf("var=%ld,%ld,%ld,%d,%d ",gfld->discipline,gfld->ipdtmpl[0], gfld->ipdtmpl[1],sp,sp2);
+  }
 }
 
 void gaseekgb(FILE *lugb, off_t iseek, g2int mseek, off_t *lskip, g2int *lgrib)

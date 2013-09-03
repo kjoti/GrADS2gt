@@ -1,4 +1,4 @@
-/*  Copyright (C) 1988-2010 by Brian Doty and the
+/*  Copyright (C) 1988-2011 by Brian Doty and the
     Institute of Global Environment and Society (IGES).
     See file COPYRIGHT for more information.   */
 
@@ -630,11 +630,11 @@ gaint garead (off_t fpos, gaint len, gadouble *gr, char *gru) {
 gafloat *fgr;
 off_t ffpos;
 gaint rc,i;
-gaint cnt,ival,*ig;
-char *ch1,*ch2,*ch3,*ch4,cc1,cc2;
-unsigned char *uch1,*uch2,ucc1,ucc2;
+gaint cnt,*ig;
 unsigned char *igr;
-unsigned char *cgr;
+char *cgr;
+unsigned short usval;
+signed short sval;
 size_t sz;
 
   if (pvr->dfrm == 1) {
@@ -644,10 +644,11 @@ size_t sz;
     ffpos = fpos*2ll + (off_t)pfi->fhdr;
   }
   else if (pvr->dfrm == 4) {
-    ffpos = fpos*(off_t)sizeof(gaint) + (off_t)pfi->fhdr;
+    ffpos = fpos*4ll + (off_t)pfi->fhdr;
   }
   else {
-    ffpos = fpos*(off_t)sizeof(gafloat) + (off_t)pfi->fhdr;
+    /* use 4 instead of sizeof(gafloat) to read float data */
+    ffpos = fpos*4ll + (off_t)pfi->fhdr;
   }
   rc = fseeko(pfi->infile, ffpos, 0);
   if (rc!=0) {
@@ -662,93 +663,71 @@ size_t sz;
   }
 
   if (pvr->dfrm == 1) {
-    sz = len*sizeof(char);
+    /* read 1-byte data */
+    sz = len;
     igr = (unsigned char *)galloc(sz,"igr");
     if (igr==NULL) {
-      gaprnt (0,"Memory Allocation Error:  char grid storage \n");
+      gaprnt (0,"Memory Allocation Error:  1-byte data storage \n");
       return (1);
     }
-    rc = fread (igr, 1, len, pfi->infile);               /* read 1-byte data */
+    rc = fread (igr, 1, len, pfi->infile);
     if (rc<len) {
       gree(igr,"f108a");
       goto readerr;
     }
-    for(i=0;i<len;i++) *(gr+i) = (gadouble)(*(igr+i));   /* convert to gadouble */
+    for(i=0;i<len;i++) *(gr+i) = (gadouble)(*(igr+i));
     gree(igr,"f108");
   }
   else if (pvr->dfrm == 2 || pvr->dfrm == -2 ) {
+    /* read 2-byte data */
     sz = len*2;
-    cgr = (unsigned char *)galloc(sz,"cgr");
+    cgr = (char *)galloc(sz,"cgr");
     if (cgr==NULL) {
-      gaprnt (0,"Memory Allocation Error:  integer*2 storage \n");
+      gaprnt (0,"Memory Allocation Error:  2-byte data storage \n");
       return (1);
     }
-    rc = fread (cgr, 2, len, pfi->infile);               /* read 2-byte data */
+    rc = fread (cgr, 2, len, pfi->infile);
     if (rc<len) {
       gree(cgr,"f109a");
       goto readerr;
     }
+    if (pfi->bswap) gabswp2(cgr,len);
     cnt=0;
-    if (pfi->bswap) {                                    /* byte swap if necessary */
-      uch1 = cgr;
-      uch2 = uch1+1;
-      for (i=0; i<len; i++) {
-        ucc1 = *uch1;
-        ucc2 = *uch2;
-        *uch1 = ucc2;
-        *uch2 = ucc1;
-        uch1+=2; uch2+=2;
-      }
-    }
     if (pvr->dfrm == -2) {
       for(i=0;i<len;i++) {
-        ival=(gaint)(*(cgr+cnt)*256) + (gaint)((*(cgr+cnt+1))) - 65536*(*(cgr+cnt)>>7);
-        *(gr+i) = (gadouble)ival;                       /* convert to gadouble */
+        sval=(signed short)(*(cgr+cnt));
+        *(gr+i) = (gadouble)sval;
         cnt+=2;
       }
     } else {
       for(i=0;i<len;i++) {
-        ival=(gaint)(*(cgr+cnt)*256) + (gaint)((*(cgr+cnt+1)));
-        *(gr+i) = (gadouble)ival;                       /* convert to gadouble */
+        usval=(unsigned short)(*(cgr+cnt));
+        *(gr+i) = (gadouble)usval;
         cnt+=2;
       }
     }
     gree(cgr,"f109");
   }
   else if (pvr->dfrm == 4) {
-    sz = len*sizeof(gaint);
+    /* read 4-byte integers */
+    sz = len*4;
     ig = (gaint *)galloc(sz,"ig");
     if (ig==NULL) {
-      gaprnt (0,"Memory Allocation Error:  integer*4 storage \n");
+      gaprnt (0,"Memory Allocation Error:  4-byte integer storage \n");
       return (1);
     }
-    rc = fread (ig, sizeof(gaint), len, pfi->infile);      /* read 4-byte integers */
+    rc = fread (ig, 4, len, pfi->infile);
     if (rc<len) {
       gree(ig,"f110a");
       goto readerr;
     }
-    if (pfi->bswap) {                                    /* byte swap if necessary */
-      ch1 = (char *)ig;
-      ch2 = ch1+1;
-      ch3 = ch2+1;
-      ch4 = ch3+1;
-      for(i=0;i<len;i++) {
-        cc1 = *ch1;
-        cc2 = *ch2;
-        *ch1 = *ch4;
-        *ch2 = *ch3;
-        *ch3 = cc2;
-        *ch4 = cc1;
-        ch1+=4; ch2+=4; ch3+=4; ch4+=4;
-      }
-    }
-    for(i=0;i<len;i++) *(gr+i) = (gadouble)(*(ig+i));     /* convert to gadouble */
+    if (pfi->bswap) gabswp(ig,len);
+    for(i=0;i<len;i++) *(gr+i) = (gadouble)(*(ig+i));
     gree(ig,"f110");
 
   }
   else {
-    /* standard direct access read */
-    /* here we use 4 instead of sizeof(gafloat) to read float data */
+    /* standard direct access read, 4-byte floats */
     sz = len*4;
     fgr = (gafloat *)galloc(sz,"fgr");
     rc = fread (fgr, 4, len, pfi->infile);
@@ -756,22 +735,8 @@ size_t sz;
       gree(fgr,"f113a");
       goto readerr;
     }
-    if (pfi->bswap) {                                     /* byte swap if necessary */
-      ch1 = (char *)fgr;
-      ch2 = ch1+1;
-      ch3 = ch2+1;
-      ch4 = ch3+1;
-      for (i=0; i<len; i++) {
-        cc1 = *ch1;
-        cc2 = *ch2;
-        *ch1 = *ch4;
-        *ch2 = *ch3;
-        *ch3 = cc2;
-        *ch4 = cc1;
-        ch1+=4; ch2+=4; ch3+=4; ch4+=4;
-      }
-    }
-    for(i=0;i<len;i++) *(gr+i) = (gadouble)(*(fgr+i));    /* convert to doubles */
+    if (pfi->bswap) gabswp(fgr,len);
+    for(i=0;i<len;i++) *(gr+i) = (gadouble)(*(fgr+i));
     gree(fgr,"f113");
   }
 
@@ -793,7 +758,7 @@ readerr:
   gaprnt (0,"Low Level I/O Error:  Read error on data file \n");
   snprintf(pout,255,"  Data file name = %s \n",pfi->name);
   gaprnt (0,pout);
-  snprintf(pout,255,"  Error reading %i bytes at location %ld \n",len, (long)ffpos);
+  snprintf(pout,255,"  Error reading %ld bytes at location %ld \n",sz,(long)ffpos);
   gaprnt (0,pout);
   return (1);
 
@@ -1251,7 +1216,8 @@ gaint rc;
 
 gaint gagdef (void) {
 gaint id, jd, i, flag;
-gaint ys,zs,ts,es,siz,pos;
+gaint ys,zs,ts,es,siz;
+off_t pos;
 gaint d[5],d1min=0,d1max=0,d2min=0,d2max=0,xt,yt;
 gadouble *v;
 char *vmask;
@@ -1353,7 +1319,7 @@ size_t sz;
   /* Move appropriate grid values */
 
   if (id==-1 && jd==-1) {
-    pos = d[0] + d[1]*ys + d[2]*zs + d[3]*ts + d[4]*es;
+    pos = (off_t)d[0] + (off_t)d[1]*(off_t)ys + (off_t)d[2]*(off_t)zs + (off_t)d[3]*(off_t)ts + (off_t)d[4]*(off_t)es;
     pgr->rmin = *(pfi->rbuf+pos);
     pgr->umin = *(pfi->ubuf+pos);
     return (0);
@@ -1371,7 +1337,7 @@ size_t sz;
         *vmask = 0;
       }
       else {
-        pos = d[0] + d[1]*ys + d[2]*zs + d[3]*ts + d[4]*es;
+        pos = (off_t)d[0] + (off_t)d[1]*(off_t)ys + (off_t)d[2]*(off_t)zs + (off_t)d[3]*(off_t)ts + (off_t)d[4]*(off_t)es;
         *v     = *(pfi->rbuf+pos);
         *vmask = *(pfi->ubuf+pos);
       }
@@ -1390,7 +1356,7 @@ size_t sz;
         *vmask = 0;
       }
       else {
-        pos = d[0] + d[1]*ys + d[2]*zs + d[3]*ts + d[4]*es;
+        pos = (off_t)d[0] + (off_t)d[1]*(off_t)ys + (off_t)d[2]*(off_t)zs + (off_t)d[3]*(off_t)ts + (off_t)d[4]*(off_t)es;
         *v     = *(pfi->rbuf+pos);
         *vmask = *(pfi->ubuf+pos);
       }
@@ -2425,7 +2391,7 @@ gaint gancsetup (void) {
       pvr->ncvid = -888;  /* set flag so we won't try this variable ever again */
       if (pvr->longnm[0] != '\0') {
         snprintf(pout,255,"Error: Variable %s not in netcdf file\n",pvr->longnm);
-      }
+     }
       else {
         snprintf(pout,255,"Error: Variable %s not in netcdf file\n",pvr->abbrv);
       }
@@ -2459,16 +2425,17 @@ gaint gancsetup (void) {
       pvr->scale=1.0;
       pvr->add=0.0;
       /* get the scale factor attribute value */
-      if (nc_get_att_double(pfi->ncid, pvr->ncvid, pfi->scattr, &val) != NC_NOERR) {
-        gaprnt(1,"Warning: Could not retrieve scale factor -- setting to 1.0\n");
-        pvr->scale = 1.0;
+      if (pfi->packflg == 1 || pfi->packflg == 2) {
+        if (nc_get_att_double(pfi->ncid, pvr->ncvid, pfi->scattr, &val) != NC_NOERR) {
+          gaprnt(1,"Warning: Could not retrieve scale factor -- setting to 1.0\n");
+          pvr->scale = 1.0;
+        }
+        else {
+          pvr->scale = val;
+        }
       }
-      else {
-        pvr->scale = val;
-      }
-
       /* get add offset if required */
-      if (pfi->packflg == 2) {
+      if (pfi->packflg == 2 || pfi->packflg == 3) {
         /* get the add offset attribute value */
         if (nc_get_att_double(pfi->ncid, pvr->ncvid, pfi->ofattr, &val) != NC_NOERR) {
           gaprnt(1,"Warning: Could not retrieve add offset -- setting to 0.0\n");
@@ -2487,28 +2454,25 @@ gaint gancsetup (void) {
         if (storage == NC_CHUNKED) {
           if ((nc_inq_vartype(pfi->ncid, pvr->ncvid, &type)) == NC_NOERR) {
             if ((nc_inq_type(pfi->ncid, type, NULL, &size)) == NC_NOERR) {
-              /* get the global cache size from the netcdf library */
-              if ((nc_get_chunk_cache(&cachesz,NULL,NULL))==NC_NOERR) {
-                nelems = 1;
-                for (i=0; i<ndims; i++) nelems *= chsize[i];
-                if (nelems*size > cachesz) {
-                  gaprnt(1,"*** WARNING! ***\n");
-                  gaprnt(1,"*** The I/O for this variable will be extremely slow \n");
-                  gaprnt(1,"*** because the chunks are too big to fit in the cache \n");
-                  snprintf(pout,255,"*** chunk size = %ld bytes  (",(long)(nelems*size));
-                  gaprnt(1,pout);
-                  for (i=ndims-1; i>=0; i--) {
-                    snprintf(pout,255,"%ld * ",(long)chsize[i]); gaprnt(1,pout);
-                  }
-                  snprintf(pout,255,"%ld bytes)\n",(long)size);
-                  gaprnt(1,pout);
-                  snprintf(pout,255,"*** cache size = %ld bytes \n",cachesz);
-                  gaprnt(1,pout);
-                  gaprnt(1,"*** There are two ways to control the cache size: \n");
-                  gaprnt(1,"*** add a CACHESIZE entry to the descriptor file \n");
-                  gaprnt(1,"*** or change the cache size scale factor with 'set cachesf' \n");
-                  gaprnt(1,"*** Please read http://iges.org/grads/gadoc/compression.html \n");
+              nelems = 1;
+              for (i=0; i<ndims; i++) nelems *= chsize[i];
+              if (nelems*size > pfi->cachesize) {
+                gaprnt(1,"*** WARNING! ***\n");
+                gaprnt(1,"*** The I/O for this variable will be extremely slow \n");
+                gaprnt(1,"*** because the chunks are too big to fit in the cache \n");
+                snprintf(pout,255,"*** chunk size = %ld bytes  (",(long)(nelems*size));
+                gaprnt(1,pout);
+                for (i=ndims-1; i>=0; i--) {
+                  snprintf(pout,255,"%ld * ",(long)chsize[i]); gaprnt(1,pout);
                 }
+                snprintf(pout,255,"%ld bytes)\n",(long)size);
+                gaprnt(1,pout);
+                snprintf(pout,255,"*** cache size = %ld bytes \n",cachesz);
+                gaprnt(1,pout);
+                gaprnt(1,"*** There are two ways to control the cache size: \n");
+                gaprnt(1,"*** add a CACHESIZE entry to the descriptor file \n");
+                gaprnt(1,"*** or change the cache size scale factor with 'set cachesf' \n");
+                gaprnt(1,"*** Please read http://iges.org/grads/gadoc/compression.html \n");
               }
             }
           }
@@ -3151,13 +3115,15 @@ size_t sz;
         return (1);
       }
       /* Retrieve the scale factor attribute value */
-      if (hdfattr(sds_id, pfi->scattr, &pvr->scale) != 0) {
-        snprintf(pout,255,"Warning: Could not retrieve \"%s\" -- setting to 1.0\n",pfi->scattr);
-        gaprnt(1,pout);
-        pvr->scale = 1.0;
+      if (pfi->packflg == 1 || pfi->packflg == 2) {
+        if (hdfattr(sds_id, pfi->scattr, &pvr->scale) != 0) {
+          snprintf(pout,255,"Warning: Could not retrieve \"%s\" -- setting to 1.0\n",pfi->scattr);
+          gaprnt(1,pout);
+          pvr->scale = 1.0;
+        }
       }
       /* Retrieve the add offset attribute value if required */
-      if (pfi->packflg == 2) {
+      if (pfi->packflg == 2 || pfi->packflg == 3) {
         if (hdfattr(sds_id, pfi->ofattr, &pvr->add) != 0) {
           snprintf(pout,255,"Warning: Could not retrieve \"%s\" -- setting to 0.0\n",pfi->ofattr);
           gaprnt(1,pout);
@@ -3459,15 +3425,17 @@ gaint h5setup(void) {
     pvr->add=0.0;
 
     /* Retrieve the scale factor attribute value */
-    if (h5attr(vid, vname, pfi->scattr, &val) != 0) {
-      snprintf(pout,255,"Warning: Could not retrieve \"%s\" -- setting to 1.0\n",pfi->scattr);
-      gaprnt(1,pout);
-    }
-    else {
-      pvr->scale = val;
+    if (pfi->packflg == 1 || pfi->packflg == 2) {
+      if (h5attr(vid, vname, pfi->scattr, &val) != 0) {
+        snprintf(pout,255,"Warning: Could not retrieve \"%s\" -- setting to 1.0\n",pfi->scattr);
+        gaprnt(1,pout);
+      }
+      else {
+        pvr->scale = val;
+      }
     }
     /* Retrieve the add offset attribute value if required */
-    if (pfi->packflg == 2) {
+    if (pfi->packflg == 2 || pfi->packflg == 3) {
       if (h5attr(vid, vname, pfi->ofattr, &val) != 0) {
         snprintf(pout,255,"Warning: Could not retrieve \"%s\" -- setting to 0.0\n",pfi->ofattr);
         gaprnt(1,pout);

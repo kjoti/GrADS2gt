@@ -84,7 +84,7 @@ endif
 
 # Source files to be compiled
 grads_SOURCES          = grads.c gxsubs.c gxmeta.c gxchpl.c gxcntr.c gxstrm.c \
-			 gxwmap.c gxshad.c gaexpr.c gafunc.c gautil.c gagx.c \
+			 gxwmap.c gxshad.c gxshad2.c gaexpr.c gafunc.c gautil.c gagx.c \
 			 gscrpt.c gamach.c bufrstn.c gabufr.c gabufrtbl.c \
 			 gxX.c gxdxwd.c galloc.c $(src_gui) $(src_gadap) \
 			 gaddes.c gaio.c gacfg.c gauser.c gasdf.c gatxt.c \

@@ -20,7 +20,6 @@
 
 gaint gxhpng (char *, gaint, gaint, gaint, gaint, char *, char *, gaint) ;
 void gxgdpoly (gaint, gaint, gaint);
-void gxqdrgb (gaint, gaint *, gaint *, gaint *);
 void gaprnt (gaint, char *);
 
 /* default size of the graph */
@@ -434,15 +433,4 @@ void gxgdpoly (gaint xycnt, gaint col, gaint thck) {
 /*    gdImageOpenPolygon(im, xxyy, xycnt, gdAntiAliased); */
     gdImageOpenPolygon(im, xxyy, xycnt, col);
   }
-}
-
-/* query non-default color rgb values*/
-
-void gxqdrgb (gaint clr, gaint *r, gaint *g, gaint *b) {
-  if (clr>=0 && clr<16) {
-    *r = rr[clr];
-    *g = gg[clr];
-    *b = bb[clr];
-  }
-  return;
 }

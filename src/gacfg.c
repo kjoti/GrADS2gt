@@ -1,4 +1,4 @@
-/*  Copyright (C) 1988-2010 by Brian Doty and the
+/*  Copyright (C) 1988-2011 by Brian Doty and the
     Institute of Global Environment and Society (IGES).
     See file COPYRIGHT for more information.   */
 
@@ -126,7 +126,7 @@ snprintf(cmd,255,"Config: v%s",GRADS_VERSION);
  }
 
  gaprnt (verbose, "Grid Analysis and Display System (GrADS) Version " GRADS_VERSION "\n");
- gaprnt (verbose, "Copyright (c) 1988-2010 by Brian Doty and the\n");
+ gaprnt (verbose, "Copyright (c) 1988-2011 by Brian Doty and the\n");
  gaprnt (verbose, "Institute for Global Environment and Society (IGES) \n");
  gaprnt (verbose, "This program is distributed WITHOUT ANY WARRANTY \n");
  gaprnt (verbose, "See file COPYRIGHT for more information. \n\n");

@@ -1,4 +1,4 @@
-/*  Copyright (C) 1988-2010 by Brian Doty and the
+/*  Copyright (C) 1988-2011 by Brian Doty and the
     Institute of Global Environment and Society (IGES).
     See file COPYRIGHT for more information.   */
 
@@ -25,14 +25,17 @@
 
 void gxstrm (gadouble *u, gadouble *v, gadouble *c, gaint is, gaint js,
    char *umask, char *vmask, char *cmask, gaint flag, gadouble *shdlvs,
-   gaint *shdcls, gaint shdcnt, gaint den) {
+   gaint *shdcls, gaint shdcnt, gaint den, gadouble strmarrd, gadouble strmarrsz,
+   gaint strmarrt) {
 gadouble x,y,xx,yy;
 gadouble *up, *vp, *cp, cv1,cv2,cv;
 gadouble uv1,uv2,uv,vv1,vv2,vv,auv,avv,xsav,ysav,xold=0.0,yold=0.0;
 gadouble fact,rscl,xxsv,yysv;
+gadouble xx1,yy1,xx2,yy2,adj,dacum;
 gaint i,ii,jj,ii1,ij1,i2,j2,ipt,acnt,icol,scol,dis;
 gaint *it,siz,iacc,iisav,iscl,imn,imx,jmn,jmx,iz,jz,iss,jss,bflg;
 char *upmask,*vpmask,*cpmask;
+
   scol = -9;
   icol = 1;
 
@@ -44,12 +47,22 @@ char *upmask,*vpmask,*cpmask;
   iscl = iscl + den - 5;
   if (iscl<1) iscl=1;
   if (iscl>10) iscl=10;
-  fact = 0.5/((gadouble)iscl);
-  rscl = (gadouble)iscl;
+  ii = 1;
+  if (den<0) {           /* Support very high resolution grids */
+    ii = -1 * (den-1);
+    if (ii>10) ii = 10;
+    if ((is<200 || js<100) && ii>2) ii=2;    /* Limit downscaling to only high res */
+    if ((is<500 || js<250) && ii>5) ii=5;
+    if ((is<1000 || js<500) && ii>10) ii=10;
+    if ((is<1500 || js<750) && ii>15) ii=15;
+    if (ii>20) ii=20;
+  }
+  rscl = (gadouble)iscl/(gadouble)ii;
+  fact = 0.5/rscl;
 
   /* Allocate memory for the flag grid */
 
-  iss = is*iscl; jss = js*iscl;
+  iss = is*iscl/ii; jss = js*iscl/ii;
   siz = iss*jss;
   it = (gaint *)malloc(sizeof(gaint) * siz);
   if (it==NULL) {
@@ -68,6 +81,8 @@ char *upmask,*vpmask,*cpmask;
     dis = 2;
     if (den<5) dis = 3;
     if (den>5) dis = 1;
+    if (den<0) dis = 1;
+    if (den<-5) dis = 2;
     imn = i2-dis; imx = i2+dis+1;
     jmn = j2-dis; jmx = j2+dis+1;
     if (imn<0) imn = 0;
@@ -93,6 +108,7 @@ char *upmask,*vpmask,*cpmask;
       iisav = -999;
       iacc = 0;
       acnt = 0;
+      dacum = 0.0;
       bflg = 0;
       while (x>=0.0 && x<(gadouble)(is-1) && y>=0.0 && y<(gadouble)(js-1)) {
         ii = (gaint)x;
@@ -139,6 +155,13 @@ char *upmask,*vpmask,*cpmask;
           uv = uv*fact/avv;
           vv = vv*fact/avv;
         }
+        gxconv (x+1.0,y+1.0,&xx,&yy,3);     /* account for localized grid distortions */
+        gxconv (x+1.1,y+1.0,&xx1,&yy1,3);
+        gxconv (x+1.0,y+1.1,&xx2,&yy2,3);
+        adj = hypot(xx-xx1,yy-yy1)/hypot(xx-xx2,yy-yy2);
+        if (adj>1.0) uv=uv/adj;
+        else vv = vv*adj;
+        if (fabs(uv)<1e-6 && fabs(vv)<1e-6) break;
         x = x + uv;
         y = y + vv;
         ii1 = (gaint)(x*rscl);
@@ -156,13 +179,14 @@ char *upmask,*vpmask,*cpmask;
           if (bflg) {gxplot(xold,yold,3); bflg=0;}
           gxplot (xx,yy,2);
         } else bflg = 1;
+        dacum += hypot(xx-xold,yy-yold);
+        acnt++;
+        if (dacum>strmarrd) {
+          if (icol>-1) strmar (xxsv,yysv,xx,yy,strmarrsz,strmarrt);
+          acnt = 0; dacum = 0.0;
+        }
         xold = xx;
         yold = yy;
-        acnt++;
-        if (acnt>20) {
-          if (icol>-1) strmar (xxsv,yysv,xx,yy);
-          acnt = 0;
-        }
         xxsv = xx; yysv = yy;
       }
       bflg = 0;
@@ -174,6 +198,7 @@ char *upmask,*vpmask,*cpmask;
       iisav = -999;
       iacc = 0;
       acnt = 19;
+      dacum = 0.0;
       while (x>=0.0 && x<(gadouble)(is-1) && y>=0.0 && y<(gadouble)(js-1)) {
         ii = (gaint)x;
         jj = (gaint)y;
@@ -219,6 +244,13 @@ char *upmask,*vpmask,*cpmask;
           uv = uv*fact/avv;
           vv = vv*fact/avv;
         }
+        gxconv (x+1.0,y+1.0,&xx,&yy,3);     /* account for localized grid distortions */
+        gxconv (x+1.1,y+1.0,&xx1,&yy1,3);
+        gxconv (x+1.0,y+1.1,&xx2,&yy2,3);
+        adj = hypot(xx-xx1,yy-yy1)/hypot(xx-xx2,yy-yy2);
+        if (adj>1.0) uv=uv/adj;
+        else vv = vv*adj;
+        if (fabs(uv)<1e-6 && fabs(vv)<1e-6) break;
         x = x - uv;
         y = y - vv;
         ii1 = (gaint)(x*rscl);
@@ -236,12 +268,13 @@ char *upmask,*vpmask,*cpmask;
           if (bflg) {gxplot(xold,yold,3); bflg=0;}
           gxplot (xx,yy,2);
         } else bflg = 1;
+        dacum += hypot(xx-xold,yy-yold);
         xold = xx;
         yold = yy;
         acnt++;
-        if (acnt>20) {
-          if (icol>-1) strmar(xx,yy,xxsv,yysv);
-          acnt = 0;
+        if (dacum>strmarrd) {
+          if (icol>-1) strmar(xx,yy,xxsv,yysv,strmarrsz,strmarrt);
+          acnt = 0; dacum=0.0;
         }
         xxsv = xx; yysv = yy;
       }
@@ -254,15 +287,25 @@ char *upmask,*vpmask,*cpmask;
 
 static gadouble a150 = 150.0*3.1416/180.0;
 
-void strmar (gadouble xx1, gadouble yy1, gadouble xx2, gadouble yy2) {
-gadouble dir;
+void strmar (gadouble xx1, gadouble yy1, gadouble xx2, gadouble yy2, gadouble sz, gaint type) {
+gadouble dir,xy[8];
 
+  if (sz<0.0001) return;
   dir = atan2(yy2-yy1,xx2-xx1);
-  gxplot (xx2,yy2,3);
-  gxplot (xx2+0.05*cos(dir+a150),yy2+0.05*sin(dir+a150),2);
-  gxplot (xx2,yy2,3);
-  gxplot (xx2+0.05*cos(dir-a150),yy2+0.05*sin(dir-a150),2);
-  gxplot (xx2,yy2,3);
+  xy[0] = xx2; xy[1] = yy2;
+  xy[2] = xx2+sz*cos(dir+a150); xy[3] = yy2+sz*sin(dir+a150);
+  xy[4] = xx2+sz*cos(dir-a150); xy[5] = yy2+sz*sin(dir-a150);
+  xy[6] = xx2; xy[7] = yy2;
+  if (type==1) {
+    gxplot (xx2,yy2,3);
+    gxplot (xy[2],xy[3],2);
+    gxplot (xx2,yy2,3);
+    gxplot (xy[4],xy[5],2);
+    gxplot (xx2,yy2,3);
+  }
+  if (type==2) {
+    gxfill(xy,4);
+  }
 }
 
 /* Given a shade value, return the relevent color */

@@ -69,6 +69,7 @@ static struct msgbuf *msgstk, *msgcurr, *msgnew;
 gaint gacmd (char *com, struct gacmn *pcm, gaint exflg) {
 struct gafile *pfi,*pfi2;
 struct gadefn *pdf,*pdf2;
+struct gaclct *clct,*clct2;
 gaint rc,reinit,fnum,i,len,retcod,flag,xin,yin,bwin,gifflg,tcolor;
 char cc[260], bgImage[256], fgImage[256];
 char *cmd,*rslt,*ccc,*ch;
@@ -187,6 +188,9 @@ size_t sz;
     reinit = 0;
     if (cmpwrd("reinit",cmd)) {
       reinit = 1;
+      mfcmn.cal365=-999;
+      mfcmn.warnflg=2;
+      /* release all define blocks */
       pdf = pcm->pdf1;
       while (pdf) {
         pdf2 = pdf->pforw;
@@ -202,9 +206,22 @@ size_t sz;
         gree(pdf,"f191");
         pdf = pdf2;
       }
+      /* release all collections */
+      for (i=0; i<32; i++) {
+        clct = pcm->clct[i];
+        while (clct) {
+          gasfre(clct->stn);
+          clct2 = clct->forw;
+          gree(clct,"f218");
+          clct = clct2;
+        }
+        pcm->clct[i] = NULL;
+        pcm->clctnm[i] = 0;
+      }
+      /* close all files */
       pfi = pcm->pfi1;
       while (pfi) {
-        if (pfi->infile) fclose (pfi->infile);
+        if (pfi->infile) fclose(pfi->infile);
         if (pfi->mfile)  fclose(pfi->mfile);
         if (pfi->ncflg==1) gaclosenc(pfi);
         if (pfi->ncflg==2) gaclosehdf(pfi);
@@ -279,6 +296,7 @@ size_t sz;
       gacmd ("set e 1",pcm,0);
       mfcmn.cal365 = pfi->calendar;
     }
+    gxchdf(0);               /* set default font to 0 */
     gxfrme (1);
     if (reinit)
       gaprnt (1,"All GrADS attributes have been reinitialized\n");
@@ -1188,7 +1206,7 @@ char shparg[4096];
     return (0);
 
     errwx:
-    gaprnt (0,"DRAW error: Syntax is DRAW WXSYM sym x y siz ");
+    gaprnt (0,"DRAW error: Syntax is DRAW WXSYM sym x y siz <color <thickness>>");
     gaprnt (0,"<color <thick> >\n");
     return (1);
   }
@@ -1289,12 +1307,8 @@ char shparg[4096];
     }
 
     /* open the shapefile */
-    if ((shpid = SHPOpen (shparg,"rb"))==NULL) {
-      if ((shpid = SHPOpen (gxgnam(shparg),"rb"))==NULL) {
-        gaprnt(0,"SHPOpen failed\n");
-        return(1);
-      }
-    }
+    shpid = gaopshp(shparg);
+    if (shpid==NULL) return(1);
     SHPGetInfo (shpid, &shpcnt, &shptype, NULL, NULL);
     if (begshp==-1) {  /* draw all shapes in file */
       begshp=0;
@@ -2611,10 +2625,10 @@ retrn:
 
 /* Handle query command */
 
-char *gxnms[27] = {"Clear","Contour","Shaded","Vector","Grid","Fgrid",
+char *gxnms[29] = {"Clear","Contour","Shaded","Vector","Grid","Fgrid",
                    "Line","Scatter","Bar","Stream","Value","Model","Wxsym","Line",
                    "StnMark","Barb","GrFill","LineFill","","","Fwrite","Findstn","Stat",
-                   "GeoTIFF", "KML", "Shapefile","ImageMap"};
+                   "GeoTIFF", "KML", "Shapefile","ImageMap","Shaded2","Shaded2b"};
 /* messages for query gxout */
 static char *gxout0D[3]   = {"Display", "Stat", "Print"};
 static char *gxout1D[5]   = {"0", "Line", "Bar", "Errbar", "Linefill"};
@@ -2713,6 +2727,17 @@ gadouble minvals[4], maxvals[4];
   }
   else if (cmpwrd(arg,"undef")) {
     snprintf(pout,255,"Output undef value is set to %12f\n",pcm->undef);
+    gaprnt(2,pout);
+  }
+  else if (cmpwrd(arg,"dbuff")) {
+    if (pcm->dbflg) snprintf(pout,255,"double buffering is on\n");
+    else snprintf(pout,255,"double buffering is off\n");
+    gaprnt(2,pout);
+  }
+  else if (cmpwrd(arg,"calendar")) {
+    if (mfcmn.cal365==-999) snprintf(pout,255,"calendar mode not yet set\n");
+    else if (mfcmn.cal365==1) snprintf(pout,255,"365-day calendar in effect\n");
+    else snprintf(pout,255,"standard calendar in effect\n");
     gaprnt(2,pout);
   }
   else if (cmpwrd(arg,"cachesf")) {
@@ -3099,14 +3124,9 @@ gadouble minvals[4], maxvals[4];
       gaprnt(0,"Query Error: Missing shapefile name \n");
     }
     else {
-      getwrd(shparg,arg,4095);
-      if ((shpid = SHPOpen (shparg,"rb"))==NULL) {
-        shpid = SHPOpen (gxgnam(shparg),"rb");
-      }
-      if (shpid==NULL) {
-        gaprnt(0,"SHPOpen failed\n");
-      }
-      else {
+      getwrd(shparg,ccc+(arg-cmd),4095);      /* use mixed-case version */
+      shpid = gaopshp(shparg);
+      if (shpid) {
         SHPGetInfo (shpid, &shpcnt, &shptype, minvals, maxvals);
         snprintf(pout,255,"Shapefile Type=%s #Shapes=%d XBounds=%g:%g YBounds=%g:%g\n",
                 SHPTypeName(shptype),shpcnt,minvals[0],maxvals[0],minvals[1],maxvals[1]);
@@ -3137,14 +3157,9 @@ gadouble minvals[4], maxvals[4];
       gaprnt(0,"Query Error: Missing shapefile name \n");
     }
     else {
-      getwrd(shparg,arg,4095);
-      if ((dbfid = DBFOpen (shparg,"rb"))==NULL) {
-        dbfid = DBFOpen (gxgnam(shparg),"rb");
-      }
-      if (dbfid==NULL) {
-        gaprnt(0,"DBFOpen failed\n");
-      }
-      else {
+      getwrd(shparg,ccc+(arg-cmd),4095);   /* use mixed-case version */
+      dbfid = gaopdbf(shparg);
+      if (dbfid) {
         fcnt = DBFGetFieldCount (dbfid);
         rcnt = DBFGetRecordCount (dbfid);
         snprintf(pout,255,"RECORD#,");
@@ -3523,10 +3538,14 @@ gadouble minvals[4], maxvals[4];
       if (flag) {
         conv = pcm->xab2gr;
         x = lon;
-        if (conv && pcm->xdim!=3) x = conv(pcm->xabval, lon);
+        if (lon>-999.0) {
+          if (conv && pcm->xdim!=3) x = conv(pcm->xabval, lon);
+        }
         conv = pcm->yab2gr;
         y = lat;
-        if (conv && pcm->ydim!=3) y = conv(pcm->yabval, lat);
+        if (lat>-999.0) {
+          if (conv && pcm->ydim!=3) y = conv(pcm->yabval, lat);
+        }
         snprintf(pout,255,"%s = %g  %s = %g\n",ccdims[pcm->xdim],x,ccdims[pcm->ydim],y);
         gaprnt(2,pout);
       } else {
@@ -4289,7 +4308,7 @@ size_t sz;
   if (cmpwrd("free",cmd)) {
     clct = pcm->clct[clnm];
     while (clct) {
-      gree(clct->stn,"f217");
+      gasfre(clct->stn);
       clct2 = clct->forw;
       gree(clct,"f218");
       clct = clct2;
@@ -4305,14 +4324,10 @@ size_t sz;
     gaprnt (0,"Collect Error: Z or T must be the only varying dimension\n");
     return (1);
   }
-/*  if ((cmd=nxtwrd(cmd)) == NULL) {
-    gaprnt (0,"Collect command error:  No expression provided\n");
-    return (1);
-  }*/
-  garemb (cmd);
 
   /* Evaluate expression(s)  */
 
+  garemb (cmd);
   pst = getpst(pcm);
   if (pst==NULL) return(1);
   rc = gapars(cmd, pst, pcm);
@@ -4332,7 +4347,8 @@ size_t sz;
   /* Chain up what we have collected */
 
   sz = sizeof(struct gaclct);
-  clct = (struct gaclct *)galloc(sz,"clct");
+  snprintf(pout,255,"%dclct%d",clnm,pcm->clctnm[clnm]);
+  clct = (struct gaclct *)galloc(sz,pout);
   if (clct==NULL) {
     gaprnt (0,"Memory allocation error in collect\n");
     rc = 1;
@@ -4341,6 +4357,7 @@ size_t sz;
   clct->forw = NULL;
   if (pcm->clct[clnm]==NULL) pcm->clct[clnm] = clct;
   else {
+    /* add new collection to end of chain */
     clct2 = pcm->clct[clnm];
     while (clct2->forw) clct2 = clct2->forw;
     clct2->forw = clct;
@@ -4627,7 +4644,7 @@ gaint xx,yy,red,green,blue;
 char *ch=NULL,*ch2=NULL,*strng,*pat,*cmd1;
 char ename1[16],ename2[16];
 size_t sz;
-static char *kwds[123] = {"X","Y","Z","T","LON","LAT","LEV","TIME",
+static char *kwds[125] = {"X","Y","Z","T","LON","LAT","LEV","TIME",
                           "CINT","CSTYLE","CCOLOR","LOOPDIM",
                           "LOOPING","LOOPINCR","DFILE","VRANGE",
                           "CSMOOTH","GRID","CMARK","XAXIS","YAXIS",
@@ -4651,7 +4668,7 @@ static char *kwds[123] = {"X","Y","Z","T","LON","LAT","LEV","TIME",
                           "DATAWARN","DIALOG","WRITEGDS","COSLAT",
                           "E","ENS","SDFWRITE","SDFATTR","GEOTIFF","KML",
                           "UNDEF","CHUNKSIZE","CACHESF","SHPOPTS",
-                          "SHP","SHPATTR"};
+                          "SHP","SHPATTR","LOG1D","STRMOPTS"};
 
   strng = NULL;
   kwrd=-1;
@@ -4904,9 +4921,15 @@ static char *kwds[123] = {"X","Y","Z","T","LON","LAT","LEV","TIME",
   else if (cmpwrd("cint",cmd)) {
     kwrd = 8;
     if ((cmd = nxtwrd (cmd)) == NULL) goto err;
-    if (getdbl(cmd,&(pcm->cint)) == NULL ) goto err;
-    snprintf(pout,255,"cint = %g \n",pcm->cint);
-    gaprnt (2,pout);
+    if (getdbl(cmd,&val1) == NULL ) goto err;
+    if (val1<=0) {
+      gaprnt (0,"SET Error: cint must be greater than 0.0\n");
+    }
+    else {
+      pcm->cint = val1;
+      snprintf(pout,255,"cint = %g \n",pcm->cint);
+      gaprnt (2,pout);
+    }
   }
   else if (cmpwrd("xlint",cmd)) {
     kwrd = 77;
@@ -4972,6 +4995,12 @@ static char *kwds[123] = {"X","Y","Z","T","LON","LAT","LEV","TIME",
     pcm->cflag = i1;
     snprintf(pout,255,"Number of clevs = %i \n",i1);
     gaprnt (2,pout);
+    for (i=1; i<pcm->cflag; i++) {
+      if (pcm->clevs[i] <= pcm->clevs[i-1]) {
+        gaprnt(1,"Warning: Contour levels are not strictly increasing\n");
+        gaprnt(1,"         This may lead to errors or undesired results\n");
+      }
+    }
   }
   else if (cmpwrd("xlevs",cmd)) {
     kwrd = 75;
@@ -5142,9 +5171,12 @@ static char *kwds[123] = {"X","Y","Z","T","LON","LAT","LEV","TIME",
 #if USESHP==1
     if ((cmd = nxtwrd (cmd)) == NULL) goto err;
     /* parse arguments to 'set shp' command */
-    while (cmpwrd("-pt",cmd) || cmpwrd("-ln",cmd) || cmpwrd("-fmt",cmd)) {
-      if (cmpwrd("-pt",cmd)) pcm->shptype = 1;
-      if (cmpwrd("-ln",cmd)) pcm->shptype = 2;
+    while (cmpwrd("-pt",cmd) || cmpwrd("-point",cmd) ||
+           cmpwrd("-ln",cmd) || cmpwrd("-line",cmd)  ||
+           cmpwrd("-poly",cmd) || cmpwrd("-fmt",cmd)) {
+      if (cmpwrd("-pt",cmd) || cmpwrd("-point",cmd)) pcm->shptype = 1;
+      if (cmpwrd("-ln",cmd) || cmpwrd("-line",cmd))  pcm->shptype = 2;
+      if (cmpwrd("-poly",cmd)) pcm->shptype = 3;
       if (cmpwrd("-fmt",cmd)) {
         if ((cmd = nxtwrd (cmd)) == NULL) goto err;
         if (intprs(cmd,&itt) == NULL ) goto err;
@@ -5177,6 +5209,7 @@ static char *kwds[123] = {"X","Y","Z","T","LON","LAT","LEV","TIME",
     gaprnt (2,pout);
     if (pcm->shptype==1) gaprnt(2,"Shapefile output type: point\n");
     if (pcm->shptype==2) gaprnt(2,"Shapefile output type: line\n");
+    if (pcm->shptype==3) gaprnt(2,"Shapefile output type: polygon\n");
     snprintf(pout,255,"Shapefile format string is \%%%d.%df\n",pcm->dblen,pcm->dbprec);
     gaprnt(2,pout);
 #else
@@ -5189,9 +5222,12 @@ static char *kwds[123] = {"X","Y","Z","T","LON","LAT","LEV","TIME",
     kwrd = 116;
     if ((cmd = nxtwrd (cmd)) == NULL) goto err;
     pcm->kmlflg = 1;                               /* set default value to image output */
-    while (cmpwrd("-img",cmd) || cmpwrd("-ln",cmd)) {
-      if (cmpwrd("-img",cmd)) pcm->kmlflg = 1;     /* image output */
-      if (cmpwrd("-ln",cmd))  pcm->kmlflg = 2;     /* contour output */
+    while (cmpwrd("-img",cmd) || cmpwrd("-image",cmd) ||
+           cmpwrd("-ln",cmd) || cmpwrd("-line",cmd) ||
+           cmpwrd("-poly",cmd)) {
+      if (cmpwrd("-img",cmd) || cmpwrd("-image",cmd)) pcm->kmlflg = 1;     /* image output */
+      if (cmpwrd("-ln",cmd) || cmpwrd("-line",cmd))   pcm->kmlflg = 2;     /* contour output */
+      if (cmpwrd("-poly",cmd)) pcm->kmlflg = 3;     /* polygon output */
       if ((cmd = nxtwrd (cmd)) == NULL) goto err;
     }
     /* make sure TIFF output is enabled */
@@ -5261,7 +5297,10 @@ static char *kwds[123] = {"X","Y","Z","T","LON","LAT","LEV","TIME",
       gaprnt(2,"KML output file name: \n");
       snprintf(pout,255,"%s (KML text file)\n",pcm->kmlname);
       gaprnt (2,pout);
-      gaprnt (2,"KML output type: contour lines\n");
+      if (pcm->kmlflg==2)
+        gaprnt (2,"KML output type: contour lines\n");
+      else
+        gaprnt (2,"KML output type: polygons\n");
     }
   }
   else if (cmpwrd("geotiff",cmd)) {
@@ -5531,6 +5570,15 @@ static char *kwds[123] = {"X","Y","Z","T","LON","LAT","LEV","TIME",
       gaprnt (2,pout);
     }
   }
+  else if (cmpwrd("log1d",cmd)) {
+    kwrd = 123;
+    if ((cmd = nxtwrd (cmd)) == NULL) goto err;
+    if (cmpwrd("loglog",cmd)) pcm->log1d = 3;
+    else if (cmpwrd("logh",cmd)) pcm->log1d = 1;
+    else if (cmpwrd("logv",cmd)) pcm->log1d = 2;
+    else if (cmpwrd("off",cmd)) pcm->log1d = 0;
+    else goto err;
+  }
   else if (cmpwrd("zlog",cmd)) {
     kwrd = 63;
     if ((cmd = nxtwrd (cmd)) == NULL) goto err;
@@ -5659,6 +5707,9 @@ static char *kwds[123] = {"X","Y","Z","T","LON","LAT","LEV","TIME",
     pcm->gout0 = 9;
     if      (cmpwrd("contour",cmd))  pcm->gout2a = 1;
     else if (cmpwrd("shaded",cmd))   pcm->gout2a = 2;
+    else if (cmpwrd("shade1",cmd))   pcm->gout2a = 2;
+    else if (cmpwrd("shade2",cmd))   pcm->gout2a = 16;
+    else if (cmpwrd("shade2b",cmd))  pcm->gout2a = 17;
     else if (cmpwrd("grid",cmd))    {pcm->gout2a = 3; pcm->gout2b = 3;}
     else if (cmpwrd("vector",cmd))  {pcm->gout2b = 4; pcm->goutstn = 6; pcm->gout1a = 1;}
     else if (cmpwrd("scatter",cmd))  pcm->gout2b = 5;
@@ -5666,7 +5717,6 @@ static char *kwds[123] = {"X","Y","Z","T","LON","LAT","LEV","TIME",
     else if (cmpwrd("fwrite",cmd))   pcm->gout2a = 7;
     else if (cmpwrd("stream",cmd))   pcm->gout2b = 8;
     else if (cmpwrd("grfill",cmd))   pcm->gout2a = 10;
-    else if (cmpwrd("pgrid",cmd))    pcm->gout2a = 11;
     else if (cmpwrd("geotiff",cmd)) {
 #if GEOTIFF==1
       pcm->gout2a = 12;
@@ -5690,14 +5740,14 @@ static char *kwds[123] = {"X","Y","Z","T","LON","LAT","LEV","TIME",
     else if (cmpwrd("model",cmd))    pcm->goutstn = 4;
     else if (cmpwrd("wxsym",cmd))    pcm->goutstn = 5;
     else if (cmpwrd("stnmark",cmd))  pcm->goutstn = 7;
-    else if (cmpwrd("stnwrt",cmd))   pcm->goutstn = 8;
+    else if (cmpwrd("stnwrt",cmd))   pcm->goutstn = 8;  /* undocumented */
     else if (cmpwrd("line",cmd))    {pcm->gout1 = 1; pcm->tser = 0;}
     else if (cmpwrd("bar",cmd))      pcm->gout1 = 2;
     else if (cmpwrd("errbar",cmd))   pcm->gout1 = 3;
     else if (cmpwrd("linefill",cmd)) pcm->gout1 = 4;
     else if (cmpwrd("stat",cmd))     pcm->gout0 = 1;
     else if (cmpwrd("print",cmd))    pcm->gout0 = 2;
-    else if (cmpwrd("writegds",cmd)) pcm->gout0 = 3;
+    else if (cmpwrd("writegds",cmd)) pcm->gout0 = 3;    /* only for internal use */
     else if (cmpwrd("tserwx",cmd))   pcm->tser = 1;
     else if (cmpwrd("tserbarb",cmd)) pcm->tser = 2;
     else goto err;
@@ -6429,10 +6479,11 @@ static char *kwds[123] = {"X","Y","Z","T","LON","LAT","LEV","TIME",
   else if (cmpwrd("dignum",cmd)) {
     kwrd = 23;
     if ((cmd = nxtwrd (cmd)) == NULL) goto err;
-    if (intprs(cmd,&(pcm->dignum)) == NULL ) goto err;
-    if (pcm->dignum<0 || pcm->dignum>8) {
+    if (intprs(cmd,&itt) == NULL ) goto err;
+    if (itt<0 || itt>8) {
       gaprnt (0,"Invalid dignum value:  must be 0 to 8\n");
     } else {
+      pcm->dignum = itt;
       snprintf(pout,255,"dignum = %i \n",pcm->dignum);
       gaprnt (2,pout);
     }
@@ -6462,10 +6513,25 @@ static char *kwds[123] = {"X","Y","Z","T","LON","LAT","LEV","TIME",
     snprintf(pout,255, "Scatter Y axis limits set: %g to %g \n", pcm->rmin2, pcm->rmax2);
     gaprnt (2,pout);
   }
-  else if (cmpwrd("strmden",cmd)) {
-    kwrd = 64;
+  else if (cmpwrd("strmden",cmd) || cmpwrd("strmopts",cmd)) {
+    kwrd = 124;
     if ((cmd = nxtwrd (cmd)) == NULL) goto err;
     if (intprs(cmd,&(pcm->strmden)) == NULL ) goto err;
+    if ((cmd = nxtwrd (cmd)) != NULL) {
+      if (getdbl(cmd,&tt) == NULL ) goto err;
+      if (tt>0.001) pcm->strmarrd = tt;
+      if ((cmd = nxtwrd (cmd)) != NULL) {
+        if (getdbl(cmd,&tt) == NULL ) goto err;
+        if (tt>=0.0) pcm->strmarrsz = tt;
+        if ((cmd = nxtwrd (cmd)) != NULL) {
+          if (intprs(cmd,&i) == NULL ) goto err;
+          if (i>0 && i<3) pcm->strmarrt = i;
+        }
+      }
+    }
+    snprintf (pout, 255, "Streamline options set to: Density %i Spacing %g Size %g Type %i\n",
+        pcm->strmden, pcm->strmarrd, pcm->strmarrsz, pcm->strmarrt) ;
+    gaprnt (2,pout);
   }
   else if (cmpwrd("ccolor",cmd)) {
     kwrd = 10;
@@ -7538,8 +7604,9 @@ gaint ncwrite (char *cmd, struct gacmn *pcm) {
 struct gadefn *pdf;
 struct gafile *pfi;
 struct dt tinit;
+off_t pos,nelems;
 gaint i,rc,nvdims=0,vdims[5],dimids[5];
-size_t siz,sz,start[5],count[5],*chunksize=NULL;
+size_t start[5],count[5],*chunksize=NULL;
 gaint xdimid,ydimid,zdimid,tdimid,edimid;
 gaint xvarid,yvarid,zvarid,tvarid,evarid,varid;
 char name[20],tunit[256];
@@ -7725,8 +7792,7 @@ char *filename={"grads.sdfwrite.nc"};
   /* If user has not set chunksizes, default chunk is a global 2D grid */
   if (pcm->sdfchunk || pcm->sdfzip) {
     /* set chunk sizes */
-    sz = nvdims*sizeof(size_t);
-    chunksize = (size_t*)galloc(sz,"chnksz");
+    chunksize = (size_t*)galloc(nvdims*sizeof(size_t),"chnksz");
     for (i=0; i<nvdims; i++) {
       if      (vdims[nvdims-1-i] == 4) chunksize[i] = pcm->echunk ? pcm->echunk : 1 ;
       else if (vdims[nvdims-1-i] == 3) chunksize[i] = pcm->tchunk ? pcm->tchunk : 1 ;
@@ -7744,7 +7810,7 @@ char *filename={"grads.sdfwrite.nc"};
     }
   }
   if (pcm->sdfzip) {
-    /* JMA compression settings: shuffle on, deflate level 1 */
+    /* compression settings: shuffle on, deflate level 1 */
     rc = nc_def_var_deflate (pcm->ncwid, varid, 1, 1, 1);
     if (rc) {
       snprintf(pout,255,"ncwrite error from nc_def_var_deflate (%s): \n ",name);
@@ -7802,10 +7868,10 @@ char *filename={"grads.sdfwrite.nc"};
   }
 
   /* Write the variable data. */
-  siz = (size_t)pfi->dnum[0] * (size_t)pfi->dnum[1] * (size_t)pfi->dnum[2] * (size_t)pfi->dnum[3] * (size_t)pfi->dnum[4];
+  nelems = (off_t)pfi->dnum[0] * (off_t)pfi->dnum[1] * (off_t)pfi->dnum[2] * (off_t)pfi->dnum[3] * (off_t)pfi->dnum[4];
   if (pcm->sdfprec==8) {
     /* copy undef values into rbuf array where mask is 0 */
-    for (i=0;i<siz;i++) if (*(pfi->ubuf+i)==0) *(pfi->rbuf+i) = pcm->undef;
+    for (pos=0; pos<nelems; pos++) if (*(pfi->ubuf+pos)==0) *(pfi->rbuf+pos) = pcm->undef;
     /* write the grid of doubles */
     rc = nc_put_vara_double(pcm->ncwid, varid, start, count, pfi->rbuf);
     if (rc) {
@@ -7816,18 +7882,17 @@ char *filename={"grads.sdfwrite.nc"};
   }
   else if (pcm->sdfprec==4) {
     /* allocate a new array for float value grid */
-    sz = siz * sizeof(gafloat);
-    flbuf = (gafloat *)galloc(sz,"flbuf");
+    flbuf = (gafloat *)galloc(nelems*sizeof(gafloat),"flbuf");
     if (flbuf==NULL) {
       gaprnt(0,"ncwrite error: unable to allocate memory for floating point buffer\n");
       goto err;
     }
     /* copy undef values into array where mask is 0 */
-    for (i=0;i<siz;i++) {
-      if (*(pfi->ubuf+i)==1)
-        *(flbuf+i) = (gafloat)*(pfi->rbuf+i);
+    for (pos=0; pos<nelems; pos++) {
+      if (*(pfi->ubuf+pos)==1)
+        *(flbuf+pos) = (gafloat)*(pfi->rbuf+pos);
       else
-        *(flbuf+i) = flundef;
+        *(flbuf+pos) = flundef;
     }
     /* write out the grid of floats */
     rc = nc_put_vara_float(pcm->ncwid, varid, start, count, flbuf);
@@ -7881,10 +7946,137 @@ void set_nc_cache(size_t newsize) {
   return;
 }
 
+
+/* Routine to open a shapefile
+   1. Tries to open filename as provided by user
+   2. Parses GASHP envv, which can have more than one directory, and prepends dirs to filename
+   3. Prepends GADDIR directory (only one dir) to filename
+   N.B. Same code as gaopdbf routine below, make sure any mods go into both routines.
+*/
+#if USESHP==1
+SHPHandle gaopshp(char *shparg) {
+  SHPHandle id=NULL;
+  gaint i,j,len,sz,ch1,ch2;
+  char *sdir,*fname;
+
+  /* get length of shapefile name provided by user (ch2) */
+  ch2 = 0;
+  i = 0;
+  while (*(shparg+i)) { i++; ch2++; }
+
+  /* first try just the filename */
+  if ((id=SHPOpen(shparg,"rb"))!=NULL) return(id);
+
+  /* next try the directories in the GASHP environment variable */
+  sdir = getenv("GASHP");
+  while (sdir!=NULL) {
+    /* ch1 is length of directory harvested from GASHP */
+    ch1 = 0;
+    i = 0;
+    /* delimters are: space, semicolon, comma, or colon. NULL is at end of GASHP string  */
+    while (*(sdir+i)!=' ' && *(sdir+i)!=';' && *(sdir+i)!=',' && *(sdir+i)!=':' && *(sdir+i)!='\0') {i++; ch1++;}
+    /* build new file name: directory + shparg + extra "/" (if necessary) + "/0" */
+    sz = ch1 + ch2 + 2;
+    fname = (char *)galloc(sz,"shpname");
+    if (fname==NULL) {
+      gaprnt (0,"Memory allocation error for shapefile name\n");
+      return(NULL);
+    }
+    for (j=0; j<ch1; j++) *(fname+j) = *(sdir+j);            /* copy dir harvested from sdir to fname */
+    len = ch1;
+    if (*(fname+ch1-1)!='/') { *(fname+ch1) = '/'; len++; }  /* add slash to fname if needed */
+    for (j=0; j<ch2; j++) *(fname+len+j) = *(shparg+j);      /* copy shparg to fname */
+    len += ch2;
+    *(fname+len)='\0';
+    /* try to open new filename */
+    if ((id=SHPOpen(fname,"rb"))!=NULL) {
+      gree(fname);
+      return(id);                                   /* success! */
+    }
+    gree(fname);                                    /* release filename */
+    sdir+=ch1;                                      /* advance to delimiter */
+    if (*(sdir)=='\0') break;                       /* end of GASHP */
+    else sdir++;                                    /* advance past delimiter */
+    while (*(sdir)==' ' && *(sdir)!='\0') sdir++;   /* advance past any extra spaces */
+  }
+
+  /* final option: try prepending GADDIR */
+  if ((id=SHPOpen(gxgnam(shparg),"rb"))!=NULL) return(id);
+
+  /* give up */
+  snprintf(pout,255,"Error: Unable to open shapefile \"%s\" \n",shparg);
+  gaprnt(0,pout);
+  return (NULL);
+}
+
+/* open a shapefile attribute data base file
+   1. Tries to open filename as provided by user
+   2. Parses GASHP envv, which can have more than one directory, and prepends dirs to filename
+   3. Prepends GADDIR directory (only one dir) to filename
+   N.B. Same code as gaopshp routine above, make sure any mods go into both routines.
+*/
+DBFHandle gaopdbf(char *shparg) {
+  DBFHandle id=NULL;
+  gaint i,j,len,sz,ch1,ch2;
+  char *sdir,*fname;
+
+  /* get length of shapefile name provided by user (ch2) */
+  ch2 = 0;
+  i = 0;
+  while (*(shparg+i)) { i++; ch2++; }
+
+  /* first try just the filename */
+  if ((id=DBFOpen(shparg,"rb"))!=NULL) return(id);
+
+  /* next try the directories in the GASHP environment variable */
+  sdir = getenv("GASHP");
+  while (sdir!=NULL) {
+    /* ch1 is length of directory harvested from GASHP */
+    ch1 = 0;
+    i = 0;
+    /* delimters are: space, semicolon, comma, or colon. NULL is at end of GASHP string */
+    while (*(sdir+i)!=' ' && *(sdir+i)!=';' && *(sdir+i)!=',' && *(sdir+i)!=':' && *(sdir+i)!='\0') {i++; ch1++;}
+    /* build new file name: directory + shparg + extra "/" (if necessary) + "/0" */
+    sz = ch1 + ch2 + 2;
+    fname = (char *)galloc(sz,"shpname");
+    if (fname==NULL) {
+      gaprnt (0,"Memory allocation error for shapefile name\n");
+      return(NULL);
+    }
+    for (j=0; j<ch1; j++) *(fname+j) = *(sdir+j);            /* copy dir harvested from sdir to fname */
+    len = ch1;
+    if (*(fname+ch1-1)!='/') { *(fname+ch1) = '/'; len++; }  /* add slash to fname if needed */
+    for (j=0; j<ch2; j++) *(fname+len+j) = *(shparg+j);      /* copy shparg to fname */
+    len += ch2;
+    *(fname+len)='\0';
+    /* try to open new filename */
+    if ((id=DBFOpen(fname,"rb"))!=NULL) {
+      gree(fname);
+      return(id);                                   /* success! */
+    }
+    gree(fname);                                    /* release filename */
+    sdir+=ch1;                                      /* advance to delimiter */
+    if (*(sdir)=='\0') break;                       /* end of GASHP */
+    else sdir++;                                    /* advance past delimiter */
+    while (*(sdir)==' ' && *(sdir)!='\0') sdir++;   /* advance past any extra spaces */
+  }
+
+  /* final option: try prepending GADDIR */
+  if ((id=DBFOpen(gxgnam(shparg),"rb"))!=NULL) return(id);
+
+  /* give up */
+  snprintf(pout,255,"Error: Unable to open shapefile \"%s\" \n",shparg);
+  gaprnt(0,pout);
+  return (NULL);
+}
+#endif
+
+
+
 /* Parse a shapefile attribute (data base field).
    Return NULL for error, pointer to dbfld structure if successful */
-struct dbfld *parsedbfld (char *ch) {
 #if USESHP==1
+struct dbfld *parsedbfld (char *ch) {
   gaint jj,len;
   char fldname[512], fldtype[512], fldvalue[512];
   void *value=NULL;
@@ -7964,7 +8156,5 @@ struct dbfld *parsedbfld (char *ch) {
  err:
   if (value) gree(value,"g184");
   return(NULL);
-#else
-  gaprnt(2,"This build does not support shapefiles\n");
-#endif
 }
+#endif

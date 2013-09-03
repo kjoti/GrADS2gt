@@ -1,4 +1,4 @@
-/*  Copyright (C) 1988-2010 by Brian Doty and the
+/*  Copyright (C) 1988-2011 by Brian Doty and the
     Institute of Global Environment and Society (IGES).
     See file COPYRIGHT for more information.   */
 
@@ -118,9 +118,10 @@ void  g2fill (gaint, gaint, gaint, off_t, g2int, struct gag2indx *);
 gaint wtg2map (struct gafile *, struct gag2indx *);
 gaint g2grid_check (gribfield *, struct gafile *pfi, gaint r, gaint f);
 gaint g2time_check (gribfield *, g2int *, struct gafile *, gaint, gaint, gaint, gaint);
-gaint g2var_match (gribfield *, struct gafile *, gaint);
+gaint g2var_match (gribfield *, struct gafile *, gaint, gaint);
 gaint g2ens_match (gribfield *, struct gafile *);
 gaint g2ens_check (struct gaens *, gribfield *);
-void g2prnt (gribfield *, gaint, g2int, gaint);
 gaint g2sp (gribfield *);
+gaint g2sp2 (gribfield *);
+void  g2prnt (gribfield *, gaint, g2int, gaint, gaint);
 #endif

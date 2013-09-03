@@ -1,4 +1,4 @@
-/*  Copyright (C) 1988-2010 by Brian Doty and the
+/*  Copyright (C) 1988-2011 by Brian Doty and the
     Institute of Global Environment and Society (IGES).
     See file COPYRIGHT for more information.   */
 
@@ -190,7 +190,7 @@ if (metabuff==1) printf ("Note: -m option was specified, but no metafile buffer 
 if (ipcflg) printf("\n<IPC>" );  /* delimit splash screen */
 
 printf ("\nGrid Analysis and Display System (GrADS) Version %s\n",gatxtl(GRADS_VERSION,0));
-printf ("Copyright (c) 1988-2010 by Brian Doty and the\n");
+printf ("Copyright (c) 1988-2011 by Brian Doty and the\n");
 printf ("Institute for Global Environment and Society (IGES)\n");
 printf ("GrADS comes with ABSOLUTELY NO WARRANTY\n");
 printf ("See file COPYRIGHT for more information\n\n");
@@ -227,6 +227,13 @@ if (aspratio>-990) { /* user has specified aspect ratio */
 if(xwideflg) gxwdln();
 
 gainit();
+mfcmn.cal365=-999;
+mfcmn.warnflg=2;
+mfcmn.winx=-999;      /* Window x  */
+mfcmn.winy=-999;      /* Window y */
+mfcmn.winw=0;         /* Window width */
+mfcmn.winh=0;         /* Window height */
+mfcmn.winb=0;         /* Window border width */
 gcmn.pfi1 = NULL;                     /* No data sets open      */
 gcmn.pfid = NULL;
 gcmn.fnum = 0;
@@ -268,6 +275,11 @@ gcmn.cachesf = 1.0;      /* global scale factor for netcdf4/hdf5 cache */
 gcmn.fillpoly = -1;      /* default is to not fill shapefile polygons */
 gcmn.marktype = 3;       /* default is to draw points as closed circe */
 gcmn.marksize = 0.05;    /* default mark size */
+for (i=0; i<32; i++) {
+  gcmn.clct[i] = NULL;  /* initialize collection pointers */
+  gcmn.clctnm[i] = 0;
+}
+
 
 gafdef();
 
@@ -377,6 +389,7 @@ gaint i;
   gcmn.yflip = 0;
   gcmn.gridln = -9;
   gcmn.zlog = 0;
+  gcmn.log1d = 0;
   gcmn.coslat = 0;
   gcmn.numgrd = 0;
   gcmn.gout0 = 0;
@@ -473,6 +486,9 @@ gaint i;
   gcmn.impflg = 0;
   gcmn.impcmd = 1;
   gcmn.strmden = 5;
+  gcmn.strmarrd = 0.4;
+  gcmn.strmarrsz = 0.05;
+  gcmn.strmarrt = 1;
   gcmn.frame = 1;
   gcmn.pxsize = gcmn.xsiz;
   gcmn.pysize = gcmn.ysiz;
@@ -508,7 +524,6 @@ gaint i;
   gcmn.wxcols[0] = 2; gcmn.wxcols[1] = 10; gcmn.wxcols[2] = 11;
   gcmn.wxcols[3] = 7; gcmn.wxcols[4] = 15;
   gcmn.wxopt = 1;
-  for (i=0; i<32; i++) gcmn.clct[i] = NULL;
   gcmn.ptflg = 0;
   gcmn.ptopt = 1;
   gcmn.ptden = 5;
@@ -522,13 +537,6 @@ gaint i;
   gcmn.dblen = 12;
   gcmn.dbprec = 6;
 
-  mfcmn.cal365=-999;
-  mfcmn.warnflg=2;
-  mfcmn.winx=-999;      /* Window x  */
-  mfcmn.winy=-999;      /* Window y */
-  mfcmn.winw=0;         /* Window width */
-  mfcmn.winh=0;         /* Window height */
-  mfcmn.winb=0;         /* Window border width */
 
 }
 

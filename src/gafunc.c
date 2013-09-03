@@ -1,4 +1,4 @@
-/* Copyright (C) 1988-2010 by Brian Doty and the
+/* Copyright (C) 1988-2011 by Brian Doty and the
    Institute of Global Environment and Society (IGES).
    See file COPYRIGHT for more information.   */
 
@@ -4072,7 +4072,6 @@ size_t sz;
     return (1);
   }
   pgr = pst->result.pgr;
-
   if (pgr->idim==3) {
     ivars = pgr->ivals;
     gr1 = pgr->dimmin[3];
@@ -4083,7 +4082,8 @@ size_t sz;
     gr1 = pgr->dimmin[2];
     gr2 = pgr->dimmax[2];
   } else if (pgr->idim== -1) {
-    gr1 = 1;  gr2 = 1;
+    gr1 = 1;
+    gr2 = 1;
   } else if (pgr->idim==4) {
     gaprnt(0,"Error from GR2STN: 1-D grid may vary only in the Z or T dimension \n");
     gafree (pst);
@@ -4095,7 +4095,6 @@ size_t sz;
   }
 
   /* Set up stn structure for the returned data */
-
   sz = sizeof(struct gastn);
   stn = (struct gastn *)galloc(sz,"gr2stn");
   if (stn==NULL) {
@@ -4229,7 +4228,6 @@ size_t sz;
         else {umask = 1; val = *p4;}
       }
     } else {                        /* bilinear */
-
       if (*p1u==0 || *p2u==0 || *p3u==0 || *p4u==0) {
         umask = 0;
       } else {
@@ -4245,7 +4243,9 @@ size_t sz;
     rpt = gaarpt (stn);
     if (rpt==NULL) {
       gaprnt (0,"Memory Allocation Error:  Station Block \n");
-      gagfre(pgr);  gafree(pst); gasfre(stn);
+      gagfre(pgr);
+      gafree(pst);
+      gasfre(stn);
       return (1);
     }
     rpt->lat = lat;
@@ -4253,17 +4253,18 @@ size_t sz;
     if (pgr->idim==2) { rpt->lev = lev; rpt->tim = 1; }
     else { rpt->lev = stn->dmin[2]; rpt->tim = gr; }
     if (umask==1) {
-      rpt->umask=1;
+      rpt->umask = 1;
       rpt->val = val;
     }
     else {
-      rpt->umask=0;
+      rpt->umask = 0;
     }
     for (i=0; i<8; i++) *(rpt->stid+i) = *(stn->stid+i);
     stn->rnum++;
     gafree(pst);
   }
 
+  gagfre(pgr);  /* Release the grid from evaluating the first argument */
   pst->result.stn = stn;
   pst->type = 0;
   pst->idim = stn->idim;
@@ -4275,12 +4276,12 @@ gaint ffclgr (struct gafunc *pfc, struct gastat *pst) {
   struct gaclct *clct, *clct0;
   struct gastn *stn;
   struct garpt *rpt;
-  struct gagrid *pgr;
-  gadouble *levs, lev, vlo, vhi, uu=0, *gr;
-  gadouble *iv,*jv,diff,lld,lhd,llo,lhi,xdiff;
+  struct gagrid *pgr=NULL;
+  gadouble *levs, lev, vlo, vhi, uu=0, *gr=NULL;
+  gadouble *iv=NULL,*jv=NULL,diff,lld,lhd,llo,lhi,xdiff;
   gaint i,j,cnt,lcnt=0,scnt,flag,clnm,dim,lflg,ucnt;
   gaint noundef;
-  char *gru;
+  char *gru=NULL;
   size_t sz;
 
   lflg = 1;
@@ -4334,8 +4335,8 @@ gaint ffclgr (struct gafunc *pfc, struct gastat *pst) {
     return (1);
   }
   if (dim==3) {
-     gaprnt  (0,"COLL2GR does not yet support time slices\n");
-     return (1);
+    gaprnt  (0,"COLL2GR does not yet support time slices\n");
+    return (1);
   }
 
 
@@ -4343,10 +4344,10 @@ gaint ffclgr (struct gafunc *pfc, struct gastat *pst) {
      what sort of interpolation was requested */
   if (lflg==1) cnt = ucnt;
   sz = sizeof(gadouble)*cnt;
-  levs = (gadouble *)galloc(sz,"col2grlevs");
+  levs = (gadouble *)galloc(sz,"clgrlevs");
   if (levs==NULL) {
-    gaprnt (0,"Memory allocation error: COLL2GR\n");
-    return (1);
+    gaprnt (0,"Error from COLL2GR: failled to allocate memory for levels \n");
+    goto err;
   }
 
   if (lflg==1) {
@@ -4401,16 +4402,14 @@ gaint ffclgr (struct gafunc *pfc, struct gastat *pst) {
   sz = sizeof(gadouble)*lcnt*scnt;
   gr = (gadouble *)galloc(sz,"col2grgr");
   if (gr==NULL) {
-    gaprnt (0,"Memory allocation error: collection gridding\n");
-    gree(levs,"f427");
-    return (1);
+    gaprnt (0,"Error from COLL2GR: failled to allocate memory for collection grid \n");
+    goto err;
   }
   sz = sizeof(char)*lcnt*scnt;
   gru = (char *)galloc(sz,"col2grgru");
   if (gru==NULL) {
-    gaprnt (0,"Memory allocation error: collection gridding\n");
-    gree(levs,"f428");
-    return (1);
+    gaprnt (0,"Error from COLL2GR: failled to allocate memory for collection umask \n");
+    goto err;
   }
   clct = clct0;
   i = 0;
@@ -4485,10 +4484,8 @@ gaint ffclgr (struct gafunc *pfc, struct gastat *pst) {
   sz = sizeof(struct gagrid);
   pgr = (struct gagrid *)galloc(sz,"col2grpgr");
   if (pgr==NULL) {
-    gaprnt (0,"Memory Allocation Error:  display collection\n");
-    gree(gr,"f429");
-    gree(levs,"f430");
-    return (1);
+    gaprnt (0,"Error from COLL2GR: failled to allocate memory for gagrid structure\n");
+    goto err;
   }
 
   pgr->grid = gr;
@@ -4506,14 +4503,15 @@ gaint ffclgr (struct gafunc *pfc, struct gastat *pst) {
   pgr->jlinr = 0;
   sz = sizeof(gadouble)*(scnt+2);
   iv = (gadouble *)galloc(sz,"col2griv");
+  if (iv==NULL) {
+    gaprnt (0,"Error from COLL2GR: failled to allocate memory for scnt \n");
+    goto err;
+  }
   sz = sizeof(gadouble)*(lcnt+2);
   jv = (gadouble *)galloc(sz,"col2grjv");
-  if (iv==NULL || jv==NULL) {
-    gaprnt (0,"Memory Allocation Error:  display collection\n");
-    gree(gr,"f431");
-    gree(levs,"f432");
-    gree(pgr,"f433");
-    return (1);
+  if (jv==NULL) {
+    gaprnt (0,"Error from COLL2GR: failled to allocate memory for lcnt \n");
+    goto err;
   }
   *iv = (gadouble)scnt;
   *jv = (gadouble)lcnt;
@@ -4531,12 +4529,23 @@ gaint ffclgr (struct gafunc *pfc, struct gastat *pst) {
   pgr->jgrab = gr2lev;
   pgr->iabgr = lev2gr;
   pgr->jabgr = lev2gr;
-  pgr->alocf = 1;  /* bad news */
+  pgr->alocf = 1;
 
   pst->type = 1;
   pst->result.pgr = pgr;
-
+  gree(levs,"f428");
   return (0);
+
+ err:
+  if (levs) gree(levs,"f429");
+  if (gr) gree(gr,"f430");
+  if (gru) gree(gru,"f431");
+  if (pgr) gagfre(pgr);
+  if (iv) gree(iv,"f432");
+  if (jv) gree(jv,"f433");
+  return (1);
+
+
 }
 
 /* Given a grid and a set of stations, interpolate to the
@@ -5933,6 +5942,7 @@ size_t sz;
   }
 
   gree(pgr->grid,"f443");
+  gree(pgr->umask,"f443a");
   pgr->grid = res;
   pgr->umask = resundef;
   return (0);

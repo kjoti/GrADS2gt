@@ -1,4 +1,4 @@
-/*  Copyright (C) 1988-2010 by Brian doty and the
+/*  Copyright (C) 1988-2011 by Brian doty and the
     Institute of Global Environment and Society (IGES).
     See file COPYRIGHT for more information.   */
 

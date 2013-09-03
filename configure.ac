@@ -7,7 +7,7 @@ dnl  See acinclude.m4 for definitions of the GA_xxx macros
 
 # The version number
 # below is the "master" version that will appear in all code, etc.
-AC_INIT(GrADS, [2.0.a9], [jma@iges.org])
+AC_INIT(GrADS, [2.0.1], [jma@iges.org])
 
 # Require autoconf 2.52 (comes with Mac OS X 10.2) or newer
 AC_PREREQ(2.52)
@@ -708,7 +708,7 @@ else
         [ AC_CHECK_LIB([hdf5], [main],
           [ use_hdf5=yes
             GA_SET_INCLUDE_VAR([hdf5_inc], [hdf5])
-            GA_SET_LIB_VAR([hdf5_libs], [hdf5 sz jpeg z])
+            GA_SET_LIB_VAR([hdf5_libs], [hdf5 sz z])
           ])
         ])
       ])

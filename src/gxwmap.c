@@ -1,4 +1,4 @@
-/*  Copyright (C) 1988-2010 by Brian Doty and the
+/*  Copyright (C) 1988-2011 by Brian Doty and the
     Institute of Global Environment and Society (IGES).
     See file COPYRIGHT for more information.   */
 
@@ -34,6 +34,10 @@ static FILE *imap;
 static gadouble lomin, lomax, lamin, lamax;
 static gadouble lonref;    /* Reference longitude for adjustment */
 static gaint adjtyp = 0;  /* Direction adjustment class */
+
+void gxrsmapt (void) {
+  adjtyp = 0;
+}
 
 void gxdmap (struct mapopt *mopt) {
 gadouble lon[255],lat[255],xx,yy,lnmin,lnmax,ltmin,ltmax,lnfact;
@@ -501,6 +505,7 @@ gadouble rad,alpha;
    to correct for current map projection and position. */
 
 gadouble gxaarw (gadouble lon, gadouble lat) {
+gadouble xx1,yy1,xx2,yy2,dir;
 
   if (adjtyp==0) return(0.0);
   if (adjtyp==1) {
@@ -511,7 +516,29 @@ gadouble gxaarw (gadouble lon, gadouble lat) {
     lon = (lonref - lon)*pi/180.0;
     return (lon);
   }
-  return (0.0);
+
+  /* For type 3 map projections that lack back transforms, estimate the north
+     direction using finite difference. */
+
+  if (adjtyp==3) {
+    if (lat>89.9) {     /* back difference if near np */
+      gxconv (lon,lat-0.05,&xx1,&yy1,2);
+      gxconv (lon,lat,&xx2,&yy2,2);
+    } else if (lat<-89.9) {  /* forward difference if near sp */
+      gxconv (lon,lat,&xx1,&yy1,2);
+      gxconv (lon,lat+0.05,&xx2,&yy2,2);
+    } else {                 /* otherwise centered diff */
+      gxconv (lon,lat-0.03,&xx1,&yy1,2);
+      gxconv (lon,lat+0.03,&xx2,&yy2,2);
+    }
+    dir = atan2(xx1-xx2,yy2-yy1);
+    return (dir);
+  }
+
+  /* type 4 map projections do not have lat/lon lines that cross at
+     right angles (non-conformal).  This is too hard to deal with.  */
+
+  return (-999.9);
 }
 
 /*  Set up Robinson Projection */
@@ -569,7 +596,7 @@ gadouble x1,x2,y1,y2,xd,yd,xave,yave,w1;
 
   gxproj (gxrobp);
   gxback (gxrobb);
-  adjtyp = 3;
+  adjtyp = 4;
   return (0);
 }
 
@@ -608,6 +635,8 @@ int i;
 /* Back Transform for Robinson Projection */
 
 void gxrobb (gadouble x, gadouble y, gadouble *rlon, gadouble *rlat) {
+  *rlon = -999.9;
+  *rlat = -999.9;
 }
 /*------------------------------------------------------------------
      DKRZ appends: Mollweide Projection
@@ -669,7 +698,7 @@ int gxmoll (struct mapprj *mpj) {
 
         gxproj (gxmollp);
         gxback (gxmollb);
-        adjtyp = 3;
+        adjtyp = 4;
         return (0);
 }
 
@@ -693,6 +722,8 @@ void gxmollp (gadouble rlon, gadouble rlat, gadouble *x, gadouble *y) {
 /* Back Transform for Mollweide Projection */
 
 void gxmollb (gadouble x, gadouble y, gadouble *rlon, gadouble *rlat) {
+  *rlon = -999.9;
+  *rlat = -999.9;
 }
 
 /* Orthographic projection.  Requires exact setup with the lat/lon range
@@ -792,7 +823,7 @@ int gxortg (struct mapprj *mpj) {
 
         gxproj (gxortgp);
         gxback (gxortgb);
-        adjtyp = 3;
+        adjtyp = 4;
         return (0);
 }
 
@@ -818,6 +849,8 @@ void gxortgp (gadouble rlon, gadouble rlat, gadouble *x, gadouble *y) {
 /* Back Transform for Orthographic Projection */
 
 void gxortgb (gadouble x, gadouble y, gadouble *rlon, gadouble *rlat) {
+  *rlon = -999.9;
+  *rlat = -999.9;
 }
 
 /*------------------------------------------------------------------
@@ -962,7 +995,7 @@ int gxlamc (struct mapprj *mpj) {
 
         gxproj (gxlamcp);
         gxback (gxlamcb);
-        adjtyp = 0;
+        adjtyp = 3;
         return (0);
 }
 
@@ -1008,6 +1041,8 @@ void gxlamcp (gadouble rlon, gadouble rlat, gadouble *x, gadouble *y)
 /*--- Back Transform for Lambert conformal Projection ---*/
 
 void gxlamcb (gadouble x, gadouble y, gadouble *rlon, gadouble *rlat) {
+  *rlon = -999.9;
+  *rlat = -999.9;
 }
 
 /* Interpolate lat/lon boundaries, and convert to xy, on

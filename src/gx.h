@@ -1,4 +1,4 @@
-/*  Copyright (C) 1988-2010 by Brian Doty and the
+/*  Copyright (C) 1988-2011 by Brian Doty and the
     Institute of Global Environment and Society (IGES).
     See file COPYRIGHT for more information.   */
 
@@ -180,7 +180,6 @@ struct gxcntr {
    gxdsgl: Set single buffer mode
    gxddbl: Set doulbe buffer mode
    gxdswp: Swap buffers
-   gxqfil: Query availability of hardware polygon fill
    gxdfil: Hardware Polygon fill
    gxdxsz: Resize X Window (X only)
    gxdbtn: Get pointer pos at mouse btn press
@@ -197,6 +196,7 @@ struct gxcntr {
    gxmaskclear: Clear (unset) mask array
                                                            */
 
+void gxqdrgb (gaint, gaint *, gaint *, gaint *);
 void gxdbgn (gadouble, gadouble);
 void gxdbat (void);
 void gxdend (void);
@@ -210,7 +210,6 @@ void gxdrec (gadouble, gadouble, gadouble, gadouble);
 void gxdsgl (void);
 void gxdbl (void);
 void gxdswp (void);
-gaint gxqfil (void);
 void gxdfil (gadouble *, gaint);
 void gxdxsz (int, int);
 void gxgrey (int);
@@ -422,11 +421,31 @@ gaint putxy  (gadouble, gadouble);
 void  shdcmp (void);
 gaint shdmax (void);
 
+/* Routines in gxshad2 -- color filled contours */
+
+void gxshad2 (gadouble *, gaint, gaint, gadouble *, gadouble, gaint *, gaint, char *);
+void s2flags (gadouble *, char *, gaint, gaint, gadouble, gadouble);
+void s2poly (gadouble *,  gaint, gaint, gadouble, gadouble);
+gaint s2follow (gadouble *, gaint, gaint, gadouble, gadouble, gaint, gaint, gaint);
+gaint s2col (gadouble, gaint, gaint);
+void s2ppnt(gadouble,gadouble);
+void s2debug ();
+void gxshad2b (gadouble *, gaint, gaint, gadouble *, gadouble, gaint *, gaint, char *);
+void s2box (gadouble, gadouble, gadouble, gadouble, gadouble, gadouble);
+void s2pdrop (gadouble, gadouble, gaint, gaint);
+void s2outpoly(void);
+gaint s2pathln (gadouble, gadouble, gadouble, gadouble, gadouble);
+void s2frepbuf (void);
+gaint s2bufpoly (gaint);
+void s2setbuf (gaint);
+void s2setdraw (gaint);
+gaint s2polyvert (FILE *);
+
 /* routines in gxstrm:  gxstrm (do streamlines) */
 
 void gxstrm (gadouble *, gadouble *, gadouble *, gaint, gaint, char *, char *, char *,
-             gaint, gadouble *, gaint *, gaint, gaint);
-void strmar (gadouble, gadouble, gadouble, gadouble);
+             gaint, gadouble *, gaint *, gaint, gaint, gadouble, gadouble, gaint);
+void strmar (gadouble, gadouble, gadouble, gadouble, gadouble, gaint);
 gaint gxshdc (gadouble *, gaint *, gaint, gadouble);
 
 /* Routines in gxwmap:
@@ -441,6 +460,7 @@ gaint gxshdc (gadouble *, gaint *, gaint, gadouble);
    gxmpoly: Interpolate polygon sides for drawing in non-linear map space
                                                                   */
 
+void gxrsmapt(void);
 void gxdmap (struct mapopt *);
 void gxwmap (gadouble, gadouble, gadouble, gadouble);
 void gxnmap (gadouble, gadouble, gadouble, gadouble);

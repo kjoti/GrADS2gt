@@ -1,4 +1,4 @@
-/* Copyright (C) 1988-2010 by Brian Doty and the
+/* Copyright (C) 1988-2011 by Brian Doty and the
    Institute of Global Environment and Society (IGES).
    See file COPYRIGHT for more information.   */
 
@@ -57,14 +57,14 @@ gaint gaddes (char *name, struct gafile *pfi, gaint mflag) {
   FILE *mfile;
   gafloat fdum;
   off_t levs,acum,acumvz,recacm;
-  gaint pdefop1=0, pdefop2=0;
+  gaint pdefop1=0,pdefop2=0,havesf,haveao;
   gaint acumstride=0, npairs, idum, reclen;
   gaint size=0,rc,len,swpflg,cnt,flag,tim1,tim2,ichar;
-  gaint flgs[8],e,t,i,j,ii,jj,err,hdrb,trlb,mflflg;
+  gaint flgs[8],e,t,i,j,ii,jj,err,hdrb,trlb,mflflg,cal365;
   gaint mcnt,maxlv,foundvar1,foundvar2;
   size_t sz;
   char rec[512], mrec[512], *ch, *pos, *sname, *vectorpairs, *pair, *vplist;
-  char pdefnm[256],var1[256],var2[256];
+  char pdefnm[256],var1[256],var2[256],ekwrd[6];
   char *varname,*attrname,*attrtype;
   unsigned char vermap, urec[8];
   static char *errs[9] = {"XDEF","YDEF","ZDEF","TDEF","UNDEF",
@@ -86,7 +86,8 @@ gaint gaddes (char *name, struct gafile *pfi, gaint mflag) {
   vplist = NULL;
   varname = attrname = attrtype = NULL;
   attrib = NULL;
-  sname=NULL;
+  sname = NULL;
+  cal365 = 0;
 
   /* Try to open descriptor file */
   descr = fopen (name, "r");
@@ -189,6 +190,8 @@ gaint gaddes (char *name, struct gafile *pfi, gaint mflag) {
       if ( (ch=nxtwrd(mrec))==NULL ) {
         gaprnt (1,"Descriptor File Warning: Missing attribute names in unpack record\n");
       } else {
+        havesf = 0;
+        haveao = 0;
         /* get the scale factor attribute name */
         len = 0;
         while (*(ch+len)!=' ' && *(ch+len)!='\n' && *(ch+len)!='\t') len++;
@@ -196,12 +199,12 @@ gaint gaddes (char *name, struct gafile *pfi, gaint mflag) {
         if ((pfi->scattr = (char *)galloc(sz,"scattr")) == NULL) goto err8;
         for (i=0; i<len; i++) *(pfi->scattr+i) = *(ch+i);
         *(pfi->scattr+len) = '\0';
-        /* set the packflg to 1, meaning only scale factor has been retrieved */
-        pfi->packflg = 1;
+        havesf = 1;
+        if (!strncmp(pfi->scattr, "NULL", 4) || !strncmp(pfi->scattr, "null", 4)) havesf = 0;
 
         /* get the offset attribute name */
         if ( (ch=nxtwrd(ch)) == NULL ) {
-          gaprnt (2,"Descriptor File Warning: No offset attribute name in unpack record\n");
+          gaprnt (1,"Descriptor File Warning: No offset attribute name in unpack record\n");
         } else {
           len = 0;
           while (*(ch+len)!=' ' && *(ch+len)!='\n' && *(ch+len)!='\t') len++;
@@ -209,8 +212,15 @@ gaint gaddes (char *name, struct gafile *pfi, gaint mflag) {
           if ((pfi->ofattr = (char *)galloc(sz,"ofattr")) == NULL) goto err8;
           for (i=0; i<len; i++) *(pfi->ofattr+i) = *(ch+i);
           *(pfi->ofattr+len) = '\0';
-          /* Set the packflg to 2, meaning scale factor and offset have been retrieved */
-          pfi->packflg = 2;
+          haveao = 1;
+          if (!strncmp(pfi->ofattr, "NULL", 4) || !strncmp(pfi->ofattr, "null", 4)) haveao = 0;
+        }
+
+        /* set the packflg */
+        if (havesf) {
+          pfi->packflg = haveao == 1 ? 2 : 1 ;
+        } else {
+          pfi->packflg = haveao == 1 ? 3 : 0 ;
         }
       }
 
@@ -229,7 +239,7 @@ gaint gaddes (char *name, struct gafile *pfi, gaint mflag) {
 #endif
           else if (cmpwrd("365_day_calendar",ch)) {
             pfi->calendar = CALTIME_NOLEAP;
-            mfcmn.cal365=pfi->calendar;
+            cal365 = 1;
           }
           else if (cmpwrd("360_day_calendar",ch)) {
             pfi->calendar = CALTIME_360_DAY;
@@ -996,7 +1006,8 @@ gaint gaddes (char *name, struct gafile *pfi, gaint mflag) {
       flgs[3] = 0;
 
     } else if (cmpwrd("edef",rec)) {
-      if ((ch = nxtwrd(rec)) == NULL) goto err1;
+      /* use mixed case version of record so ensemble names can have upper case letters */
+      if ((ch = nxtwrd(mrec)) == NULL) goto err1;
       if ((pos = intprs(ch,&(pfi->dnum[4])))==NULL) goto err1;
       if (pfi->dnum[4]<1) {
         snprintf(pout,255,"Warning: Invalid EDEF syntax in %s -- Changing size of E axis from %d to 1 \n",
@@ -1030,28 +1041,35 @@ gaint gaddes (char *name, struct gafile *pfi, gaint mflag) {
       pfi->ens1 = ens;
       j = 0;
       ch = nxtwrd(ch);
-      /* this is the pathway for keyword "names" followed by list of ensemble members */
-      if ((ch!=NULL) && cmpwrd("names",ch)) {
-        while (j<pfi->dnum[4]) {
-          if ((ch=nxtwrd(ch))==NULL) {
-            /* ensemble names are listed in more than one line */
-            if (fgets(rec,256,descr)==NULL) goto err7a;
-            ch = rec;
-            while (*ch==' ' || *ch=='\t') ch++;        /* advance through white space */
-            if (*ch=='\0' || *ch=='\n') goto err7b;    /* nothing there */
+      if (ch!=NULL) {
+        /* this is the pathway for keyword "names" followed by list of ensemble members */
+        getwrd(ekwrd,ch,5);
+        lowcas(ekwrd);
+        if (cmpwrd("names",ekwrd)) {
+          while (j<pfi->dnum[4]) {
+            if ((ch=nxtwrd(ch))==NULL) {
+              /* ensemble names are listed in more than one line */
+              if (fgets(rec,512,descr)==NULL) goto err7a;  /* read line, keep as mixed case */
+              ch = rec;
+              while (*ch==' ' || *ch=='\t') ch++;          /* advance through white space */
+              if (*ch=='\0' || *ch=='\n') goto err7b;      /* nothing there */
+            }
+            /* get the ensemble name */
+            if ((getenm(ens, ch))!=0) goto err7d;
+            /* initialize remaining fields in ensemble structure */
+            for (jj=0;jj<4;jj++) ens->grbcode[jj]=-999;
+            ens->length=0;
+            ens->gt=1;
+            ens->tinit.yr=0;
+            ens->tinit.mo=0;
+            ens->tinit.dy=0;
+            ens->tinit.hr=0;
+            ens->tinit.mn=0;
+            j++; ens++;
           }
-          /* get the ensemble name */
-          if ((getenm(ens, ch))!=0) goto err7d;
-          /* initialize remaining fields in ensemble structure */
-          for (jj=0;jj<4;jj++) ens->grbcode[jj]=-999;
-          ens->length=0;
-          ens->gt=1;
-          ens->tinit.yr=0;
-          ens->tinit.mo=0;
-          ens->tinit.dy=0;
-          ens->tinit.hr=0;
-          ens->tinit.mn=0;
-          j++; ens++;
+        } else {
+          gaprnt(1,"Invalid syntax in EDEF statement: \"names\" not found\n");
+          goto err7f;
         }
       }
       else {
@@ -1316,7 +1334,6 @@ gaint gaddes (char *name, struct gafile *pfi, gaint mflag) {
         /* parse the variable description */
         getstr (pvar->varnm,mrec+(ch-rec),127);
 
-
         /* var_t is for data files with dimension sequence: X, Y, Z, T, V */
         if ((pvar->units[0]==-1) &&
             (pvar->units[1]==20))
@@ -1325,10 +1342,9 @@ gaint gaddes (char *name, struct gafile *pfi, gaint mflag) {
         /* non-float data types */
         if ((pvar->units[0]==-1) &&
             (pvar->units[1]==40)) {
-
           if (pvar->units[2]== 1) pvar->dfrm = 1;
           if (pvar->units[2]== 2) { pvar->dfrm = 2;
-          if (pvar->units[3]==-1) pvar->dfrm = -2; }
+            if (pvar->units[3]==-1) pvar->dfrm = -2; }
           if (pvar->units[2]== 4) pvar->dfrm = 4;
         }
 
@@ -2163,9 +2179,9 @@ gaint gaddes (char *name, struct gafile *pfi, gaint mflag) {
    we do this here to set the calandar for templating */
 
   if (mfcmn.cal365<0) {
-    mfcmn.cal365=pfi->calendar;
+    mfcmn.cal365 = cal365;
   } else {
-    if (pfi->calendar != mfcmn.cal365) {
+    if (cal365 != mfcmn.cal365) {
       gaprnt(0,"Attempt to change the global calendar...\n");
       if (mfcmn.cal365) {
         gaprnt(0,"The calendar is NOW 365 DAYS and you attempted to open a standard calendar file\n");
@@ -2416,6 +2432,10 @@ gaint gaddes (char *name, struct gafile *pfi, gaint mflag) {
   gaprnt (0,"Open Error:  Invalid ensemble record\n");
   goto err9;
 
+ err7f:
+  gaprnt (0,"Open Error:  Invalid ensemble keyword\n");
+  goto err9;
+
  err8:
   gaprnt (0,"Open Error:  Memory allocation Error in gaddes.c\n");
   goto retrn;
@@ -2505,7 +2525,7 @@ size_t sz;
   vvs++;
   for (i=0; i<pfi->dnum[dim]; i++) {
     if ( (ch = nxtwrd(ch))==NULL) {
-      if (fgets(rec,256,descr)==NULL) goto err2;
+      if (fgets(rec,512,descr)==NULL) goto err2;
       ch = rec;
       while (*ch==' ' || *ch=='\t') ch++;
       if (*ch=='\0' || *ch=='\n') goto err3;

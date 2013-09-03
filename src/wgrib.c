@@ -94,7 +94,7 @@ struct ParmTable {
         /* char *name, *comment; */
         char *name, *comment;
 };
-/* version 1.4.4 of grib headers  w. ebisuzaki */
+/* version 1.4.5 of grib headers  w. ebisuzaki */
 /* this version is incomplete */
 /* 5/00 - dx/dy or di/dj controlled by bit 1 of resolution byte */
 /* 8/00 - dx/dy or di/dj for polar and lambert not controlled by res. byte */
@@ -103,6 +103,8 @@ struct ParmTable {
 /* Clean up of triangular grid properties access and added spectral information
          Luis Kornblueh, 27.03.2002 */
 /* 8/08 - dx/dy (polar,lambert) controlled by bit 1 of resolution byte */
+/* 5/11 Paul Schou: fixed GDS_Lambert_LonSP(gds) */
+/* 6/11 Jeffery S. Smith Albers equal area projection */
 
 #ifndef INT3
 #define INT3(a,b,c) ((1-(int) ((unsigned) (a & 0x80) >> 6)) * (int) (((a & 127) << 16)+(b<<8)+c))
@@ -138,6 +140,7 @@ struct ParmTable {
 #define GDS_Lambert(gds)        (gds[5] == 3)
 #define GDS_Gaussian(gds)       (gds[5] == 4)
 #define GDS_Polar(gds)          (gds[5] == 5)
+#define GDS_Albers(gds)         (gds[5] == 8)
 #define GDS_RotLL(gds)          (gds[5] == 10)
 #define GDS_Harmonic(gds)       (gds[5] == 50)
 #define GDS_Triangular(gds)     (gds[5] == 192)
@@ -185,7 +188,11 @@ struct ParmTable {
 #define GDS_Lambert_Latin1(gds) INT3(gds[28],gds[29],gds[30])
 #define GDS_Lambert_Latin2(gds) INT3(gds[31],gds[32],gds[33])
 #define GDS_Lambert_LatSP(gds)  INT3(gds[34],gds[35],gds[36])
-#define GDS_Lambert_LonSP(gds)  INT3(gds[37],gds[37],gds[37])
+
+/* bug found by Paul Schou 5/3/2011
+   #define GDS_Lambert_LonSP(gds)       INT3(gds[37],gds[37],gds[37])
+*/
+#define GDS_Lambert_LonSP(gds)  INT3(gds[37],gds[38],gds[39])
 
 #define GDS_ssEgrid_n(gds)      UINT2(gds[6],gds[7])
 #define GDS_ssEgrid_n_dum(gds)  UINT2(gds[8],gds[9])
@@ -279,7 +286,7 @@ struct ParmTable {
 
 enum Def_NCEP_Table {rean, opn, rean_nowarn, opn_nowarn};
 
-unsigned char *seek_grib(FILE *file, long *pos, long *len_grib,
+unsigned char *seek_grib(FILE *file, unsigned long *pos, long *len_grib,
         unsigned char *buffer, unsigned int buf_len);
 
 int read_grib(FILE *file, long pos, long len_grib, unsigned char *buffer);
@@ -437,7 +444,7 @@ void ensemble(unsigned char *pds, int mode);
 
 
 
-#define VERSION "v1.8.0.13f (3-10) Wesley Ebisuzaki\n\t\tDWD-tables 2,201-205 (11-28-2005) Helmut P. Frank\n\t\tspectral: Luis Kornblueh (MPI)"
+#define VERSION "v1.8.1.2a (6-11) Wesley Ebisuzaki\n\t\tDWD-tables 2,201-205 (11-28-2005) Helmut P. Frank\n\t\tspectral: Luis Kornblueh (MPI)"
 
 #define CHECK_GRIB
 /* #define DEBUG */
@@ -483,7 +490,7 @@ enum Def_NCEP_Table def_ncep_table = DEF_T62_NCEP_TABLE;
 int minute = 0;
 int ncep_ens = 0;
 int cmc_eq_ncep = 0;
-int ec_large_grib = 0, len_ec_bds;
+extern int ec_large_grib, len_ec_bds;
 
 int main(int argc, char **argv) {
 
@@ -982,6 +989,19 @@ int main(int argc, char **argv) {
                      GDS_Lambert_nx(gds), GDS_Lambert_ny(gds),
                      0.001*GDS_Lambert_dx(gds), 0.001*GDS_Lambert_dy(gds),
                      GDS_Lambert_scan(gds), GDS_Lambert_mode(gds));
+            else if (gds && GDS_Albers(gds))
+                /* Albers equal area has same parameters as Lambert conformal */
+                printf("  Albers Equal-Area: Lat1 %f Lon1 %f Lov %f\n"
+                       "      Latin1 %f Latin2 %f LatSP %f LonSP %f\n"
+                       "      %s (%d x %d) Dx %f Dy %f scan %d mode %d\n",
+                     0.001*GDS_Lambert_La1(gds),0.001*GDS_Lambert_Lo1(gds),
+                     0.001*GDS_Lambert_Lov(gds),
+                     0.001*GDS_Lambert_Latin1(gds), 0.001*GDS_Lambert_Latin2(gds),
+                     0.001*GDS_Lambert_LatSP(gds), 0.001*GDS_Lambert_LonSP(gds),
+                      GDS_Lambert_NP(gds) ? "North Pole": "South Pole",
+                     GDS_Lambert_nx(gds), GDS_Lambert_ny(gds),
+                     0.001*GDS_Lambert_dx(gds), 0.001*GDS_Lambert_dy(gds),
+                     GDS_Lambert_scan(gds), GDS_Lambert_mode(gds));
             else if (gds && GDS_Mercator(gds))
                 printf("  Mercator: lat  %f to %f by %f km  nxny %ld\n"
                        "          long %f to %f by %f km, (%d x %d) scan %d"
@@ -1257,26 +1277,24 @@ void print_gds(unsigned char *gds, int print_GDS, int print_GDS10, int verbose) 
  * v1.4 11/10/2001 D. Haalman, looks at entire file, does not try
  *      to read past EOF
  *      3/8/2010 echack added by Brian Doty
+ * v1.5 5/2011 changes for ECMWF who have grib1+grib2 files, scan entire file
  */
 
 #ifndef min
    #define min(a,b)  ((a) < (b) ? (a) : (b))
 #endif
 
-#define NTRY 100
 /* #define LEN_HEADER_PDS (28+42+100) */
 #define LEN_HEADER_PDS (28+8)
 
-extern int ec_large_grib,  len_ec_bds;
+int ec_large_grib = 0,  len_ec_bds;
 
-unsigned char *seek_grib(FILE *file, long *pos, long *len_grib,
+unsigned char *seek_grib(FILE *file, unsigned long *pos, long *len_grib,
         unsigned char *buffer, unsigned int buf_len) {
 
-    int i, j, len;
-    static int warn_grib2 = 0;
+    int i, len;
     long length_grib;
-
-    j = 1;
+    static int warn_grib2 = 0;
     clearerr(file);
     while ( !feof(file) ) {
 
@@ -1305,17 +1323,11 @@ unsigned char *seek_grib(FILE *file, long *pos, long *len_grib,
 
                 /* grib edition 2 */
                 else if (buffer[i+7] == 2) {
-                    if (warn_grib2++ < 5) fprintf(stderr,"grib2 message ignored (use wgrib2)\n");
+                    if (warn_grib2++ == 0) fprintf(stderr,"grib2 message ignored (use wgrib2)\n");
                 }
 
             }
         }
-
-        if (j++ == NTRY) {
-            fprintf(stderr,"found unidentified data \n");
-           /* break; // stop seeking after NTRY records */
-        }
-
         *pos = *pos + (buf_len - LEN_HEADER_PDS);
     }
 
@@ -2218,7 +2230,6 @@ void PDStimes(int time_range, int p1, int p2, int time_unit) {
              unit = units[time_unit];
         else unit = "";
 
-
         /* change x3/x6/x12 to hours */
 
         if (time_unit == HOURS3) {
@@ -2241,10 +2252,12 @@ void PDStimes(int time_range, int p1, int p2, int time_unit) {
             p1 *= 15; p2 *= 15;
             time_unit = MINUTE;
         }
+        /* turn off 5/13/2010
         if (time_unit == MINUTE && p1 % 60 == 0 && p2 % 60 == 0) {
             p1 /= 60; p2 /= 60;
             time_unit = HOUR;
         }
+        */
 
         if (time_unit >= 0 && time_unit <= sizeof(units)/sizeof(char *))
              unit = units[time_unit];
@@ -3445,10 +3458,10 @@ const struct ParmTable parm_table_nceptab_130[256] = {
       /* 190 */ {"VWSALB", "Visible, white sky albedo [%]"},
       /* 191 */ {"NBSALB", "Near IR, black sky albedo [%]"},
       /* 192 */ {"NWSALB", "Near IR, white sky albedo [%]"},
-      /* 193 */ {"var193", "undefined"},
-      /* 194 */ {"var194", "undefined"},
-      /* 195 */ {"var195", "undefined"},
-      /* 196 */ {"var196", "undefined"},
+      /* 193 */ {"FRZR", "Freezing rain [kg/m^2]"},
+      /* 194 */ {"FROZR", "Frozen rain [kg/m^2]"},
+      /* 195 */ {"TSNOW", "Total snow [kg/m^2]"},
+      /* 196 */ {"MTERH", "Model terrain height [m]"},
       /* 197 */ {"var197", "undefined"},
       /* 198 */ {"SBSNO", "Sublimation (evaporation from snow) [W/m^2]"},
       /* 199 */ {"EVBS", "Direct evaporation from bare soil [W/m^2]"},
@@ -3493,10 +3506,10 @@ const struct ParmTable parm_table_nceptab_130[256] = {
       /* 238 */ {"SNOWC", "Snow cover [%]"},
       /* 239 */ {"SNOT", "Snow temperature [K]"},
       /* 240 */ {"POROS", "Soil porosity [fraction]"},
-      /* 241 */ {"var241", "undefined"},
-      /* 242 */ {"var242", "undefined"},
-      /* 243 */ {"var243", "undefined"},
-      /* 244 */ {"var244", "undefined"},
+      /* 241 */ {"SBT112", "Simulated brightness temp for GOES11, channel 2 [K]"},
+      /* 242 */ {"SBT113", "Simulated brightness temp for GOES11, channel 3 [K]"},
+      /* 243 */ {"SBT114", "Simulated brightness temp for GOES11, channel 4 [K]"},
+      /* 244 */ {"SBT115", "Simulated brightness temp for GOES11, channel 5 [K]"},
       /* 245 */ {"var245", "undefined"},
       /* 246 */ {"RCS", "Solar parameter in canopy conductance [fraction]"},
       /* 247 */ {"RCT", "Temperature parameter in canopy conductance [fraction]"},
@@ -3687,10 +3700,10 @@ const struct ParmTable parm_table_nceptab_133[256] = {
       /* 173 */ {"LRGMR", "Large scale moistening rate"},
       /* 174 */ {"VDFOZ", "Ozone vertical diffusion"},
       /* 175 */ {"POZ", "Ozone production"},
-      /* 176 */ {"var176", "undefined"},
-      /* 177 */ {"var177", "undefined"},
-      /* 178 */ {"var178", "undefined"},
-      /* 179 */ {"var179", "undefined"},
+      /* 176 */ {"AMSRE9", "Sim brightness tmp for AMSRE on Aqua channel 9 [K]"},
+      /* 177 */ {"AMSRE10", "Sim brightness tmp for AMSRE on Aqua channel 10 [K]"},
+      /* 178 */ {"AMSRE11", "Sim brightness tmp for AMSRE on Aqua channel 11 [K]"},
+      /* 179 */ {"AMSRE12", "Sim brightness tmp for AMSRE on Aqua channel 12 [K]"},
       /* 180 */ {"var180", "undefined"},
       /* 181 */ {"GWDU", "Gravity wave drag u acceleration"},
       /* 182 */ {"GWDV", "Gravity wave drag v acceleration"},
@@ -9916,8 +9929,8 @@ const struct ParmTable parm_table_nceptab_129[256] = {
       /* 183 */ {"SIGV", "Sigma level value [non-dim]"},
       /* 184 */ {"EWGT", "Ensemble Weight [non-dim]"},
       /* 185 */ {"CICEL", "Confidence indicator - Ceiling [non-dim]"},
-      /* 186 */ {"CIVIS", "Confidence indicator - Visibility [non-dim] 186"},
-      /* 187 */ {"var187", "undefined"},
+      /* 186 */ {"CIVIS", "Confidence indicator - Visibility [non-dim]"},
+      /* 187 */ {"CIFLT", "Confidence indicator - Flight Category [non-dim]"},
       /* 188 */ {"LAVV", "Latitude of V wind component of velocity [deg]"},
       /* 189 */ {"LOVV", "Longitude of V wind component of velocity [deg]"},
       /* 190 */ {"USCT", "Scatterometer est. U wind component [m/s]"},
@@ -9963,15 +9976,15 @@ const struct ParmTable parm_table_nceptab_129[256] = {
       /* 230 */ {"RHPW", "Relative humidity with respect to precip water [%]"},
       /* 231 */ {"OZMAX1", "Ozone daily max from 1-hour ave [ppbV]"},
       /* 232 */ {"OZMAX8", "Ozone daily max from 8-hour ave [ppbV]"},
-      /* 233 */ {"var233", "undefined"},
-      /* 234 */ {"var234", "undefined"},
-      /* 235 */ {"var235", "undefined"},
-      /* 236 */ {"var236", "undefined"},
-      /* 237 */ {"var237", "undefined"},
-      /* 238 */ {"var238", "undefined"},
-      /* 239 */ {"var239", "undefined"},
-      /* 240 */ {"var240", "undefined"},
-      /* 241 */ {"var241", "undefined"},
+      /* 233 */ {"PDMAX1", "PM 2.5 daily max from 1-hour ave [ug/m^3]"},
+      /* 234 */ {"PDMAX24", "PM 2.5 daily max from 24-hour ave [ug/m^3]"},
+      /* 235 */ {"MAXREF", "Hourly max of sim. reflect at 1km AGL [dbZ]"},
+      /* 236 */ {"MXUPHL", "Hourly max updraft helicity 2-5km AGL [m^2/s^2]"},
+      /* 237 */ {"MAXUVV", "Hourly max upward vert vel in lowest 400mb [m/s]"},
+      /* 238 */ {"MAXDVV", "Hourly max downward vert fel in lowest 400mb [m/s]"},
+      /* 239 */ {"MAXVIG", "Hourly max column graupel [kg/m^2]"},
+      /* 240 */ {"RETOP", "Radar echo top (18.3 dbZ) [m]"},
+      /* 241 */ {"VRATE", "Ventilation rate [m^2/s]"},
       /* 242 */ {"TCSRG20", "20% tropical cyclone storm exceedance [m]"},
       /* 243 */ {"TCSRG30", "30% tropical cyclone storm exceedance [m]"},
       /* 244 */ {"TCSRG40", "40% tropical cyclone storm exceedance [m]"},
@@ -9980,11 +9993,11 @@ const struct ParmTable parm_table_nceptab_129[256] = {
       /* 247 */ {"TCSRG70", "70% tropical cyclone storm exceedance [m]"},
       /* 248 */ {"TCSRG80", "80% tropical cyclone storm exceedance [m]"},
       /* 249 */ {"TCSRG90", "90% tropical cyclone storm exceedance [m]"},
-      /* 250 */ {"RETOP", "Radar echo top (18.3 DBZ) [m]"},
-      /* 251 */ {"TENV", "Total energy norm variance []"},
-      /* 252 */ {"var252", "undefined"},
-      /* 253 */ {"var253", "undefined"},
-      /* 254 */ {"var254", "undefined"},
+      /* 250 */ {"HINDEX", "Haines index []"},
+      /* 251 */ {"DIFTEN", "Difference between 2 states in total energy norm [J/kg]"},
+      /* 252 */ {"PSPCP", "Pseudo-precipitation [kg/m^2]"},
+      /* 253 */ {"MAXUW", "U of hourly max 10m wind speed [m/s]"},
+      /* 254 */ {"MAXVW", "V of hourly max 10m wind speed [m/s]"},
       /* 255 */ {"var255", "undefined"},
 };
 
@@ -11182,6 +11195,7 @@ int setup_user_table(int center, int subcenter, int ptable) {
  * v1.2 years that are multiple of 400 are leap years, not 500
  * v1.2.1  make the change to the source code for v1.2
  * v1.2.2  add 3/6/12 hour forecast time units
+ * v1.2.3  Jan 31 + 1 month => Feb 31 .. change to Feb 28/29
  */
 
 static int msg_count = 0;
@@ -11221,8 +11235,8 @@ int PDS_date(unsigned char *pds, int option, int v_time) {
 }
 
 #define  FEB29   (31+29)
-static int monthjday[12] = {
-        0,31,59,90,120,151,181,212,243,273,304,334};
+static int monthjday[13] = {
+        0,31,59,90,120,151,181,212,243,273,304,334,365};
 
 static int leap(int year) {
         if (year % 4 != 0) return 0;
@@ -11232,7 +11246,7 @@ static int leap(int year) {
 
 
 int add_time(int *year, int *month, int *day, int *hour, int dtime, int unit) {
-    int y, m, d, h, jday, i;
+    int y, m, d, h, jday, i, days_in_month;
 
     y = *year;
     m = *month;
@@ -11262,8 +11276,16 @@ int add_time(int *year, int *month, int *day, int *hour, int dtime, int unit) {
            dtime += (i * 12);
         }
         dtime += (m - 1);
-        *year = y + (dtime / 12);
-        *month = 1 + (dtime % 12);
+        *year =  y = y + (dtime / 12);
+        *month = m = 1 + (dtime % 12);
+
+        /* check if date code if valid */
+        days_in_month = monthjday[m] - monthjday[m-1];
+        if (m == 2 && leap(y)) {
+            days_in_month++;
+        }
+        if (days_in_month < d) *day = days_in_month;
+
         return 0;
     }
 
