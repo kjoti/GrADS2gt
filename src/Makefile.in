@@ -75,24 +75,25 @@ bufrscan_OBJECTS = $(am_bufrscan_OBJECTS)
 bufrscan_LDADD = $(LDADD)
 bufrscan_DEPENDENCIES =
 am__grads_SOURCES_DIST = grads.c gxsubs.c gxmeta.c gxchpl.c gxcntr.c \
-	gxstrm.c gxwmap.c gxshad.c gaexpr.c gafunc.c gautil.c gagx.c \
-	gscrpt.c gamach.c bufrstn.c gabufr.c gabufrtbl.c gxX.c \
-	gxdxwd.c galloc.c gagui.c gsgui.c dodstn.c gaddes.c gaio.c \
-	gacfg.c gauser.c gasdf.c gatxt.c gacal.c caltime.c gagt3.c
+	gxstrm.c gxwmap.c gxshad.c gxshad2.c gaexpr.c gafunc.c \
+	gautil.c gagx.c gscrpt.c gamach.c bufrstn.c gabufr.c \
+	gabufrtbl.c gxX.c gxdxwd.c galloc.c gagui.c gsgui.c dodstn.c \
+	gaddes.c gaio.c gacfg.c gauser.c gasdf.c gatxt.c gacal.c \
+	caltime.c gagt3.c
 @USEGUI_TRUE@am__objects_1 = gagui.$(OBJEXT) gsgui.$(OBJEXT)
 @USEGADAP_TRUE@am__objects_2 = dodstn.$(OBJEXT)
 @GTOOL3_TRUE@am__objects_3 = gagt3.$(OBJEXT)
 am_grads_OBJECTS = grads.$(OBJEXT) gxsubs.$(OBJEXT) gxmeta.$(OBJEXT) \
 	gxchpl.$(OBJEXT) gxcntr.$(OBJEXT) gxstrm.$(OBJEXT) \
-	gxwmap.$(OBJEXT) gxshad.$(OBJEXT) gaexpr.$(OBJEXT) \
-	gafunc.$(OBJEXT) gautil.$(OBJEXT) gagx.$(OBJEXT) \
-	gscrpt.$(OBJEXT) gamach.$(OBJEXT) bufrstn.$(OBJEXT) \
-	gabufr.$(OBJEXT) gabufrtbl.$(OBJEXT) gxX.$(OBJEXT) \
-	gxdxwd.$(OBJEXT) galloc.$(OBJEXT) $(am__objects_1) \
-	$(am__objects_2) gaddes.$(OBJEXT) gaio.$(OBJEXT) \
-	gacfg.$(OBJEXT) gauser.$(OBJEXT) gasdf.$(OBJEXT) \
-	gatxt.$(OBJEXT) gacal.$(OBJEXT) caltime.$(OBJEXT) \
-	$(am__objects_3)
+	gxwmap.$(OBJEXT) gxshad.$(OBJEXT) gxshad2.$(OBJEXT) \
+	gaexpr.$(OBJEXT) gafunc.$(OBJEXT) gautil.$(OBJEXT) \
+	gagx.$(OBJEXT) gscrpt.$(OBJEXT) gamach.$(OBJEXT) \
+	bufrstn.$(OBJEXT) gabufr.$(OBJEXT) gabufrtbl.$(OBJEXT) \
+	gxX.$(OBJEXT) gxdxwd.$(OBJEXT) galloc.$(OBJEXT) \
+	$(am__objects_1) $(am__objects_2) gaddes.$(OBJEXT) \
+	gaio.$(OBJEXT) gacfg.$(OBJEXT) gauser.$(OBJEXT) \
+	gasdf.$(OBJEXT) gatxt.$(OBJEXT) gacal.$(OBJEXT) \
+	caltime.$(OBJEXT) $(am__objects_3)
 grads_OBJECTS = $(am_grads_OBJECTS)
 am__DEPENDENCIES_1 =
 am__DEPENDENCIES_2 = $(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1) \
@@ -379,7 +380,7 @@ DISTCLEANFILES = buildinfo.h
 
 # Source files to be compiled
 grads_SOURCES = grads.c gxsubs.c gxmeta.c gxchpl.c gxcntr.c gxstrm.c \
-			 gxwmap.c gxshad.c gaexpr.c gafunc.c gautil.c gagx.c \
+			 gxwmap.c gxshad.c gxshad2.c gaexpr.c gafunc.c gautil.c gagx.c \
 			 gscrpt.c gamach.c bufrstn.c gabufr.c gabufrtbl.c \
 			 gxX.c gxdxwd.c galloc.c $(src_gui) $(src_gadap) \
 			 gaddes.c gaio.c gacfg.c gauser.c gasdf.c gatxt.c \
