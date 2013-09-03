@@ -4040,7 +4040,7 @@ struct dbfld* newdbfld (char *fldname, DBFFieldType dbtype, gaint len, gaint pre
 }
 #endif
 
-/* Writes out a KML file containing output from contouring routine */
+/* Writes out a KML file containing output from contour/shade2 routine */
 
 void gakml (struct gacmn *pcm) {
   FILE *kmlfp=NULL;
