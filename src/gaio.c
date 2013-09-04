@@ -631,7 +631,7 @@ gafloat *fgr;
 off_t ffpos;
 gaint rc,i;
 gaint cnt,*ig;
-unsigned char *igr;
+unsigned char *igr,*chcast;
 char *cgr;
 unsigned short usval;
 signed short sval;
@@ -694,14 +694,18 @@ size_t sz;
     if (pfi->bswap) gabswp2(cgr,len);
     cnt=0;
     if (pvr->dfrm == -2) {
+      chcast = (unsigned char *)(&sval);
       for(i=0;i<len;i++) {
-        sval=(signed short)(*(cgr+cnt));
+        *chcast = *(cgr+cnt);
+        *(chcast+1) = *(cgr+cnt+1);
         *(gr+i) = (gadouble)sval;
         cnt+=2;
       }
     } else {
+      chcast = (unsigned char *)(&usval);
       for(i=0;i<len;i++) {
-        usval=(unsigned short)(*(cgr+cnt));
+        *chcast = *(cgr+cnt);
+        *(chcast+1) = *(cgr+cnt+1);
         *(gr+i) = (gadouble)usval;
         cnt+=2;
       }
@@ -4887,10 +4891,14 @@ char *fn=NULL;
   }
 
   /* find out if we need to open a new file */
+  /* tmplat = 3 means templating on E and T
+     tmplat = 2 means templating only on E
+     tmplat = 1 means templating only on T */
+
   need_new_file=0;
   if (pfi->tmplat==3 && ((i != pfi->fnumc) || (e != pfi->fnume))) need_new_file=1;
-  if (pfi->tmplat==2 && (e != pfi->fnume)) need_new_file=1;
-  if (pfi->tmplat==1 && (i != pfi->fnumc)) need_new_file=1;
+  if (pfi->tmplat==2 && (e != pfi->fnume)) need_new_file=2;
+  if (pfi->tmplat==1 && (i != pfi->fnumc)) need_new_file=3;
 
   /* the current file is not the one we need */
   if (need_new_file) {

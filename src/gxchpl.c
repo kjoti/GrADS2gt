@@ -55,7 +55,7 @@ char *cdat;
   xscl = width/21.0;
   yscl = height/22.0;
   fn = dfont;
-  angle = angle * 3.1416/180.0;
+  angle = angle*M_PI/180;
   supsub = 0;
   while (*chrs!='\0' && len>0) {
     while (*chrs=='`') {

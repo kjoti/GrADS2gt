@@ -30,8 +30,8 @@ void gxstrm (gadouble *u, gadouble *v, gadouble *c, gaint is, gaint js,
 gadouble x,y,xx,yy;
 gadouble *up, *vp, *cp, cv1,cv2,cv;
 gadouble uv1,uv2,uv,vv1,vv2,vv,auv,avv,xsav,ysav,xold=0.0,yold=0.0;
-gadouble fact,rscl,xxsv,yysv;
-gadouble xx1,yy1,xx2,yy2,adj,dacum;
+gadouble fact,rscl,xxsv,yysv,xstrt,ystrt;
+gadouble xx1,yy1,xx2,yy2,adj,dacum,tacum;
 gaint i,ii,jj,ii1,ij1,i2,j2,ipt,acnt,icol,scol,dis;
 gaint *it,siz,iacc,iisav,iscl,imn,imx,jmn,jmx,iz,jz,iss,jss,bflg;
 char *upmask,*vpmask,*cpmask;
@@ -59,6 +59,7 @@ char *upmask,*vpmask,*cpmask;
   }
   rscl = (gadouble)iscl/(gadouble)ii;
   fact = 0.5/rscl;
+  /* if (fact<0.3) fact = 0.3; */
 
   /* Allocate memory for the flag grid */
 
@@ -102,6 +103,7 @@ char *upmask,*vpmask,*cpmask;
       y = ((gadouble)j2)/rscl;
       xsav = x;
       ysav = y;
+      xstrt = x; ystrt = y;
       gxconv (x+1.0,y+1.0,&xx,&yy,3);
       gxplot (xx,yy,3);
       xxsv = xx; yysv = yy;
@@ -109,6 +111,7 @@ char *upmask,*vpmask,*cpmask;
       iacc = 0;
       acnt = 0;
       dacum = 0.0;
+      tacum = 0.0;
       bflg = 0;
       while (x>=0.0 && x<(gadouble)(is-1) && y>=0.0 && y<(gadouble)(js-1)) {
         ii = (gaint)x;
@@ -171,8 +174,9 @@ char *upmask,*vpmask,*cpmask;
         if (*(it+ii1)==1) break;
         if (ii1!=iisav && iisav>-1) *(it+iisav) = 1;
         if (ii1==iisav) iacc++;
-        else iacc = 0;
-        if (iacc>10) break;
+        else {iacc = 0; tacum = 0; }
+        if (iacc>10 && tacum<0.1) break;
+        if (iacc>100) break;
         iisav = ii1;
         gxconv (x+1.0,y+1.0,&xx,&yy,3);
         if (icol>-1) {
@@ -180,6 +184,7 @@ char *upmask,*vpmask,*cpmask;
           gxplot (xx,yy,2);
         } else bflg = 1;
         dacum += hypot(xx-xold,yy-yold);
+        tacum += hypot(xx-xold,yy-yold);
         acnt++;
         if (dacum>strmarrd) {
           if (icol>-1) strmar (xxsv,yysv,xx,yy,strmarrsz,strmarrt);
@@ -199,6 +204,7 @@ char *upmask,*vpmask,*cpmask;
       iacc = 0;
       acnt = 19;
       dacum = 0.0;
+      tacum = 0.0;
       while (x>=0.0 && x<(gadouble)(is-1) && y>=0.0 && y<(gadouble)(js-1)) {
         ii = (gaint)x;
         jj = (gaint)y;
@@ -261,7 +267,8 @@ char *upmask,*vpmask,*cpmask;
         if (ii1!=iisav && iisav>-1) *(it+iisav) = 1;
         if (ii1==iisav) iacc++;
         else iacc = 0;
-        if (iacc>10) break;
+        if (iacc>10 && tacum<0.1) break;
+        if (iacc>100) break;
         iisav = ii1;
         gxconv (x+1.0,y+1.0,&xx,&yy,3);
         if (icol>-1) {
@@ -269,6 +276,7 @@ char *upmask,*vpmask,*cpmask;
           gxplot (xx,yy,2);
         } else bflg = 1;
         dacum += hypot(xx-xold,yy-yold);
+        tacum += hypot(xx-xold,yy-yold);
         xold = xx;
         yold = yy;
         acnt++;
@@ -278,6 +286,10 @@ char *upmask,*vpmask,*cpmask;
         }
         xxsv = xx; yysv = yy;
       }
+      ii1 = (gaint)(xstrt*rscl);
+      ij1 = (gaint)(ystrt*rscl);
+      ii1 = ij1*iss + ii1;
+      if (ii1>=0 || ii1<siz) *(it+ii1) = 1;
     }
     i2++;
     if (i2==iss) { i2 = 0; j2++; }
@@ -285,7 +297,7 @@ char *upmask,*vpmask,*cpmask;
   free (it);
 }
 
-static gadouble a150 = 150.0*3.1416/180.0;
+static gadouble a150 = 150.0*M_PI/180;
 
 void strmar (gadouble xx1, gadouble yy1, gadouble xx2, gadouble yy2, gadouble sz, gaint type) {
 gadouble dir,xy[8];

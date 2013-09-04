@@ -1225,6 +1225,7 @@ gaint gaddes (char *name, struct gafile *pfi, gaint mflag) {
         pvar->isu = 0;
         pvar->isdvar = 0;
         pvar->nvardims = 0;
+        pvar->g2aflg = 0;
 #if USEHDF5==1
         pvar->h5varflg=-999;
         pvar->dataspace=-999;
@@ -1280,8 +1281,8 @@ gaint gaddes (char *name, struct gafile *pfi, gaint mflag) {
 
         /* parse the levels fields */
         if ( (ch=nxtwrd(rec))==NULL) goto err6;
+        for (j=0;j<48;j++) pvar->units[j] = -999;
         /* begin with 8th element of units aray for levels values */
-        for (j=0;j<16;j++) pvar->units[j] = -999;
         j = 8;
         while (1) {
           if (j==8) {
@@ -1302,6 +1303,25 @@ gaint gaddes (char *name, struct gafile *pfi, gaint mflag) {
           if (*ch=='\0' || *ch=='\n') goto err6;
           j++;
           if (j>15) goto err6;
+        }
+
+        /* check if this is an extra block of "additional" grib2 codes  */
+        if (*ch=='a') {
+          pvar->g2aflg = 1;
+          /* parse the additional codes; begin with 16th element of pvar->units */
+          j=16;
+          ch++;
+          while (1) {
+            if ((ch=getdbl(ch,&(pvar->units[j])))==NULL) goto err6;
+            while (*ch==' ') ch++;
+            if (*ch=='\0' || *ch=='\n') goto err6;
+            if (*ch!=',') break;
+            ch++;
+            while (*ch==' ') ch++;
+            if (*ch=='\0' || *ch=='\n') goto err6;
+            j++;
+            if (j>47) goto err6;
+          }
         }
 
         /* parse the units fields; begin with 0th element for variable units */
@@ -1332,7 +1352,7 @@ gaint gaddes (char *name, struct gafile *pfi, gaint mflag) {
         }
 
         /* parse the variable description */
-        getstr (pvar->varnm,mrec+(ch-rec),127);
+        getstr (pvar->varnm,mrec+(ch-rec),140);
 
         /* var_t is for data files with dimension sequence: X, Y, Z, T, V */
         if ((pvar->units[0]==-1) &&
@@ -3212,7 +3232,7 @@ size_t sz;
        three constants at each lat-lon grid point: offset
        of the ij gridpoint, and the delta x and delta y values. */
 
-    pi = acos(-1.0);
+    pi = M_PI;
     ioff = pfi->ppi[0];
     dx = (gadouble*)pfi->ppf[0];
     dy = (gadouble*)pfi->ppf[1];
@@ -3346,7 +3366,7 @@ C   LANGUAGE: SUN FORTRAN 1.4
 C   MACHINE:  SUN SPARCSTATION 1+
 C*/
 
-static gadouble d2r = 3.14159/180.0;
+static gadouble d2r = M_PI/180.0;
 static gadouble earthr = 6371.2;
 
 gadouble re,xlat,wlong,r;
@@ -3433,7 +3453,7 @@ c
   gadouble alnfix,alon,x,y,windrot;
   gadouble latref,lonref,iref,jref,stdlt1,stdlt2,stdlon,delx,dely;
 
-  pi = 4.0*atan(1.0);
+  pi = M_PI;
   pi2 = pi/2.0;
   pi4 = pi/4.0;
   d2r = pi/180.0;
@@ -3533,14 +3553,13 @@ c            grdj:   j-coordinate(s) that this routine will generate
 c                    information for
 */
 
-  gadouble pi,d2r,r2d, earthr;
+  gadouble d2r,r2d, earthr;
   gadouble tlm0d,tph0d,dlam,dphi;
   gadouble phi,lam,lam0,phi0;
   gadouble x,y,z,xx,bigphi,biglam;
   gadouble dlmd,dphd,wbd,sbd;
 
-  pi = 3.141592654;
-  d2r = pi/180.0;
+  d2r = M_PI/180.0;
   r2d = 1.0/d2r;
   earthr = 6371.2;
 
@@ -3590,7 +3609,7 @@ void ll2pse (gaint im, gaint jm, gadouble *vals, gadouble lon, gadouble lat,
 
   const gadouble rearth = 6378.273e3;
   const gadouble eccen2 = 0.006693883;
-  const gadouble pi = 3.141592654;
+  const gadouble pi = M_PI;
 
   gadouble cdr, alat, along, e, e2;
   gadouble t, x, y, rho, sl, tc, mc;
@@ -3830,7 +3849,7 @@ c     constants and functions
 void ll2rotll( gadouble *vals, gadouble grdlat, gadouble grdlon,
                         gadouble *grdi, gadouble *grdj,  gadouble *wrot ) {
 
-  const gadouble pi = 4.0*atan( 1.0 );
+  const gadouble pi = M_PI;
   gadouble lon_pole;      /* longitude of the pole in radiants */
   gadouble lat_pole;      /* latitude of the pole in radiants */
   gadouble dlon;          /* longitude increment in radiants */

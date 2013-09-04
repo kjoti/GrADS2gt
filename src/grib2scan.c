@@ -49,7 +49,8 @@ struct gag2 {
   gaint comptype;                     /* Compression type (for JPEG2000 compression) */
   gaint bmsflg;                       /* Bit Map Section flag */
 };
-gaint verb=0;
+gaint verb=0,ctl=1;
+char levs[100],units[100],extra[100];
 
 /* Function Declarations */
 gaint gagby (unsigned char *, gaint, gaint);
@@ -58,8 +59,6 @@ gaint sect1 (unsigned char *, struct gag2 *);
 gaint sect3 (unsigned char *, struct gag2 *);
 gaint sect4 (unsigned char *, struct gag2 *);
 gaint sect5 (unsigned char *, struct gag2 *);
-gaint sect4stp (unsigned char *, struct gag2 *, gaint, gaint);
-gaint sect4spp (unsigned char *, struct gag2 *, gaint, gaint *);
 void CodeTable0p0  (gaint);
 void CodeTable1p2  (gaint);
 void CodeTable3p1  (gaint);
@@ -92,7 +91,11 @@ gaint main (gaint argc, char *argv[]) {
      ch = argv[iarg];
      if (*(ch)=='-' && *(ch+1)=='v') {
        verb=1;
-     } else {
+     }
+     else if (*(ch)=='-' && *(ch+1)=='V') {
+       verb=2;
+     }
+     else {
        gfile = fopen(ch,"rb");
        if (gfile==NULL) {
          printf ("Could not open input file %s\n",ch);
@@ -105,6 +108,7 @@ gaint main (gaint argc, char *argv[]) {
  }
  if (!flg) {
    printf ("Usage: grib2scan [-v] filename\n");
+   printf ("       Use -v for verbose output \n");
    return (1);
  }
 
@@ -118,8 +122,9 @@ gaint main (gaint argc, char *argv[]) {
    while (1) {
      rc = fseeko(gfile,fpos,SEEK_SET);
      rc = fread(work,1,260,gfile);
-     if (rc<260) {
-       printf ("EOF\n");
+/*      if (rc<260) { */
+     if (rc==0) {
+       printf ("EOF rc=%d\n",rc);
        return(0);
      }
      for (i=0; i<257; i++) {
@@ -164,7 +169,7 @@ gaint main (gaint argc, char *argv[]) {
    if (verb) printf("starts at %i of length %i \n",i,rlen);
    else printf("\n");
    if (verb) {
-     printf ("  Discipline=%d ",g2.discipline);
+     printf (" Discipline=%d ",g2.discipline);
      CodeTable0p0(g2.discipline);
      printf ("\n");
    }
@@ -270,11 +275,14 @@ gaint main (gaint argc, char *argv[]) {
                        s1len, s2len, s3len, s4len, s5len, s6len, s7len);
      roff += s7len;
 
+     if (ctl) printf(" ctl:  var%d.%d   0,%s  %s  %s   description\n",recnum,field,levs,extra,units);
+
      /* Section 8, the End Section */
      s8 = rec+roff;
      if (*s8=='7' && *(s8+1)=='7' && *(s8+2)=='7' && *(s8+3)=='7') {
        break;
      }
+
 
      /* If it wasn't the End, look for another field */
      field++;
@@ -296,7 +304,7 @@ gaint sect1 (unsigned char *s1, struct gag2 *pg2) {
   pg2->hr  = gagby(s1,16,1);
   pg2->mn  = gagby(s1,17,1);
   pg2->sc  = gagby(s1,18,1);
-  printf ("  Reference Time = %4i-%02i-%02i %02i:%02i:%02i  ",
+  printf (" Reference Time = %4i-%02i-%02i %02i:%02i:%02i  ",
           pg2->yr,pg2->mo,pg2->dy,pg2->hr,pg2->mn,pg2->sc);
   CodeTable1p2(pg2->sig);
   printf("\n");
@@ -384,109 +392,179 @@ gaint sect3 (unsigned char *s3, struct gag2 *pg2) {
 
 /* Look at contents of Section 4 */
 gaint sect4 (unsigned char *s4, struct gag2 *pg2) {
-  struct dt reft,fcst,begt;
+  struct dt reft,fcst,begt,endt;
   gaint enstotal,sp,sp2,gotfcst;
-  gaint fpnum,fptot,fptyp,llsf,llval,ulsf,ulval;
+  gaint ptyp,llsf,llval,ulsf,ulval,llval2,i;
   gadouble ll=0,ul=0;
   gadouble lev1=0,lev2=0;
+  gaint var1,var2,var3,var4,var5,numtr,pos1,pos2;
+  gaint off,atyp,styp,s1sf,s1sval,s2sf,s2sval,wtyp,w1sf,w1sval,w2sf,w2sval;
+  gadouble s1,s2,w1,w2;
 
   pg2->pdt      = gagby(s4, 7,2);
   pg2->parcat   = gagby(s4, 9,1);
   pg2->parnum   = gagby(s4,10,1);
-  pg2->trui     = gagby(s4,17,1);
-  pg2->ftime    = gagby(s4,18,4);
-  pg2->lev1type = gagby(s4,22,1);
-  pg2->lev1sf   = gagby(s4,23,1);
-  pg2->lev1     = gagby(s4,24,4);
-  pg2->lev2type = gagby(s4,28,1);
-  pg2->lev2sf   = gagby(s4,29,1);
-  pg2->lev2     = gagby(s4,30,4);
-  /* get the statistical process when values are not instantaneous, but span a time interval */
-  sp = sp2 = -999;
-  if      (pg2->pdt ==  8) sp = sect4stp (s4, pg2, 34, 46);
-  else if (pg2->pdt ==  9) sp = sect4stp (s4, pg2, 47, 59);
-  else if (pg2->pdt == 10) sp = sect4stp (s4, pg2, 35, 47);
-  else if (pg2->pdt == 11) sp = sect4stp (s4, pg2, 37, 49);
-  else if (pg2->pdt == 12) sp = sect4stp (s4, pg2, 36, 48);
-  /* get the statistical process and type of spatial processing */
-  else if (pg2->pdt == 15) sp = sect4spp (s4, pg2, 34, &sp2);
+  /* PDT 48 has 24 unique octets inserted after octet 11 instead of starting at octet 35 */
+  if (pg2->pdt==48) off=24;
+  else off=0;
+  pg2->trui     = gagby(s4,17+off,1);
+  pg2->ftime    = gagby(s4,18+off,4);
+  pg2->lev1type = gagby(s4,22+off,1);
+  pg2->lev1sf   = gagby(s4,23+off,1);
+  /* check for a negative level value */
+  pg2->lev1 = gagbb(s4,(24+off)*8+1,31);
+  i = gagbb(s4,(24+off)*8,1);
+  if (i) pg2->lev1 = -1.0*pg2->lev1;
+  pg2->lev2type = gagby(s4,28+off,1);
+  pg2->lev2sf   = gagby(s4,29+off,1);
+  /* check for a negative level value */
+  pg2->lev2 = gagbb(s4,(30+off)*8+1,31);
+  i = gagbb(s4,(30+off)*8,1);
+  if (i) pg2->lev2 = -1.0*pg2->lev2;
 
-  if (sp==-999) {
-    printf ("  PDT=%i,  %d ",pg2->pdt,pg2->ftime);
-    CodeTable4p4(pg2->trui);
-    printf ("Forecast");
-
-    reft.yr = pg2->yr;
-    reft.mo = pg2->mo;
-    reft.dy = pg2->dy;
-    reft.hr = pg2->hr;
-    reft.mn = pg2->mn;
-    fcst.yr = fcst.mo = fcst.dy = fcst.hr = fcst.mn = 0;  /* initialize forecast time structure */
-    gotfcst=0;
-    if      (pg2->trui== 0) fcst.mn = pg2->ftime;
-    else if (pg2->trui== 1) fcst.hr = pg2->ftime;
-    else if (pg2->trui== 2) fcst.dy = pg2->ftime;
-    else if (pg2->trui== 3) fcst.mo = pg2->ftime;
-    else if (pg2->trui== 4) fcst.yr = pg2->ftime;
-    else if (pg2->trui==10) fcst.hr = pg2->ftime*3;   /* 3Hr incr */
-    else if (pg2->trui==11) fcst.hr = pg2->ftime*6;   /* 6Hr incr */
-    else if (pg2->trui==12) fcst.hr = pg2->ftime*12;  /* 2Hr incr */
-    else gotfcst=-99;
-    if (gotfcst==-99) {
-      /* unable to get forecast time, so use reference time as valid time */
-      begt = reft;
-    }
-    else {
-      /* add reference time and forecast time together to get valid time */
-      timadd(&reft,&fcst);
-      begt = fcst;
-      printf(",  Valid Time = %4i-%02i-%02i %02i:%02i  ",begt.yr,begt.mo,begt.dy,begt.hr,begt.mn);
-    }
-    printf ("\n");
-    printf ("   Parameter: disc,cat,num = %d,%d,%d\n",
-            pg2->discipline,pg2->parcat,pg2->parnum);
+  /* get the reference time */
+  reft.yr = pg2->yr;
+  reft.mo = pg2->mo;
+  reft.dy = pg2->dy;
+  reft.hr = pg2->hr;
+  reft.mn = pg2->mn;
+  /* initialize forecast time structure */
+  fcst.yr = fcst.mo = fcst.dy = fcst.hr = fcst.mn = 0;
+  gotfcst=0;
+  if      (pg2->trui== 0) {fcst.mn = pg2->ftime; gotfcst=1;}
+  else if (pg2->trui== 1) {fcst.hr = pg2->ftime; gotfcst=1;}
+  else if (pg2->trui== 2) {fcst.dy = pg2->ftime; gotfcst=1;}
+  else if (pg2->trui== 3) {fcst.mo = pg2->ftime; gotfcst=1;}
+  else if (pg2->trui== 4) {fcst.yr = pg2->ftime; gotfcst=1;}
+  else if (pg2->trui==10) {fcst.hr = pg2->ftime*3; gotfcst=1;}   /* 3Hr incr */
+  else if (pg2->trui==11) {fcst.hr = pg2->ftime*6; gotfcst=1;}   /* 6Hr incr */
+  else if (pg2->trui==12) {fcst.hr = pg2->ftime*12; gotfcst=1;}  /* 2Hr incr */
+  if (gotfcst) {
+    /* add reference time and forecast time together */
+    timadd(&reft,&fcst);
   }
-  else if (sp==255) {
-    printf ("   Parameter: disc,cat,num = %d,%d,%d\n",
-            pg2->discipline,pg2->parcat,pg2->parnum);
+
+  sp = -1;
+  sp2 = -1;
+  printf("  PDT=%d",pg2->pdt);
+  /* instantaneous fields */
+  if (pg2->pdt<=7 || pg2->pdt==15 || pg2->pdt==48) {
+    if (pg2->pdt<=7|| pg2->pdt==48) {
+      printf ("  %d ",pg2->ftime);
+      CodeTable4p4(pg2->trui);
+      printf ("Forecast");
+    }
+    else if (pg2->pdt==15) {
+      /* for PDT 4.15, get info about the type of spatial and statistical processing used */
+      /* pos2 is the location of octet for statistical process code (sp), subsequent octet is for spatial process */
+      pos2=34;
+      sp  = gagby(s4,pos2+0,1);
+      sp2 = gagby(s4,pos2+1,1);
+      printf("  Spatial ");
+      CodeTable4p10(sp);
+      printf(", ");
+      CodeTable4p15(sp2);
+    }
+    printf("  Valid Time = %4i-%02i-%02i %02i:%02i  ",fcst.yr,fcst.mo,fcst.dy,fcst.hr,fcst.mn);
+  }
+  /* fields spanning a time interval */
+  else if (pg2->pdt>=8 && pg2->pdt<=12) {
+    /* get the beg/end times and statistical process  */
+    /* pos1 is location of octets describing end of overall time period */
+    /* pos2 is the location of octet for statistical process code (sp) */
+    if      (pg2->pdt ==  8) {pos1=34; pos2=46;}
+    else if (pg2->pdt ==  9) {pos1=47; pos2=59;}
+    else if (pg2->pdt == 10) {pos1=35; pos2=47;}
+    else if (pg2->pdt == 11) {pos1=37; pos2=49;}
+    else if (pg2->pdt == 12) {pos1=36; pos2=48;}
+
+    /* get the ending time of the overall averaging period */
+    endt.yr = gagby(s4,pos1+0,2);
+    endt.mo = gagby(s4,pos1+2,1);
+    endt.dy = gagby(s4,pos1+3,1);
+    endt.hr = gagby(s4,pos1+4,1);
+    endt.mn = gagby(s4,pos1+5,1);
+
+    /* get info about statistical processing */
+    sp   = gagby(s4,pos2+0,1);
+    var1 = gagby(s4,pos2+1,1);
+    var2 = gagby(s4,pos2+2,1);
+    var3 = gagby(s4,pos2+3,4);
+    var4 = gagby(s4,pos2+7,1);
+    var5 = gagby(s4,pos2+8,4);
+
+    /* get number of time specifications */
+    numtr = gagby(s4,pos1+7,1);
+    if (numtr) {
+      if (var5==0) {   /* continuous statistical processing function */
+        printf("  %d ",var3);
+        CodeTable4p4(var2);
+        if (sp==255)
+          printf("Interval");
+        else
+          CodeTable4p10(sp);
+        printf("  BegTime = %4i-%02i-%02i %02i:%02i",fcst.yr,fcst.mo,fcst.dy,fcst.hr,fcst.mn);
+        printf("  EndTime = %4i-%02i-%02i %02i:%02i",endt.yr,endt.mo,endt.dy,endt.hr,endt.mn);
+      }
+    }
+  }
+  printf(" \n");
+
+  /* Print the grib codes that should be included in the descriptor file entry */
+  if (sp<0 || sp==255) {
+    printf ("   Parameter: disc,cat,num = %d,%d,%d\n",pg2->discipline,pg2->parcat,pg2->parnum);
+    if (ctl) sprintf (units,"%d,%d,%d",pg2->discipline,pg2->parcat,pg2->parnum);
   }
   else {
-    if (sp2==-999)
-      printf ("   Parameter: disc,cat,num,sp = %d,%d,%d,%d\n",
-              pg2->discipline,pg2->parcat,pg2->parnum,sp);
-    else
-      printf ("   Parameter: disc,cat,num,sp,sp2 = %d,%d,%d,%d,%d\n",
-              pg2->discipline,pg2->parcat,pg2->parnum,sp,sp2);
+    if (sp2<0) {
+      printf ("   Parameter: disc,cat,num,sp = %d,%d,%d,%d\n",pg2->discipline,pg2->parcat,pg2->parnum,sp);
+      if (ctl) sprintf (units,"%d,%d,%d,%d",pg2->discipline,pg2->parcat,pg2->parnum,sp);
+    }
+    else {
+      printf ("   Parameter: disc,cat,num,sp,sp2 = %d,%d,%d,%d,%d\n",pg2->discipline,pg2->parcat,pg2->parnum,sp,sp2);
+      if (ctl) sprintf (units,"%d,%d,%d,%d,%d",pg2->discipline,pg2->parcat,pg2->parnum,sp,sp2);
+    }
   }
-  if (pg2->lev1 != -1) lev1 = scaled2dbl(pg2->lev1sf,pg2->lev1);
 
+  /* Get level information */
+  if (pg2->lev1 != -1) lev1 = scaled2dbl(pg2->lev1sf,pg2->lev1);
   if (pg2->lev2type != 255) {  /* we have two level types */
     if (pg2->lev2 != -1) {
       lev2 = scaled2dbl(pg2->lev2sf,pg2->lev2);
-      if (pg2->lev2type == pg2->lev1type)
-        printf ("   Levels: ltype,lval,lval2 = %d,%g,%g ",pg2->lev1type, lev1,lev2);
-      else
-        printf ("   Levels: ltype,lval,lval2,ltype2 = %d,%g,%g,%d ",
-                pg2->lev1type, lev1,lev2,pg2->lev2type);
+      if (pg2->lev2type == pg2->lev1type) {
+        printf ("   Levels: ltype,lval,lval2 = %d,%g,%g ",pg2->lev1type,lev1,lev2);
+        if (ctl) sprintf (levs,"%d,%g,%g",pg2->lev1type,lev1,lev2);
+      }
+      else {
+        printf ("   Levels: ltype,lval,lval2,ltype2 = %d,%g,%g,%d ",pg2->lev1type,lev1,lev2,pg2->lev2type);
+        if (ctl) sprintf (levs,"%d,%g,%g,%d",pg2->lev1type,lev1,lev2,pg2->lev2type);
+      }
       if (verb)
         printf("  (sf1,sval1,sf2,sval2 = %d %d %d %d) \n",pg2->lev1sf,pg2->lev1,pg2->lev2sf,pg2->lev2);
       else printf ("\n");
     }
     else {  /* level values are missing */
-      if (pg2->lev2type == pg2->lev1type)
+      if (pg2->lev2type == pg2->lev1type) {
         printf ("   Levels: ltype = %d \n",pg2->lev1type);
-      else
+        if (ctl) sprintf (levs,"%d",pg2->lev1type);
+      }
+      else {
         printf ("   Levels: ltype,,,ltype2 = %d,,,%d \n",pg2->lev1type,pg2->lev2type);
+        if (ctl) sprintf (levs,"%d,,,%d",pg2->lev1type,pg2->lev2type);
+      }
     }
   }
   else {    /* only one level type */
     if (pg2->lev1 != -1) {
       printf ("   Level: ltype,lval = %d,%g ",pg2->lev1type,lev1);
-      if (verb) printf("  (sf,sval = %d %d) \n",pg2->lev1sf,pg2->lev1);
-      else printf ("\n");
+      if (ctl) sprintf (levs,"%d,%g",pg2->lev1type,lev1);
+      if (verb) printf("  (sf,sval = %d %d)",pg2->lev1sf,pg2->lev1);
+      printf ("\n");
     }
-    else
+    else {
       printf ("   Level: ltype = %d \n",pg2->lev1type);  /* level value is missing */
+      if (ctl) sprintf (levs,"%d",pg2->lev1type);
+    }
   }
 
   /* Ensemble Metadata */
@@ -507,108 +585,131 @@ gaint sect4 (unsigned char *s4, struct gag2 *pg2) {
       printf("\n");
     }
   }
+
   /* Probability Forecasts */
-  if (pg2->pdt==9) {
-    fpnum = gagby(s4,34,1);
-    fptot = gagby(s4,35,1);
-    fptyp = gagby(s4,36,1);
+  /* The value of octet 35 (Forecast Probability Number) is not used by NCEP */
+  /* The value of octet 36 (Total Number of Forecast Probabilities) is the ensemble size */
+  /* We don't need to look at either of these octets */
+  if (pg2->pdt==9 || pg2->pdt==5) {
+    ptyp  = gagby(s4,36,1);
     llsf  = gagby(s4,37,1);
-    llval = gagby(s4,38,4);
+    /* check for a negative lower limit value */
+    llval = gagbb(s4,38*8+1,31);
+    i = gagbb(s4,38*8,1);
+    if (i) llval = -1.0*llval;
     ulsf  = gagby(s4,42,1);
-    ulval = gagby(s4,43,4);
+    /* check for a negative upper limit value */
+    ulval = gagbb(s4,43*8+1,31);
+    i = gagbb(s4,43*8,1);
+    if (i) ulval = -1.0*ulval;
     ll = scaled2dbl(llsf,llval);
     ul = scaled2dbl(ulsf,ulval);
-    printf("   Forecast Probability Number %d out of %d  Type = %d\n",fpnum,fptot,fptyp);
-    printf("   Lower and Upper Limits: %g %g\n",ll,ul);
+    if (ptyp<=4) {
+      if (ptyp==2) {
+        printf ("   Prob: type,llim,ulim = %d,%g,%g",ptyp,ll,ul);
+        if (ctl) sprintf (extra,"a%d,%g,%g",ptyp,ll,ul);
+      }
+      else if (ptyp==0 || ptyp==3) {
+        printf ("   Prob: type,lim = %d,%g",ptyp,ll);
+        if (ctl) sprintf (extra,"a%d,%g",ptyp,ll);
+      }
+      else {
+        printf ("   Prob: type,lim = %d,%g",ptyp,ul);
+        if (ctl) sprintf (extra,"a%d,%g",ptyp,ul);
+      }
+    }
+    else if (ptyp==255) printf ("   Probability Type is missing");
+    else printf ("   Probability Type = %d",ptyp);
+
+    /* decoding code table 4p9 */
+    if (verb) {
+      if      (ptyp==0) printf ("  (Probability of event below %g)",ll);
+      else if (ptyp==1) printf ("  (Probability of event above %g)",ul);
+      else if (ptyp==2) printf ("  (Probability of event between %g and %g)",ll,ul);
+      else if (ptyp==3) printf ("  (Probability of event above %g)",ll);
+      else if (ptyp==4) printf ("  (Probability of event below %g)",ul);
+    }
+    if (verb>1) printf ("   (llsf,llval=%d,%d  ulsf,ulval=%d,%d)",llsf,llval,ulsf,ulval);
+    printf("\n");
+  }
+
+  /* Optical Properties of Aerosols */
+  if (pg2->pdt==48) {
+    atyp   = gagby(s4,11,2);
+    styp   = gagby(s4,13,1);
+    s1sf   = gagby(s4,14,1);
+    s1sval = gagby(s4,15,4);
+    s2sf   = gagby(s4,19,1);
+    s2sval = gagby(s4,20,4);
+    wtyp   = gagby(s4,24,1);
+    w1sf   = gagby(s4,25,1);
+    w1sval = gagby(s4,26,4);
+    w2sf   = gagby(s4,30,1);
+    w2sval = gagby(s4,31,4);
+    s1 = scaled2dbl(s1sf,s1sval);
+    s2 = scaled2dbl(s2sf,s2sval);
+    w1 = scaled2dbl(w1sf,w1sval);
+    w2 = scaled2dbl(w2sf,w2sval);
+    if (atyp!=65535) {
+      if (styp!=255) {
+        if (wtyp!=255) {
+          printf ("   Aerosol: atyp,styp,s1,s2,wtyp,w1,w1 = %d,%d,%g,%g,%d,%g,%g",atyp,styp,s1,s2,wtyp,w1,w2);
+          if (ctl) sprintf (extra,"a%d,%d,%g,%g,%d,%g,%g",atyp,styp,s1,s2,wtyp,w1,w2);
+        }
+        else {
+          printf ("   Aerosol: atyp,styp,s1,s2 = %d,%d,%g,%g",atyp,styp,s1,s2);
+          if (ctl) sprintf (extra,"a%d,%d,%g,%g",atyp,styp,s1,s2);
+        }
+      }
+      else {
+        if (wtyp!=255) {
+          printf ("   Aerosol: atyp,wtyp,w1,w1 = %d,%d,%g,%g",atyp,wtyp,w1,w2);
+          if (ctl) sprintf (extra,"a%d,%d,%g,%g",atyp,wtyp,w1,w2);
+        }
+        else {
+          printf ("   Aerosol: atyp = %d",atyp);
+          if (ctl) sprintf (extra,"a%d",atyp);
+        }
+      }
+    }
+    if (verb) {
+      if (styp<=11) {
+        /* code table 4p91 */
+        if      (styp==0)  printf("  (size is < %g)",s1);
+        else if (styp==1)  printf("  (size is > %g)",s2);
+        else if (styp==2)  printf("  (size is >= %g and < %g)",s1,s2);
+        else if (styp==3)  printf("  (size is > %g)",s1);
+        else if (styp==4)  printf("  (size is < %g)",s2);
+        else if (styp==5)  printf("  (size is <= %g)",s1);
+        else if (styp==6)  printf("  (size is >= %g)",s2);
+        else if (styp==7)  printf("  (size is >= %g and <= %g)",s1,s2);
+        else if (styp==8)  printf("  (size is >= %g)",s1);
+        else if (styp==9)  printf("  (size is <= %g)",s2);
+        else if (styp==10) printf("  (size is > %g and <= %g)",s1,s2);
+        else if (styp==11) printf("  (size is = %g)",s1);
+      }
+      if (wtyp<=11) {
+        /* code table 4p91 */
+        if      (wtyp==0)  printf("  (wavelength is < %g)",w1);
+        else if (wtyp==1)  printf("  (wavelength is > %g)",w2);
+        else if (wtyp==2)  printf("  (wavelength is >= %g and < %g)",w1,w2);
+        else if (wtyp==3)  printf("  (wavelength is > %g)",w1);
+        else if (wtyp==4)  printf("  (wavelength is < %g)",w2);
+        else if (wtyp==5)  printf("  (wavelength is <= %g)",w1);
+        else if (wtyp==6)  printf("  (wavelength is >= %g)",w2);
+        else if (wtyp==7)  printf("  (wavelength is >= %g and <= %g)",w1,w2);
+        else if (wtyp==8)  printf("  (wavelength is >= %g)",w1);
+        else if (wtyp==9)  printf("  (wavelength is <= %g)",w2);
+        else if (wtyp==10) printf("  (wavelength is > %g and <= %g)",w1,w2);
+        else if (wtyp==11) printf("  (wavelength is = %g)",w1);
+      }
+      if (verb>1) printf("\n            (size: sf1,val1=%d,%d  sf2,val2=%d,%d)",s1sf,s1sval,s2sf,s2sval);
+      if (verb>1) printf("  (wavelength: sf1,val1=%d,%d  sf2,val2=%d,%d)",w1sf,w1sval,w2sf,w2sval);
+    }
+    printf(" \n");
   }
   return(0);
 }
-
-/* get info about statistical processing done over time intervals in section 4 */
-/* pos1 is location of octets end of overal time interval ,
-   pos2 is location of octet for spatial processing code */
-gaint sect4stp (unsigned char *s4, struct gag2 *pg2, gaint pos1, gaint pos2) {
-struct dt reft,fcst,begt;
-gaint endyr,endmo,enddy,endhr,endmn,gotfcst;
-gaint var1,var2,var3,var4,var5,numtr,sp;
-  sp=-999;
-  /* get the ending time of the overall averaging period */
-  endyr = gagby(s4,pos1+0,2);
-  endmo = gagby(s4,pos1+2,1);
-  enddy = gagby(s4,pos1+3,1);
-  endhr = gagby(s4,pos1+4,1);
-  endmn = gagby(s4,pos1+5,1);
-
-  /* get the beginning time of the overall averaging period */
-  reft.yr = pg2->yr;
-  reft.mo = pg2->mo;
-  reft.dy = pg2->dy;
-  reft.hr = pg2->hr;
-  reft.mn = pg2->mn;
-
-  fcst.yr = fcst.mo = fcst.dy = fcst.hr = fcst.mn = 0;  /* initialize forecast time structure */
-  gotfcst=0;
-  if      (pg2->trui== 0) fcst.mn = pg2->ftime;
-  else if (pg2->trui== 1) fcst.hr = pg2->ftime;
-  else if (pg2->trui== 2) fcst.dy = pg2->ftime;
-  else if (pg2->trui== 3) fcst.mo = pg2->ftime;
-  else if (pg2->trui== 4) fcst.yr = pg2->ftime;
-  else if (pg2->trui==10) fcst.hr = pg2->ftime*3;   /* 3Hr incr */
-  else if (pg2->trui==11) fcst.hr = pg2->ftime*6;   /* 6Hr incr */
-  else if (pg2->trui==12) fcst.hr = pg2->ftime*12;  /* 2Hr incr */
-  else gotfcst=-99;
-  if (gotfcst==-99) {
-    /* unable to get forecast time, so use reference time as valid time */
-    begt = reft;
-  }
-  else {
-    /* add reference time and forecast time together to get beginnin of overall time interval */
-    timadd(&reft,&fcst);
-    begt = fcst;
-  }
-
-  numtr = gagby(s4,41,1);       /* number of time specifications */
-  if (numtr) {
-    sp   = gagby(s4,pos2+0,1);
-    var1 = gagby(s4,pos2+1,1);
-    var2 = gagby(s4,pos2+2,1);
-    var3 = gagby(s4,pos2+3,4);
-    var4 = gagby(s4,pos2+7,1);
-    var5 = gagby(s4,pos2+8,4);
-    if (var5==0) {   /* continuous statistical processing function */
-      printf("  PDT=%d ",pg2->pdt);
-      if (sp<=255) {
-        printf("(%d ",var3);
-        CodeTable4p4(var2);
-        CodeTable4p10(sp);
-        printf(") ");
-      }
-      printf("BegTime = %4i-%02i-%02i %02i:%02i  ",begt.yr,begt.mo,begt.dy,begt.hr,begt.mn);
-      printf("EndTime = %4i-%02i-%02i %02i:%02i \n",endyr,endmo,enddy,endhr,endmn);
-    }
-  }
-  return (sp);
-}
-
-/* get info about statistical processing done over spatial area in section 4
-   so far this is only for PDT 4.15.
-   pos1 is location of octet for statistical process code (sp),
-   the subsequent octet is for the spatial process (sp2).
-*/
-gaint sect4spp (unsigned char *s4, struct gag2 *pg2, gaint pos1, gaint *pp2) {
-gaint sp1,sp2;
-  sp1 = sp2 = -999;
-  sp1 = gagby(s4,pos1+0,1);
-  sp2 = gagby(s4,pos1+1,1);
-  printf("  PDT=%d Spatial ",pg2->pdt);
-  if (sp1<=255) CodeTable4p10(sp1);
-  printf(", ");
-  if (sp2<=255) CodeTable4p15(sp2);
-  printf(" \n");
-  *pp2 = sp2;
-  return (sp1);
-}
-
 
 /* Look at contents of Section 5 */
 gaint sect5 (unsigned char *s5, struct gag2 *pg2) {
@@ -645,10 +746,10 @@ void CodeTable0p0 (gaint i) {
 }
 /* Significance of Reference Time */
 void CodeTable1p2 (gaint i) {
-  if      (i==0) printf ("Analysis");
-  else if (i==1) printf ("Start of Forecast");
-  else if (i==2) printf ("Verifying Time of Forecast");
-  else if (i==3) printf ("Observation Time");
+  if      (i==0) printf ("(Analysis)");
+  else if (i==1) printf ("(Start of Forecast)");
+  else if (i==2) printf ("(Verifying Time of Forecast)");
+  else if (i==3) printf ("(Observation Time)");
 }
 /* Grid Definition Template Number */
 void CodeTable3p1 (gaint i) {
@@ -710,7 +811,6 @@ void CodeTable4p10 (gaint i) {
   else if (i==7)  printf ("Covariance");
   else if (i==8)  printf ("Diff(beg-end)");
   else if (i==9)  printf ("Ratio");
-  else            printf ("sp=%d",i);
 }
 /* Type of Spatial Processing */
 void CodeTable4p15 (gaint i) {

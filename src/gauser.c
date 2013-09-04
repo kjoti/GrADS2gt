@@ -1226,7 +1226,7 @@ char shparg[4096];
     gxchln (cmd,len,pcm->strhsz,&swide);
     shite = pcm->strvsz;
 
-    ang = pcm->strrot*3.1416/180.0;
+    ang = pcm->strrot*M_PI/180;
     x = x - justx[pcm->strjst] * swide * cos(ang);
     y = y - justx[pcm->strjst] * swide * sin(ang);
     x = x - justy[pcm->strjst] * shite * cos(ang+1.5708);
@@ -2667,6 +2667,7 @@ struct dt tdef, tdefi;
 char *tfile, *tfile2;
 gaint ncid=0, rc, error, n_atts, n_gatts;
 gaint sdid=0;
+char dimname[256];
 #endif
 #if USEHDF5 == 1
 gaint h5id=-999;
@@ -4191,20 +4192,13 @@ gadouble minvals[4], maxvals[4];
 #endif
     }
 
-
     /* Print netcdf coordinate attributes */
 #if USENETCDF == 1
     if (pfi->ncflg == 1) {
-      n_atts = ncpattrs(pfi->ncid, "lon", "lon", hdrflg, fnum, pfi->title);
-      if (hdrflg && n_atts>0) hdrflg=0;
-      n_atts = ncpattrs(pfi->ncid, "lat", "lat", hdrflg, fnum, pfi->title);
-      if (hdrflg && n_atts>0) hdrflg=0;
-      n_atts = ncpattrs(pfi->ncid, "lev", "lev", hdrflg, fnum, pfi->title);
-      if (hdrflg && n_atts>0) hdrflg=0;
-      n_atts = ncpattrs(pfi->ncid, "time", "time", hdrflg, fnum, pfi->title);
-      if (hdrflg && n_atts>0) hdrflg=0;
-      n_atts = ncpattrs(pfi->ncid, "ens", "ens", hdrflg, fnum, pfi->title);
-      if (hdrflg && n_atts>0) hdrflg=0;
+      for (i=0;i<pfi->nsdfdims;i++) {
+        n_atts = ncpattrs(pfi->ncid, pfi->sdfdimnam[i], pfi->sdfdimnam[i], hdrflg, fnum, pfi->title);
+        if (hdrflg && n_atts>0) hdrflg=0;
+      }
     }
 #endif
     /* Print Variable attributes for dtype netcdf and dtype hdf. */
@@ -7080,7 +7074,6 @@ gaint rc;
       gaprnt (1," Updated documentation is at http://iges.org/grads/gadoc/pdef.html\n");
     }
   }
-
   return (0);
 }
 

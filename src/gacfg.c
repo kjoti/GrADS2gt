@@ -217,8 +217,10 @@ snprintf(cmd,255,"Config: v%s",GRADS_VERSION);
    Hgetlibversion(&majorv,&minorv,&release,hdfverstr);
    snprintf(cmd,255,   "      HDF %d.%dr%d \n",majorv,minorv,release);
    gaprnt(verbose,cmd);
+   gaprnt(verbose,"  o HDF5 interface DISABLED \n");
 #else
    /* we've only got hdf5 */
+   gaprnt(verbose,"  o HDF4 interface DISABLED \n");
    gaprnt(verbose,"  o HDF5 interface ENABLED \n");
    gaprnt(verbose,"      http://hdfgroup.org \n");
    H5get_libversion(&vmajor,&vminor,&vrelease);
@@ -227,7 +229,7 @@ snprintf(cmd,255,"Config: v%s",GRADS_VERSION);
 #endif
 #endif
 #else
-   gaprnt(verbose,"  o HDF interface DISABLED\n");
+   gaprnt(verbose,"  o HDF4 and HDF5 interfaces DISABLED\n");
 #endif
 
 #if GEOTIFF==1
