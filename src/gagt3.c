@@ -411,7 +411,6 @@ my_deflev(struct gafile *pfi, int id, const double *values, int size)
 
     assert(size > 1 && pfi->dnum[id] == size);
 
-    /* why "+ 5"? */
     if ((vals = (FLOAT *)malloc(sizeof(FLOAT) * (size + 5))) == NULL)
         return -1;
 
@@ -419,7 +418,7 @@ my_deflev(struct gafile *pfi, int id, const double *values, int size)
     *p++ = (FLOAT)size;
     for (i = 0; i < size; i++)
         *p++ = (FLOAT)values[i];
-    *p++ = -999.9f;
+    *p++ = -999.9;
 
     pfi->abvals[id] = vals;
     pfi->grvals[id] = vals;
@@ -1009,8 +1008,8 @@ expand_tmplat(char *path, const struct gafile *pfi, int tidx, int eidx)
 
     assert(pfi->tmplat);
 
-    gr2t(pfi->grvals[TINDEX], tidx + 1.0f, &dtim);
-    gr2t(pfi->grvals[TINDEX], 1.0f, &dtimi);
+    gr2t(pfi->grvals[TINDEX], tidx + 1.0, &dtim);
+    gr2t(pfi->grvals[TINDEX], 1.0, &dtimi);
 
     gafndt_impl(path, TMPL_SIZE,
                 pfi->gtvlist[pfi->gtcurr],
@@ -1401,11 +1400,11 @@ gt3ddes_tmpl(struct gafile *pfi, const char *tmpl, int ntime)
     }
     expnd[0][0] = '\0';
     expnd[1][0] = '\0';
-    gr2t(pfi->grvals[TINDEX], 1.0f, &tdefi);
+    gr2t(pfi->grvals[TINDEX], 1.0, &tdefi);
 
     fnum = 0;
     for (i = 0, cr = 0; i < ntime; i++, cr ^= 1) {
-        gr2t(pfi->grvals[TINDEX], i + 1.0f, &tdef);
+        gr2t(pfi->grvals[TINDEX], i + 1.0, &tdef);
 
         gafndt_impl(expnd[cr], TMPL_SIZE, tmpl,
                     &tdef, &tdefi, pfi->abvals[3], NULL,

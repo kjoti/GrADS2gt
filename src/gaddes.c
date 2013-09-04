@@ -239,15 +239,15 @@ gaint gaddes (char *name, struct gafile *pfi, gaint mflag) {
 #endif
           else if (cmpwrd("365_day_calendar",ch)) {
             pfi->calendar = CALTIME_NOLEAP;
-            cal365 = 1;
+            cal365 = pfi->calendar;
           }
           else if (cmpwrd("360_day_calendar",ch)) {
             pfi->calendar = CALTIME_360_DAY;
-            mfcmn.cal365 = pfi->calendar;
+            cal365 = pfi->calendar;
           }
           else if (cmpwrd("julian_calendar",ch)) {
             pfi->calendar = CALTIME_JULIAN;
-            mfcmn.cal365 = pfi->calendar;
+            cal365 = pfi->calendar;
           }
           else if (cmpwrd("big_endian",ch)) {
             if (!BYTEORDER) pfi->bswap = 1;
