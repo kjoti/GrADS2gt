@@ -128,6 +128,9 @@ gaint gasdfopen (char *args, struct gacmn *pcm) {
     gacmd ("set t 1",pcm,0);
     gacmd ("set e 1",pcm,0);
   }
+  if (pfi->pa2mb) {
+    gaprnt(1,"Notice: Z coordinate pressure values have been converted from Pa to mb\n");
+  }
   freeparms(&parms);
   return Success;
 }
@@ -242,6 +245,9 @@ gaint gaxdfopen (char *args, struct gacmn *pcm) {
     gacmd ("set z 1",pcm,0);
     gacmd ("set t 1",pcm,0);
     gacmd ("set e 1",pcm,0);
+  }
+  if (pfi->pa2mb) {
+    gaprnt(1,"Notice: Z coordinate pressure values have been converted from Pa to mb\n");
   }
   freeparms(&parms);
   return Success;
@@ -643,10 +649,14 @@ utUnit timeunit ;
       gaprnt(2, "SDF file has no discernable time coordinate -- using default values.\n") ;
     }
     else {
-      /* make sure it's not a 365 day calendar */
+      /* make sure it's not a 360- or 365-day calendar */
       attr = NULL;
       attr = find_att(Tcoord->longnm, pfi->attr, "calendar") ;
       if (attr) {
+        if (!strncasecmp((char *)attr->value,"360_day", 7)) {
+          gaprnt(0,"SDF Error: 360 day calendars are not supported by sdfopen.\n");
+          return Failure;
+        }
         if ((!strncasecmp((char *)attr->value,"cal365",      6)) ||
             (!strncasecmp((char *)attr->value,"altcal365",   9)) ||
             (!strncasecmp((char *)attr->value,"common_year",11)) ||
@@ -1081,6 +1091,7 @@ utUnit timeunit ;
         pfi->ab2gr[EINDEX] = liconv;
         pfi->gr2ab[EINDEX] = liconv;
         pfi->linear[EINDEX] = 1;
+
         /* allocate an array of ensemble structures */
         sz = pfi->dnum[EINDEX] * sizeof(struct gaens);
         if ((ens = (struct gaens *)galloc(sz,"ens2")) == NULL) {
@@ -1088,13 +1099,6 @@ utUnit timeunit ;
           goto err1;
         }
         pfi->ens1 = ens;
-      }
-      else {
-        /* check to make sure the size given in xdf descriptor matches actual size */
-        if (pfi->sdfdimsiz[Ecoord->vardimids[0]] != pfi->dnum[EINDEX]) {
-          gaprnt(0,"gadsdf: Ensemble dimension size in descriptor and data file do not match.\n");
-          return Failure;
-        }
       }
       if (parms.esetup >= 2) {   /* still need ensemble names, time metadata */
         /* first see if there is an attribute containing ensemble names in the file */
@@ -1229,12 +1233,6 @@ utUnit timeunit ;
       if (ch==NULL) {
         snprintf(pout,255,"Open Error: couldn't determine data file name for e=%d t=%d\n",e,ens->gt);
         gaprnt(0,pout);
-        goto err2;
-      }
-      if ((flag==1) && (pfi->dnum[4]>1)) {
-        gaprnt(0,"Open Error: If the E dimension size is > 1 \n");
-        gaprnt(0,"  and templating in the T dimension is used,\n");
-        gaprnt(0,"  then templating in the E dimension must also be used.\n");
         goto err2;
       }
       pfi->fnums[(e-1)*pfi->dnum[3]+t-1] = j;
@@ -1713,6 +1711,14 @@ uint32 *uidata=NULL;
     pfi->gr2ab[dim] = gr2lev;
   }
 
+  /* Check if we need to convert Pa to mb */
+  if ((dim==2) && (pfi->pa2mb)) {
+    for (i=1; i<=pfi->dnum[2]; i++) {
+      *(pfi->grvals[2]+i) = *(pfi->grvals[2]+i)/100;
+    }
+  }
+
+
   /* check if longitudes wrap around the globe */
   if ((dim==0) && (pfi->linear[dim]) && (len > 2) ) {
     val1 = axisvals[0];
@@ -1915,6 +1921,7 @@ gaint findZ(struct gafile *pfi, struct gavar **Zcoordptr, gaint *ispressptr) {
           }
           /* if we can convert the units to pascals, then it could be pressure */
           if (utConvert(&thisguy, &pascals, &slope, &intcept) == 0) {
+            pfi->pa2mb = 1;
             *Zcoordptr = lclvar ;
             *ispressptr = 1 ;
             return Success;
@@ -3685,6 +3692,24 @@ size_t sz;
           gaprnt (1,pout);
           pfi->dnum[EINDEX] = 1;
         }
+        /* set up linear scaling */
+        sz = sizeof(gadouble)*6;
+        if ((evals = (gadouble *)galloc(sz,"evals")) == NULL) {
+          gaprnt(0,"gadxdf: memory allocation failed for ensemble dimension scaling values\n");
+          goto err1;
+        }
+        v1=v2=1;
+        *(evals+1) = v1 - v2;
+        *(evals) = v2;
+        *(evals+2) = -999.9;
+        *(evals+4) = -1.0 * ( (v1-v2)/v2 );
+        *(evals+3) = 1.0/v2;
+        *(evals+5) = -999.9;
+        pfi->grvals[EINDEX] = evals;
+        pfi->abvals[EINDEX] = evals+3;
+        pfi->ab2gr[EINDEX] = liconv;
+        pfi->gr2ab[EINDEX] = liconv;
+        pfi->linear[EINDEX] = 1;
         /* allocate an array of ensemble structures */
         sz = pfi->dnum[EINDEX] * sizeof(struct gaens);
         if ((ens = (struct gaens *)galloc(sz,"ens3")) == NULL) {
@@ -3703,6 +3728,15 @@ size_t sz;
             if ((ch=nxtwrd(ch))==NULL) goto err7b;
             /* get the ensemble name */
             if ((getenm(ens, ch))!=0) goto err7c;
+            /* initialize remaining fields in ensemble structure */
+            for (jj=0;jj<4;jj++) ens->grbcode[jj]=-999;
+            ens->length=0;
+            ens->gt=1;
+            ens->tinit.yr=0;
+            ens->tinit.mo=0;
+            ens->tinit.dy=0;
+            ens->tinit.hr=0;
+            ens->tinit.mn=0;
             j++; ens++;
           }
           parms->esetup=1;  /* still need time metadata */
@@ -3710,7 +3744,7 @@ size_t sz;
       }
     }
 
-    /* Parse the variable declarations */
+    /* parse the variable declarations */
     else if (cmpwrd("vars",rec)) {
       if ((ch = nxtwrd(rec)) == NULL) goto err5;
       if ((pos = intprs(ch,&(pfi->vnum)))==NULL) goto err5;
@@ -3868,7 +3902,8 @@ size_t sz;
   }
 
 
-  /* If the file name is a time series template, figure out
+  /* Create the fnums array.
+     If the file name is a time series template, figure out
      which times go with which files, so we don't waste a lot
      of time later opening and closing files unnecessarily. */
 
@@ -3905,11 +3940,13 @@ size_t sz;
         gaprnt(0,pout);
         goto err2;
       }
-      if ((flag==1) && (pfi->dnum[4]>1)) {
-        gaprnt(0,"Open Error: If the E dimension size is > 1 \n");
-        gaprnt(0,"  and templating in the T dimension is used,\n");
-        gaprnt(0,"  then templating in the E dimension must also be used.\n");
-        goto err2;
+      /* set the pfi->tmplat flag to the flag returned by gafndt */
+      if (flag==0) {
+        gaprnt(1,"Warning: OPTIONS keyword \"template\" is used, but the \n");
+        gaprnt(1,"   DSET entry contains no substitution templates.\n");
+        pfi->tmplat = 1;
+      } else {
+        pfi->tmplat = flag;
       }
       pfi->fnums[(e-1)*pfi->dnum[3]+t-1] = j;
       /* loop over remaining valid times for this ensemble */

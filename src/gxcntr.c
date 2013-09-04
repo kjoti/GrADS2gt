@@ -740,13 +740,13 @@ for (i=0; i<gxlabn; i++ ) {
   bcol = gxqbck();
   h = csize*1.2;                     /* set label height */
   w = 0.2;
-  gxchln (gxlabv[i],lablen,csize,&w);
-  if (gxlabs[i]==0.0) {
-    x = gxlabx[i] - (w/2.0);
+  gxchln (gxlabv[i],lablen,csize,&w);  /* get label width */
+  if (gxlabs[i]==0.0) {              /* contour label is not rotated */
+    x = gxlabx[i] - (w/2.0);         /* adjust reference point */
     y = gxlaby[i] - (h/2.0);
     gxcolr (bcol);
     buff=h*0.2;     /* add a buffer above and below the string, already padded in X */
-    gxrecf (x, x+w, y-buff, y+h+buff);
+    gxrecf (x, x+w, y-buff, y+h+buff);   /* draw the background rectangle,  */
     if (colflg>-1) fcol = colflg;
     else fcol = gxlabc[i];
     if (fcol==gxqbck()) {
@@ -754,19 +754,19 @@ for (i=0; i<gxlabn; i++ ) {
       else gxcolr(0);
     }
     else gxcolr (fcol);
-    gxchpl (gxlabv[i],lablen,x,y,h,csize,0.0);
-  } else {
+    gxchpl (gxlabv[i],lablen,x,y,h,csize,0.0);  /* draw the label */
+  } else {                           /* contour label is rotated */
     xd1 = (h/2.0)*sin(gxlabs[i]);
     xd2 = (w/2.0)*cos(gxlabs[i]);
     yd1 = (h/2.0)*cos(gxlabs[i]);
     yd2 = (w/2.0)*sin(gxlabs[i]);
-    x = gxlabx[i] - xd2 + xd1;
+    x = gxlabx[i] - xd2 + xd1;       /* adjust reference point */
     y = gxlaby[i] - yd2 - yd1;
     xd1 = (h/2.0*1.6)*sin(gxlabs[i]);
     xd2 = 1.1*(w/2.0)*cos(gxlabs[i]);
     yd1 = (h/2.0*1.6)*cos(gxlabs[i]);
     yd2 = 1.1*(w/2.0)*sin(gxlabs[i]);
-    xy[0] = gxlabx[i] - xd2 + xd1;
+    xy[0] = gxlabx[i] - xd2 + xd1;   /* rotated background rectangle => polygon */
     xy[1] = gxlaby[i] - yd2 - yd1;
     xy[2] = gxlabx[i] - xd2 - xd1;
     xy[3] = gxlaby[i] - yd2 + yd1;
@@ -785,7 +785,7 @@ for (i=0; i<gxlabn; i++ ) {
       else gxcolr(0);
     }
     else gxcolr (fcol);
-    gxchpl (gxlabv[i],lablen,x,y,h,csize,gxlabs[i]*180.0/3.1416);
+    gxchpl (gxlabv[i],lablen,x,y,h,csize,gxlabs[i]*180/M_PI)  /* draw the label */;
   }
 }
 gxcolr (colr);
@@ -865,7 +865,8 @@ gadouble x,y,*lons=NULL,*lats=NULL,*vals=NULL,lon,lat,val,dval;
  shpid=0;
  pclbuf = clbufanch;
  if (pclbuf==NULL) {
-   printf("Error in gxshplin: contour buffer is empty\n");
+   snprintf(pout,511,"Error in gxshplin: contour buffer is empty\n");
+   gaprnt(0,pout);
    rc = -1;
    goto cleanup;
  }
@@ -873,17 +874,20 @@ gadouble x,y,*lons=NULL,*lats=NULL,*vals=NULL,lon,lat,val,dval;
    if (pclbuf->lxy) {
      /* allocate memory for lons and lats of the vertices in contour line */
      if ((lons = (gadouble*)galloc (pclbuf->len*sizeof(gadouble),"shplons"))==NULL) {
-       printf("Error in gxshplin: unable to allocate memory for lon array\n");
+       snprintf(pout,511,"Error in gxshplin: unable to allocate memory for lon array\n");
+       gaprnt(0,pout);
        rc = -1;
        goto cleanup;
      }
      if ((lats = (gadouble*)galloc (pclbuf->len*sizeof(gadouble),"shplats"))==NULL) {
-       printf("Error in gxshplin: unable to allocate memory for lat array\n");
+       snprintf(pout,511,"Error in gxshplin: unable to allocate memory for lat array\n");
+       gaprnt(0,pout);
        rc = -1;
        goto cleanup;
      }
      if ((vals = (gadouble*)galloc (pclbuf->len*sizeof(gadouble),"shpvals"))==NULL) {
-       printf("Error in gxshplin: unable to allocate memory for val array\n");
+       snprintf(pout,511,"Error in gxshplin: unable to allocate memory for val array\n");
+       gaprnt(0,pout);
        rc = -1;
        goto cleanup;
      }
@@ -901,7 +905,8 @@ gadouble x,y,*lons=NULL,*lats=NULL,*vals=NULL,lon,lat,val,dval;
      i = SHPWriteObject(sfid,-1,shp);
      SHPDestroyObject(shp);
      if (i!=shpid) {
-       printf("Error in gxshplin: SHPWriteObject returned %d, shpid=%d\n",i,shpid);
+       snprintf(pout,511,"Error in gxshplin: SHPWriteObject returned %d, shpid=%d\n",i,shpid);
+       gaprnt(0,pout);
        rc = -1;
        goto cleanup;
      }
@@ -1079,12 +1084,13 @@ gadouble lablen,x,y,w,h,buff;
 gaint rc;
   lablen=strlen(clabel);
   w = 0.2;
-  h = csize*1.2;
+  h = csize*1.2;            /* height scaled by 1.2 for consistency with other labels */
   gxchln (clabel,lablen,csize,&w);
   x = xpos-(w/2.0);
   y = ypos-(h/2.0);
-  buff = h*1.0;
-  rc = gxmaskrq (x-buff, x+w+buff, y-buff, y+h+buff);
+  buff=h*0.2;                            /* set a buffer around the label */
+  /* area to check is a bit (0.02) smaller than the actual mask */
+  rc = gxmaskrq (x-buff+0.02, x+w+buff-0.02, y-buff+0.02, y+h+buff-0.02);
   return (rc);
 }
 

@@ -285,7 +285,7 @@ gaint main (gaint argc, char *argv[])  {
           for (j=0; j<8; j++) stid[j] = hdr.id[j];
           stid[8] = '\0';
           printf ("  ID,LON,LAT,T,NLEV,FLAG: ");
-          printf ("%s %g %g %g %i %i  ",stid,hdr.lon,hdr.lat,hdr.t,hdr.nlev,hdr.flag);
+          printf ("%s %8.3f %7.3f %g %i %i  ",stid,hdr.lon,hdr.lat,hdr.t,hdr.nlev,hdr.flag);
           printf ("SIZE = %i\n",siz);
         }
         if (pfi->seqflg) {

@@ -6,7 +6,6 @@
 #include <stdlib.h>
 #include <sys/types.h>
 #include "gabufr.h"
-/* #include <gatypes.h>  JMA why is this causing problems? */
 #if GRIB2==1
 #include "grib2.h"
 #endif
@@ -669,10 +668,12 @@ struct gavar {
   char varnm[128];             /* Variable description.                */
   char abbrv[16];              /* Variable abbreviation.               */
   char longnm[257];            /* netcdf/hdf var name if different     */
-  gadouble units[16];          /* Units indicator.
+  gadouble units[48];          /* Units indicator.
                                   Vals 0-7 are for variable codes:
-                                  grib, non-float data, nc/hdf dims
-                                  Vals  8-11 are for grib level codes  */
+                                  grib, non-float data, and nc/hdf dims;
+                                  Vals 8-15 are for grib level codes;
+                                  Vals 16-48 are for extra grib2 codes */
+  gaint g2aflg;                /* var requires additional grib2 codes  */
   gaint offset;                /* Offset in grid elements of the start
                                   of this variable within a time group
                                   within this file.                    */

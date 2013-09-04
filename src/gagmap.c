@@ -370,7 +370,7 @@ gaint gribmap (void) {
    /* Set up g2index and initialize values */
    g2indx = (struct gag2indx *)malloc(sizeof(struct gag2indx));
    if (g2indx==NULL) {
-     printf ("grib2map error: unable to allocate memory for g2indx\n");
+     printf ("gribmap error: unable to allocate memory for g2indx\n");
      fflush(stdout);
      return(1);
    }
@@ -383,7 +383,7 @@ gaint gribmap (void) {
    }
    g2indx->g2intpnt = (gaint *)malloc(sizeof(gaint)*g2indx->g2intnum);
    if (g2indx->g2intpnt==NULL) {
-     printf ("grib2map error: unable to allocate memory for g2indx->g2intpnt\n");
+     printf ("gribmap error: unable to allocate memory for g2indx->g2intpnt\n");
      fflush(stdout);
      goto err;
    }
@@ -392,7 +392,7 @@ gaint gribmap (void) {
      sz = pfi->trecs * pfi->dnum[3] * pfi->dnum[4];
      g2indx->g2bigpnt = (off_t *)malloc(sizeof(off_t)*sz);
      if (g2indx->g2bigpnt==NULL) {
-       printf ("grib2map error: unable to allocate memory for g2indx->g2bigpnt\n");
+       printf ("gribmap error: unable to allocate memory for g2indx->g2bigpnt\n");
        fflush(stdout);
        goto err;
      }
@@ -438,17 +438,17 @@ gaint gribmap (void) {
          gr2t(pfi->grvals[3], ens->gt, &dtimi);
          ch = gafndt(pfi->name, &dtim, &dtimi, pfi->abvals[3], pfi->pchsub1, pfi->ens1,tcur,e,&flag);
          if (ch==NULL) {
-           printf("grib2map error: couldn't determine data file name for e=%d t=%d\n",e,tcur);
+           printf("gribmap error: couldn't determine data file name for e=%d t=%d\n",e,tcur);
            fflush(stdout);
            goto err;
          }
        }
        /* Open this GRIB file and position to start of first record (s/b subroutine) */
-       if (!quiet) printf("grib2map: scanning GRIB2 file: %s \n",ch);
+       if (!quiet) printf("gribmap: scanning GRIB2 file: %s \n",ch);
        fflush(stdout);
        gfile = fopen(ch,"rb");
        if (gfile==NULL) {
-         if (!quiet) printf ("grib2map warning: could not open GRIB file: %s\n",ch);
+         if (!quiet) printf ("gribmap warning: could not open GRIB file: %s\n",ch);
          fflush(stdout);
          continue;
        }
@@ -465,14 +465,14 @@ gaint gribmap (void) {
          sz = lgrib;
          cgrib = (unsigned char *)galloc(sz,"cgrib2");
          if (cgrib == NULL) {
-           printf("grib2map error: unable to allocate memory for record %d at byte %jd\n",record,iseek);
+           printf("gribmap error: unable to allocate memory for record %d at byte %jd\n",record,(intmax_t)iseek);
            fflush(stdout);
            goto err;
          }
          ret = fseeko(gfile,lskip,SEEK_SET);
          lengrib = fread(cgrib,sizeof(unsigned char),lgrib,gfile);
          if (lengrib < lgrib) {
-           printf("grib2map error: unable to read record %d at byte %jd\n",record,iseek);
+           printf("gribmap error: unable to read record %d at byte %jd\n",record,(intmax_t)iseek);
            fflush(stdout);
            goto err;
          }
@@ -480,7 +480,7 @@ gaint gribmap (void) {
          /* Check for ultra long length -- which we do not yet handle */
 
          if (gagby(cgrib,8,4)!=0 || gagbb(cgrib+12,0,1)!=0) {
-           printf("grib2map error: grib2 record too long! record %d at byte %jd\n",record,iseek);
+           printf("gribmap error: grib2 record too long! record %d at byte %jd\n",record,(intmax_t)iseek);
            fflush(stdout);
            goto err;
          }
@@ -489,7 +489,7 @@ gaint gribmap (void) {
          ierr = 0;
          ierr = g2_info(cgrib,listsec0,listsec1,&numfields,&numlocal);
          if (ierr) {
-           printf("grib2map error: g2_info failed: ierr=%d\n",ierr);
+           printf("gribmap error: g2_info failed: ierr=%d\n",ierr);
            fflush(stdout);
            goto err;
          }
@@ -497,7 +497,7 @@ gaint gribmap (void) {
            ierr = 0;
            ierr = g2_getfld(cgrib,n+1,unpack,expand,&gfld);
            if (ierr) {
-             printf("grib2map error: g2_getfld failed: ierr=%d\n",ierr);
+             printf("gribmap error: g2_getfld failed: ierr=%d\n",ierr);
              fflush(stdout);
              goto err;
            }
@@ -531,7 +531,6 @@ gaint gribmap (void) {
            /* Check if the variable is a match */
            ioff = g2var_match(gfld,pfi,sp,sp2);
            if (ioff==-999) {
-             if (verb) printf("\n");
              fflush(stdout);
              g2_free(gfld);
              break;
@@ -540,7 +539,6 @@ gaint gribmap (void) {
            /* check if ensemble codes match */
            e = g2ens_match(gfld,pfi);
            if (e==-999) {
-             if (verb) printf("\n");
              fflush(stdout);
              g2_free(gfld);
              break;
@@ -607,7 +605,7 @@ gaint gribmap (void) {
            gr2t(pfi->grvals[3], ens->gt, &dtimi);
            ch = gafndt(pfi->name, &dtim, &dtimi, pfi->abvals[3], pfi->pchsub1, pfi->ens1,tcur,e,&flag);
            if (ch==NULL) {
-             printf("grib2map error: couldn't determine data file name for e=%d t=%d\n",e,tcur);
+             printf("gribmap error: couldn't determine data file name for e=%d t=%d\n",e,tcur);
              fflush(stdout);
              goto err;
            }
@@ -621,17 +619,17 @@ gaint gribmap (void) {
        }
 
        /* Open this GRIB file and position to start of first record (s/b subroutine) */
-       if (!quiet) printf("grib2map: scanning GRIB2 file: %s \n",ch);
+       if (!quiet) printf("gribmap: scanning GRIB2 file: %s \n",ch);
        fflush(stdout);
        gfile = fopen(ch,"rb");
        if (gfile==NULL) {
          if (pfi->tmplat) {
-           if (!quiet) printf ("grib2map warning: could not open GRIB file: %s\n",ch);
+           if (!quiet) printf ("gribmap warning: could not open GRIB file: %s\n",ch);
            fflush(stdout);
            continue;
          }
          else {
-           printf ("grib2map error: could not open GRIB file: %s\n",ch);
+           printf ("gribmap error: could not open GRIB file: %s\n",ch);
            fflush(stdout);
            goto err;
          }
@@ -650,21 +648,21 @@ gaint gribmap (void) {
          sz = lgrib;
          cgrib = (unsigned char *)galloc(sz,"cgrib2");
          if (cgrib == NULL) {
-           printf("grib2map error: unable to allocate memory for record %d at byte %jd\n",record,iseek);
+           printf("gribmap error: unable to allocate memory for record %d at byte %jd\n",record,(intmax_t)iseek);
            fflush(stdout);
            goto err;
          }
          ret = fseeko(gfile,lskip,SEEK_SET);
          lengrib = fread(cgrib,sizeof(unsigned char),lgrib,gfile);
          if (lengrib < lgrib) {
-           printf("grib2map error: unable to read record %d at byte %jd\n",record,iseek);
+           printf("gribmap error: unable to read record %d at byte %jd\n",record,(intmax_t)iseek);
            fflush(stdout);
            goto err;
          }
 
          /* Check for ultra long length -- which we do not yet handle */
          if (gagby(cgrib,8,4)!=0 || gagbb(cgrib+12,0,1)!=0) {
-           printf("grib2map error: grib2 record length too long! record %d at byte %jd\n",record,iseek);
+           printf("gribmap error: grib2 record length too long! record %d at byte %jd\n",record,(intmax_t)iseek);
            fflush(stdout);
            goto err;
          }
@@ -673,7 +671,7 @@ gaint gribmap (void) {
          ierr = 0;
          ierr = g2_info(cgrib,listsec0,listsec1,&numfields,&numlocal);
          if (ierr) {
-           printf("grib2map error: g2_info failed: ierr=%d\n",ierr);
+           printf("gribmap error: g2_info failed: ierr=%d\n",ierr);
            fflush(stdout);
            goto err;
          }
@@ -681,7 +679,7 @@ gaint gribmap (void) {
            ierr = 0;
            ierr = g2_getfld(cgrib,n+1,unpack,expand,&gfld);
            if (ierr) {
-             printf("grib2map error: g2_getfld failed: ierr=%d\n",ierr);
+             printf("gribmap error: g2_getfld failed: ierr=%d\n",ierr);
              fflush(stdout);
              goto err;
            }
@@ -715,17 +713,14 @@ gaint gribmap (void) {
            /* Check if the variable is a match */
            ioff = g2var_match(gfld,pfi,sp,sp2);
            if (ioff==-999) {
-             if (verb) printf("\n");
              fflush(stdout);
              g2_free(gfld);
              break;
            }
-
            if (pfi->tmplat) {
              /* make sure grib codes match for this ensemble */
              rc = g2ens_check(ens,gfld);
              if (rc==1) {
-               if (verb) printf("\n");
                fflush(stdout);
                g2_free(gfld);
                break;
@@ -735,7 +730,6 @@ gaint gribmap (void) {
              /* check if ensemble codes match */
              e = g2ens_match(gfld,pfi);
              if (e==-999) {
-               if (verb) printf("\n");
                fflush(stdout);
                g2_free(gfld);
                break;
@@ -765,7 +759,7 @@ gaint gribmap (void) {
    } /* end of loop over ensemble members: for (e=1,ens=pfi->ens1; e<=pfi->dnum[4]; e++,ens++) */
    } /* end of else statement for if (pfi->dnum[4]>1 && pfi->tmplat==1)  */
 
-   if (!quiet) printf ("grib2map: reached end of files\n");
+   if (!quiet) printf ("gribmap: reached end of files\n");
    fflush(stdout);
 
 
@@ -1436,7 +1430,7 @@ gaint wtg2map(struct gafile *pfi, struct gag2indx *g2indx) {
     return(1);
   }
 
-  printf("grib2map: Writing out the index file \n");
+  printf("gribmap: Writing out the index file \n");
   /* write the version number */
   rc = fwrite(&g2indx->version, sizeof(gaint),1,mfile);
   if (rc!=1) {
@@ -1515,7 +1509,7 @@ gaint xsize=0,ysize=0;
 gaint g2time_check (gribfield *gfld, g2int *listsec1, struct gafile *pfi,
                     gaint r, gaint f, gaint tmin, gaint tmax) {
   struct dt tref,tfld,tvalid;
-  gaint it,tfield;
+  gaint it,tfield,trui_idx,endyr_idx;
   gafloat t;
   gadouble v1,delta;
   /* Get reference time from Section 1 of GRIB message */
@@ -1535,16 +1529,18 @@ gaint g2time_check (gribfield *gfld, g2int *listsec1, struct gafile *pfi,
     tvalid.mn = tref.mn;
   }
   else {
-    /* For fields at a point in time (PDT<8 or PDT=15) */
-    if (gfld->ipdtnum < 8 || gfld->ipdtnum==15) {
-      if      (gfld->ipdtmpl[7]== 0) tfld.mn = gfld->ipdtmpl[8];
-      else if (gfld->ipdtmpl[7]== 1) tfld.hr = gfld->ipdtmpl[8];
-      else if (gfld->ipdtmpl[7]== 2) tfld.dy = gfld->ipdtmpl[8];
-      else if (gfld->ipdtmpl[7]== 3) tfld.mo = gfld->ipdtmpl[8];
-      else if (gfld->ipdtmpl[7]== 4) tfld.yr = gfld->ipdtmpl[8];
-      else if (gfld->ipdtmpl[7]==10) tfld.hr = gfld->ipdtmpl[8]*3;   /* 3Hr incr */
-      else if (gfld->ipdtmpl[7]==11) tfld.hr = gfld->ipdtmpl[8]*6;   /* 6Hr incr */
-      else if (gfld->ipdtmpl[7]==12) tfld.hr = gfld->ipdtmpl[8]*12;  /* 2Hr incr */
+    /* For fields at a point in time (PDT<8 or PDT=15 or PDT=48) */
+    if (gfld->ipdtnum < 8 || gfld->ipdtnum==15 || gfld->ipdtnum==48) {
+      trui_idx=7;
+      if (gfld->ipdtnum==48) trui_idx=18;
+      if      (gfld->ipdtmpl[trui_idx]== 0) tfld.mn = gfld->ipdtmpl[trui_idx+1];
+      else if (gfld->ipdtmpl[trui_idx]== 1) tfld.hr = gfld->ipdtmpl[trui_idx+1];
+      else if (gfld->ipdtmpl[trui_idx]== 2) tfld.dy = gfld->ipdtmpl[trui_idx+1];
+      else if (gfld->ipdtmpl[trui_idx]== 3) tfld.mo = gfld->ipdtmpl[trui_idx+1];
+      else if (gfld->ipdtmpl[trui_idx]== 4) tfld.yr = gfld->ipdtmpl[trui_idx+1];
+      else if (gfld->ipdtmpl[trui_idx]==10) tfld.hr = gfld->ipdtmpl[trui_idx+1]*3;   /* 3Hr incr */
+      else if (gfld->ipdtmpl[trui_idx]==11) tfld.hr = gfld->ipdtmpl[trui_idx+1]*6;   /* 6Hr incr */
+      else if (gfld->ipdtmpl[trui_idx]==12) tfld.hr = gfld->ipdtmpl[trui_idx+1]*12;  /* 2Hr incr */
       else tfield=-99;
       if (tfield==-99) {
         /* use reference time as valid time */
@@ -1558,89 +1554,31 @@ gaint g2time_check (gribfield *gfld, g2int *listsec1, struct gafile *pfi,
     }
     /* For fields that are statistically processed over a time interval
        e.g. averages, accumulations, extremes, et al. */
-    else if (gfld->ipdtnum == 8) {
+    else if (gfld->ipdtnum == 8 || gfld->ipdtnum==9 || gfld->ipdtnum==11 || gfld->ipdtnum==12) {
+      trui_idx=7;
+      if      (gfld->ipdtnum==8)  endyr_idx=15;
+      else if (gfld->ipdtnum==9)  endyr_idx=22;
+      else if (gfld->ipdtnum==11) endyr_idx=18;
+      else if (gfld->ipdtnum==12) endyr_idx=17;
+
       if (tauave==0) {
         /* valid time is the end of the overall time interval */
-        tvalid.yr = gfld->ipdtmpl[15];
-        tvalid.mo = gfld->ipdtmpl[16];
-        tvalid.dy = gfld->ipdtmpl[17];
-        tvalid.hr = gfld->ipdtmpl[18];
-        tvalid.mn = gfld->ipdtmpl[19];
+        tvalid.yr = gfld->ipdtmpl[endyr_idx];
+        tvalid.mo = gfld->ipdtmpl[endyr_idx+1];
+        tvalid.dy = gfld->ipdtmpl[endyr_idx+2];
+        tvalid.hr = gfld->ipdtmpl[endyr_idx+3];
+        tvalid.mn = gfld->ipdtmpl[endyr_idx+4];
       }
       else {
         /* valid time is the beginning of the overall time interval */
-        if      (gfld->ipdtmpl[7]== 0) tfld.mn = gfld->ipdtmpl[8];
-        else if (gfld->ipdtmpl[7]== 1) tfld.hr = gfld->ipdtmpl[8];
-        else if (gfld->ipdtmpl[7]== 2) tfld.dy = gfld->ipdtmpl[8];
-        else if (gfld->ipdtmpl[7]== 3) tfld.mo = gfld->ipdtmpl[8];
-        else if (gfld->ipdtmpl[7]== 4) tfld.yr = gfld->ipdtmpl[8];
-        else if (gfld->ipdtmpl[7]==10) tfld.hr = gfld->ipdtmpl[8]*3;   /* 3Hr incr */
-        else if (gfld->ipdtmpl[7]==11) tfld.hr = gfld->ipdtmpl[8]*6;   /* 6Hr incr */
-        else if (gfld->ipdtmpl[7]==12) tfld.hr = gfld->ipdtmpl[8]*12;  /* 2Hr incr */
-        else tfield=-99;
-        if (tfield==-99) {
-          /* unable to get forecast time, so use reference time as valid time */
-          tvalid = tref;
-        }
-        else {
-          /* add reference time and forecast time together to get beginnin of overall time interval */
-          timadd(&tref,&tfld);
-          tvalid = tfld;
-        }
-      }
-    }
-    /* Individual ensemble forecast */
-    else if (gfld->ipdtnum == 11) {
-      if (tauave==0) {
-        /* valid time is the end of the overall time interval */
-        tvalid.yr = gfld->ipdtmpl[18];
-        tvalid.mo = gfld->ipdtmpl[19];
-        tvalid.dy = gfld->ipdtmpl[20];
-        tvalid.hr = gfld->ipdtmpl[21];
-        tvalid.mn = gfld->ipdtmpl[22];
-      }
-      else {
-        /* valid time is the beginning of the overall time interval */
-        if      (gfld->ipdtmpl[7]== 0) tfld.mn = gfld->ipdtmpl[8];
-        else if (gfld->ipdtmpl[7]== 1) tfld.hr = gfld->ipdtmpl[8];
-        else if (gfld->ipdtmpl[7]== 2) tfld.dy = gfld->ipdtmpl[8];
-        else if (gfld->ipdtmpl[7]== 3) tfld.mo = gfld->ipdtmpl[8];
-        else if (gfld->ipdtmpl[7]== 4) tfld.yr = gfld->ipdtmpl[8];
-        else if (gfld->ipdtmpl[7]==10) tfld.hr = gfld->ipdtmpl[8]*3;   /* 3Hr incr */
-        else if (gfld->ipdtmpl[7]==11) tfld.hr = gfld->ipdtmpl[8]*6;   /* 6Hr incr */
-        else if (gfld->ipdtmpl[7]==12) tfld.hr = gfld->ipdtmpl[8]*12;  /* 2Hr incr */
-        else tfield=-99;
-        if (tfield==-99) {
-          /* unable to get forecast time, so use reference time as valid time */
-          tvalid = tref;
-        }
-        else {
-          /* add reference time and forecast time together to get beginnin of overall time interval */
-          timadd(&tref,&tfld);
-          tvalid = tfld;
-        }
-      }
-    }
-    /* Derived forecast based on ensemble members */
-    else if (gfld->ipdtnum == 12) {
-      if (tauave==0) {
-        /* valid time is the end of the overall time interval */
-        tvalid.yr = gfld->ipdtmpl[17];
-        tvalid.mo = gfld->ipdtmpl[18];
-        tvalid.dy = gfld->ipdtmpl[19];
-        tvalid.hr = gfld->ipdtmpl[20];
-        tvalid.mn = gfld->ipdtmpl[21];
-      }
-      else {
-        /* valid time is the beginning of the overall time interval */
-        if      (gfld->ipdtmpl[7]== 0) tfld.mn = gfld->ipdtmpl[8];
-        else if (gfld->ipdtmpl[7]== 1) tfld.hr = gfld->ipdtmpl[8];
-        else if (gfld->ipdtmpl[7]== 2) tfld.dy = gfld->ipdtmpl[8];
-        else if (gfld->ipdtmpl[7]== 3) tfld.mo = gfld->ipdtmpl[8];
-        else if (gfld->ipdtmpl[7]== 4) tfld.yr = gfld->ipdtmpl[8];
-        else if (gfld->ipdtmpl[7]==10) tfld.hr = gfld->ipdtmpl[8]*3;   /* 3Hr incr */
-        else if (gfld->ipdtmpl[7]==11) tfld.hr = gfld->ipdtmpl[8]*6;   /* 6Hr incr */
-        else if (gfld->ipdtmpl[7]==12) tfld.hr = gfld->ipdtmpl[8]*12;  /* 2Hr incr */
+        if      (gfld->ipdtmpl[trui_idx]== 0) tfld.mn = gfld->ipdtmpl[trui_idx+1];
+        else if (gfld->ipdtmpl[trui_idx]== 1) tfld.hr = gfld->ipdtmpl[trui_idx+1];
+        else if (gfld->ipdtmpl[trui_idx]== 2) tfld.dy = gfld->ipdtmpl[trui_idx+1];
+        else if (gfld->ipdtmpl[trui_idx]== 3) tfld.mo = gfld->ipdtmpl[trui_idx+1];
+        else if (gfld->ipdtmpl[trui_idx]== 4) tfld.yr = gfld->ipdtmpl[trui_idx+1];
+        else if (gfld->ipdtmpl[trui_idx]==10) tfld.hr = gfld->ipdtmpl[trui_idx+1]*3;   /* 3Hr incr */
+        else if (gfld->ipdtmpl[trui_idx]==11) tfld.hr = gfld->ipdtmpl[trui_idx+1]*6;   /* 6Hr incr */
+        else if (gfld->ipdtmpl[trui_idx]==12) tfld.hr = gfld->ipdtmpl[trui_idx+1]*12;  /* 2Hr incr */
         else tfield=-99;
         if (tfield==-99) {
           /* unable to get forecast time, so use reference time as valid time */
@@ -1691,16 +1629,19 @@ gaint g2time_check (gribfield *gfld, g2int *listsec1, struct gafile *pfi,
 
 gaint g2var_match (gribfield *gfld, struct gafile *pfi, gaint sp, gaint sp2) {
   struct gavar *pvar;
-  gadouble lev1,lev2,z;
+  gadouble lev1,lev2,z,ll,ul;
   gadouble (*conv) (gadouble *, gadouble);
-  gaint rc1,rc2,rc3,rc4,rc5,rc6;
+  gaint rc1,rc2,rc3,rc4,rc5,rc6,lev_idx,match;
   gaint i,ioff,iz;
 
-  /* Get level values from grib field */
-  lev1 = scaled2dbl(gfld->ipdtmpl[10],gfld->ipdtmpl[11]);
+  lev_idx=9;
+  if (gfld->ipdtnum==48) lev_idx=20;
+
+  /* Get first level values from grib field */
+  lev1 = scaled2dbl(gfld->ipdtmpl[lev_idx+1],gfld->ipdtmpl[lev_idx+2]);
   /* Check if we've got info on 2nd level */
-  if (gfld->ipdtmpl[12] != 255)
-    lev2 = scaled2dbl(gfld->ipdtmpl[13],gfld->ipdtmpl[14]);
+  if (gfld->ipdtmpl[lev_idx+3] != 255)
+    lev2 = scaled2dbl(gfld->ipdtmpl[lev_idx+4],gfld->ipdtmpl[lev_idx+5]);
   else
     lev2 = -999;
 
@@ -1711,13 +1652,13 @@ gaint g2var_match (gribfield *gfld, struct gafile *pfi, gaint sp, gaint sp2) {
   while (i<pfi->vnum) {
     if (pvar->levels>0) {
       /* Z-varying data */
-      rc1 = dequal(pvar->units[0],(gadouble)gfld->discipline,1e-8); /* discipline */
-      rc2 = dequal(pvar->units[1],(gadouble)gfld->ipdtmpl[0],1e-8); /* category   */
-      rc3 = dequal(pvar->units[2],(gadouble)gfld->ipdtmpl[1],1e-8); /* number     */
-      rc4 = dequal(pvar->units[3],(gadouble)sp,1e-8);               /* Statistical Process */
-      rc5 = dequal(pvar->units[4],(gadouble)sp2,1e-8);              /* Spatial Process     */
-      rc6 = dequal(pvar->units[8],(gadouble)gfld->ipdtmpl[9],1e-8); /* LTYPE1     */
-      if (rc1==0 && rc2==0 && rc3==0 && rc4==0 && rc5==0 && rc6==0) {   /* all the above match */
+      rc1 = (gaint)pvar->units[0]==(gaint)gfld->discipline ? 0 : 1;       /* discipline */
+      rc2 = (gaint)pvar->units[1]==(gaint)gfld->ipdtmpl[0] ? 0 : 1;       /* parameter category */
+      rc3 = (gaint)pvar->units[2]==(gaint)gfld->ipdtmpl[1] ? 0 : 1;       /* parameter number  */
+      rc4 = (gaint)pvar->units[3]==sp  ? 0 : 1;                           /* Statistical Process */
+      rc5 = (gaint)pvar->units[4]==sp2 ? 0 : 1;                           /* Spatial Process     */
+      rc6 = (gaint)pvar->units[8]==(gaint)gfld->ipdtmpl[lev_idx] ? 0 : 1; /* LTYPE1     */
+      if (rc1==0 && rc2==0 && rc3==0 && rc4==0 && rc5==0 && rc6==0) {     /* all the above match */
         /* get a Z value for level 1 */
         conv = pfi->ab2gr[2];
         z = conv(pfi->abvals[2],lev1);
@@ -1725,21 +1666,31 @@ gaint g2var_match (gribfield *gfld, struct gafile *pfi, gaint sp, gaint sp2) {
           iz = (gaint)(z+0.5);
           /* make sure Z value for level 1 is an integer */
           if (fabs(z-(gadouble)iz) < 0.01) {
-            ioff = pvar->recoff + iz - 1;
-            return(ioff);
+            /* check if additional grib codes match */
+            if (pvar->g2aflg) {
+              if ((g2a_check(gfld,pvar))==1) {
+                ioff = pvar->recoff + iz - 1;
+                return(ioff);
+              }
+            }
+            else {
+              /* no additional grib codes, so match is OK */
+              ioff = pvar->recoff + iz - 1;
+              return(ioff);
+            }
           }
         }
       }
     }
     else {
       /* non-Z-varying data */
-      rc1 = dequal(pvar->units[0],(gadouble)gfld->discipline,1e-8); /* discipline */
-      rc2 = dequal(pvar->units[1],(gadouble)gfld->ipdtmpl[0],1e-8); /* category   */
-      rc3 = dequal(pvar->units[2],(gadouble)gfld->ipdtmpl[1],1e-8); /* number     */
-      rc4 = dequal(pvar->units[3],(gadouble)sp,1e-8);               /* Statistical Process */
-      rc5 = dequal(pvar->units[4],(gadouble)sp2,1e-8);              /* Spatial Process     */
-      rc6 = dequal(pvar->units[8],(gadouble)gfld->ipdtmpl[9],1e-8); /* LTYPE1     */
-      if (rc1==0 && rc2==0 && rc3==0 && rc4==0 && rc5==0 && rc6==0) {   /* all the above match */
+      rc1 = (gaint)pvar->units[0]==(gaint)gfld->discipline ? 0 : 1;       /* discipline */
+      rc2 = (gaint)pvar->units[1]==(gaint)gfld->ipdtmpl[0] ? 0 : 1;       /* parameter category   */
+      rc3 = (gaint)pvar->units[2]==(gaint)gfld->ipdtmpl[1] ? 0 : 1;       /* parameter number */
+      rc4 = (gaint)pvar->units[3]==sp ? 0 : 1;                            /* Statistical Process */
+      rc5 = (gaint)pvar->units[4]==sp2 ? 0 : 1;                           /* Spatial Process     */
+      rc6 = (gaint)pvar->units[8]==(gaint)gfld->ipdtmpl[lev_idx] ? 0 : 1; /* LTYPE1     */
+      if (rc1==0 && rc2==0 && rc3==0 && rc4==0 && rc5==0 && rc6==0) {     /* all the above match */
         /* check if level value(s) match those given in descriptor file */
         if (
             (pvar->units[9] < -900)                /* LVAL not given */
@@ -1755,16 +1706,93 @@ gaint g2var_match (gribfield *gfld, struct gafile *pfi, gaint sp, gaint sp2) {
              pvar->units[11] > -900 &&             /* LTYPE2 is given */
              dequal(pvar->units[9],lev1,1e-8)==0 &&               /* and LVAL1 matches */
              dequal(pvar->units[10],lev2,1e-8)==0 &&              /* and LVAL2 matches */
-             dequal(pvar->units[11],gfld->ipdtmpl[12],1e-8)==0)   /* and LTYPE2 matches */
+             dequal(pvar->units[11],gfld->ipdtmpl[lev_idx+3],1e-8)==0)   /* and LTYPE2 matches */
             ) {
-          ioff = pvar->recoff;
-          return(ioff);
+          /* check if additional grib codes match */
+          if (pvar->g2aflg) {
+            if ((g2a_check(gfld,pvar))==1) {
+              ioff = pvar->recoff;
+              return(ioff);
+            }
+          }
+          else {
+            /* no additional grib codes, so match is OK */
+            ioff = pvar->recoff;
+            return(ioff);
+          }
         }
       }
     }
     pvar++; i++;
   }  /* end of loop over variables in descriptor file */
   return(ioff);
+}
+
+/* check additional codes that need to be matched for certain PDTs (5, 9, and 48 for now)
+   returns 1 if match is OK, otherwise 0
+*/
+gaint g2a_check (gribfield *gfld, struct gavar *pvar) {
+  gaint match,rc1,rc2,rc3,rc4,rc5,rc6;
+  gadouble ll,ul,s1,s2,w1,w2;
+
+  match=0;
+  /* probability forecasts */
+  if (gfld->ipdtnum==5 || gfld->ipdtnum==9) {
+    ll = scaled2dbl(gfld->ipdtmpl[18],gfld->ipdtmpl[19]);  /* get lower limit */
+    ul = scaled2dbl(gfld->ipdtmpl[20],gfld->ipdtmpl[21]);  /* get upper limit */
+    if ((gaint)pvar->units[16]==(gaint)gfld->ipdtmpl[17]) {     /* probability type matches */
+      if ((gfld->ipdtmpl[17]==0 && dequal(pvar->units[17],ll,1e-8)==0) ||  /* check all cases of prob type */
+          (gfld->ipdtmpl[17]==1 && dequal(pvar->units[17],ul,1e-8)==0) ||
+          (gfld->ipdtmpl[17]==2 && dequal(pvar->units[17],ll,1e-8)==0 && dequal(pvar->units[18],ul,1e-8)==0) ||
+          (gfld->ipdtmpl[17]==3 && dequal(pvar->units[17],ll,1e-8)==0) ||
+          (gfld->ipdtmpl[17]==4 && dequal(pvar->units[17],ul,1e-8)==0))
+        match=1;
+    }
+  }
+  /* optical properties of aerosol */
+  else if (gfld->ipdtnum==48) {
+    s1 = scaled2dbl(gfld->ipdtmpl[4],gfld->ipdtmpl[5]);
+    s2 = scaled2dbl(gfld->ipdtmpl[6],gfld->ipdtmpl[7]);
+    w1 = scaled2dbl(gfld->ipdtmpl[9],gfld->ipdtmpl[10]);
+    w2 = scaled2dbl(gfld->ipdtmpl[11],gfld->ipdtmpl[12]);
+    if ((gaint)pvar->units[16]==(gaint)gfld->ipdtmpl[2]) {     /* aerosol type matches */
+      if (gfld->ipdtmpl[3]!=255) {  /* size interval type is not missing */
+        if (gfld->ipdtmpl[8]!=255) {  /* wavelength interval type is not missing */
+          /* we must match 6 codes (size and wavelength )*/
+          rc1 = dequal(pvar->units[17],(gadouble)gfld->ipdtmpl[3],1e-8);   /* size interval type */
+          rc2 = dequal(pvar->units[18],s1,1e-8);                           /* size1 */
+          rc3 = dequal(pvar->units[19],s2,1e-8);                           /* size2 */
+          rc4 = dequal(pvar->units[20],(gadouble)gfld->ipdtmpl[8],1e-8);   /* wavelength interval type */
+          rc5 = dequal(pvar->units[21],w1,1e-8);                           /* wavelength1 */
+          rc6 = dequal(pvar->units[22],w2,1e-8);                           /* wavelength2 */
+          if (rc1==0 && rc2==0 && rc3==0 && rc4==0 && rc5==0 && rc6==0)    /* all the above match */
+            match=1;
+        }
+        else {
+          /* we must match 3 codes (size only) */
+          rc1 = dequal(pvar->units[17],(gadouble)gfld->ipdtmpl[3],1e-8);   /* size interval type */
+          rc2 = dequal(pvar->units[18],s1,1e-8);                           /* size1 */
+          rc3 = dequal(pvar->units[19],s2,1e-8);                           /* size2 */
+          if (rc1==0 && rc2==0 && rc3==0)                                  /* all the above match */
+            match=1;
+        }
+      }
+      else {
+        if (gfld->ipdtmpl[8]!=255) {
+          /* we must match 3 codes (wavelength only) */
+          rc4 = dequal(pvar->units[20],(gadouble)gfld->ipdtmpl[8],1e-8);   /* wavelength interval type */
+          rc5 = dequal(pvar->units[21],w1,1e-8);                           /* wavelength1 */
+          rc6 = dequal(pvar->units[22],w2,1e-8);                           /* wavelength2 */
+          if (rc4==0 && rc5==0 && rc6==0)                                  /* all the above match */
+            match=1;
+        }
+        else {
+          /* only the aerosol type is available for matching; leave this as a non-match for the moment --JMA */
+        }
+      }
+    }
+  }
+  return(match);
 }
 
 /* Loops over ensembles to see if ensemble codes match current grib2 field
@@ -1780,10 +1808,9 @@ gaint g2ens_match (gribfield *gfld, struct gafile *pfi) {
   }
   else {
     for (e=1,ens=pfi->ens1; e<=pfi->dnum[4]; e++,ens++) {
-      /* PDT 0 or 8 and no grib codes */
+      /* No grib codes and not an ensemble PDT */
       if (ens->grbcode[0]==-999 && ens->grbcode[1]==-999 &&
-          (gfld->ipdtnum==0 || gfld->ipdtnum==8)) {
-        if (verb) printf("pdt=%d ",(gaint)gfld->ipdtnum);
+          (gfld->ipdtnum!=1 && gfld->ipdtnum!=2 && gfld->ipdtnum!=11 && gfld->ipdtnum!=12)) {
         return(e);
       }
       if (ens->grbcode[0]>-900) {
@@ -1792,7 +1819,6 @@ gaint g2ens_match (gribfield *gfld, struct gafile *pfi) {
           if ((gfld->ipdtnum==1 || gfld->ipdtnum==11) &&
               ((ens->grbcode[0] == gfld->ipdtmpl[15]) &&
                (ens->grbcode[1] == gfld->ipdtmpl[16]))) {
-            if (verb) printf("pdt=%d ens=%d,%d ",(gaint)gfld->ipdtnum,ens->grbcode[0],ens->grbcode[1]);
             return(e);
           }
         }
@@ -1800,18 +1826,10 @@ gaint g2ens_match (gribfield *gfld, struct gafile *pfi) {
           /* PDT 2 or 12 */
           if ((gfld->ipdtnum==2 || gfld->ipdtnum==12) &&
               (ens->grbcode[0] == gfld->ipdtmpl[15])) {
-            if (verb) printf("pdt=%d ens=%d ",(gaint)gfld->ipdtnum,ens->grbcode[0]);
             return(e);
           }
         }
       }
-    }
-    if (verb) {
-      printf("pdt=%d ",(gaint)gfld->ipdtnum);
-      if (gfld->ipdtnum==1 || gfld->ipdtnum==11)
-        printf("ens=%d,%d ",(gaint)gfld->ipdtmpl[15],(gaint)gfld->ipdtmpl[16]);
-      if (gfld->ipdtnum==2 || gfld->ipdtnum==12)
-        printf("ens=%d ",(gaint)gfld->ipdtmpl[15]);
     }
     return(-999);
   }
@@ -1820,14 +1838,6 @@ gaint g2ens_match (gribfield *gfld, struct gafile *pfi) {
 /* Checks ensemble codes, if provided in descriptor file.
    Returns 0 if ok or not provided, 1 if codes don't match. */
 gaint g2ens_check (struct gaens *ens, gribfield *gfld) {
-  /* print out ensemble info */
-  if (verb) {
-    printf("pdt=%d ",(gaint)gfld->ipdtnum);
-    if (gfld->ipdtnum==1 || gfld->ipdtnum==11)
-      printf("ens=%d,%d ",(gaint)gfld->ipdtmpl[15],(gaint)gfld->ipdtmpl[16]);
-    if (gfld->ipdtnum==2 || gfld->ipdtnum==12)
-      printf("ens=%d ",(gaint)gfld->ipdtmpl[15]);
-  }
   if (ens->grbcode[0]>-900) {
     if (ens->grbcode[1]>-900) {
       /* PDT 1 or 11 */
@@ -1843,9 +1853,9 @@ gaint g2ens_check (struct gaens *ens, gribfield *gfld) {
       else return(1);
     }
   }
-  /* PDT 0 or 8 and no grib codes */
+  /* No grib codes and not an ensemble PDT */
   if (ens->grbcode[0]==-999 && ens->grbcode[1]==-999 &&
-      (gfld->ipdtnum==0 || gfld->ipdtnum==8)) return(0);
+      (gfld->ipdtnum!=1 && gfld->ipdtnum!=2 && gfld->ipdtnum!=11 && gfld->ipdtnum!=12)) return(0);
   else return(1);
 }
 
@@ -1863,6 +1873,8 @@ gaint g2sp (gribfield *gfld) {
   if (sp==255) sp = -999;
   return(sp);
 }
+
+/* get the statistical process used within a spatial area (only for PDT 15) */
 gaint g2sp2(gribfield *gfld) {
   gaint sp2;
   sp2 = -999;
@@ -1873,20 +1885,72 @@ gaint g2sp2(gribfield *gfld) {
 
 /* prints out relevant info from a grib2 record */
 void g2prnt (gribfield *gfld, gaint r, g2int f, gaint sp, gaint sp2) {
+  gaint atyp,styp,wtyp,lev_idx;
+  gadouble ll,ul,s1,s2,w1,w2;
+
+  lev_idx=9;
+  if (gfld->ipdtnum==48) lev_idx=20;
+
   /* print record/field number */
   printf("%d.%ld: ",r,f);
   /* print level info */
-  if (gfld->ipdtmpl[10]==-127)
-    printf("lev1=%ld ",gfld->ipdtmpl[9]); /* just print the level1 type */
+  if (gfld->ipdtmpl[lev_idx+1]==-127)
+    printf("lev1=%ld ",gfld->ipdtmpl[lev_idx]); /* just print the level1 type */
   else
-    printf("lev1=%ld,%g ",gfld->ipdtmpl[9],scaled2dbl(gfld->ipdtmpl[10],gfld->ipdtmpl[11]));
+    printf("lev1=%ld,%g ",gfld->ipdtmpl[lev_idx],scaled2dbl(gfld->ipdtmpl[lev_idx+1],gfld->ipdtmpl[lev_idx+2]));
 
-  if (gfld->ipdtmpl[12]<255) {
-    if (gfld->ipdtmpl[13]==-127)
-      printf("lev1=%ld ",gfld->ipdtmpl[12]); /* just print the level2 type */
+  if (gfld->ipdtmpl[lev_idx+3]<255) {
+    if (gfld->ipdtmpl[lev_idx+4]==-127)
+      printf("lev1=%ld ",gfld->ipdtmpl[lev_idx+3]); /* just print the level2 type */
     else
-      printf("lev2=%ld,%g ",gfld->ipdtmpl[12],scaled2dbl(gfld->ipdtmpl[13],gfld->ipdtmpl[14]));
+      printf("lev2=%ld,%g ",gfld->ipdtmpl[lev_idx+3],scaled2dbl(gfld->ipdtmpl[lev_idx+4],gfld->ipdtmpl[lev_idx+5]));
   }
+
+  /* print additional info for probability forecasts (PDTs 5 and 9) */
+  if (gfld->ipdtnum == 5 || gfld->ipdtnum == 9) {
+    /* probability forecasts */
+    ll = scaled2dbl(gfld->ipdtmpl[18],gfld->ipdtmpl[19]);  /* get lower limit */
+    ul = scaled2dbl(gfld->ipdtmpl[20],gfld->ipdtmpl[21]);  /* get upper limit */
+    if (gfld->ipdtmpl[17]==2) {
+      printf ("a%ld,%g,%g ",gfld->ipdtmpl[17],ll,ul);
+    }
+    else if (gfld->ipdtmpl[17]==0 || gfld->ipdtmpl[17]==3) {
+      printf ("a%ld,%g ",gfld->ipdtmpl[17],ll);
+    }
+    else if (gfld->ipdtmpl[17]==1 || gfld->ipdtmpl[17]==4) {
+      printf ("a%ld,%g ",gfld->ipdtmpl[17],ul);
+    }
+  }
+
+  /* print additional info for PDT 48 */
+  if (gfld->ipdtnum ==48) {
+    atyp   = gfld->ipdtmpl[2];
+    styp   = gfld->ipdtmpl[3];
+    wtyp   = gfld->ipdtmpl[8];
+    s1 = scaled2dbl(gfld->ipdtmpl[4],gfld->ipdtmpl[5]);
+    s2 = scaled2dbl(gfld->ipdtmpl[6],gfld->ipdtmpl[7]);
+    w1 = scaled2dbl(gfld->ipdtmpl[9],gfld->ipdtmpl[10]);
+    w2 = scaled2dbl(gfld->ipdtmpl[11],gfld->ipdtmpl[12]);
+    if (atyp!=65535) {
+      if (styp!=255) {
+        if (wtyp!=255) {
+          printf ("a%d,%d,%g,%g,%d,%g,%g ",atyp,styp,s1,s2,wtyp,w1,w2);
+        }
+        else {
+          printf ("a%d,%d,%g,%g ",atyp,styp,s1,s2);
+        }
+      }
+      else {
+        if (wtyp!=255) {
+          printf ("a%d,%d,%g,%g ",atyp,wtyp,w1,w2);
+        }
+        else {
+          printf ("a%d ",atyp);
+        }
+      }
+    }
+  }
+
   /* print variable info */
   if (sp==-999)
     printf("var=%ld,%ld,%ld ",gfld->discipline,gfld->ipdtmpl[0],gfld->ipdtmpl[1]);
@@ -1896,6 +1960,11 @@ void g2prnt (gribfield *gfld, gaint r, g2int f, gaint sp, gaint sp2) {
     else
       printf("var=%ld,%ld,%ld,%d,%d ",gfld->discipline,gfld->ipdtmpl[0], gfld->ipdtmpl[1],sp,sp2);
   }
+  /* print ensemble info */
+  if (gfld->ipdtnum==1 || gfld->ipdtnum==11)
+    printf("ens=%d,%d ",(gaint)gfld->ipdtmpl[15],(gaint)gfld->ipdtmpl[16]);
+  if (gfld->ipdtnum==2 || gfld->ipdtnum==12)
+    printf("ens=%d ",(gaint)gfld->ipdtmpl[15]);
 }
 
 void gaseekgb(FILE *lugb, off_t iseek, g2int mseek, off_t *lskip, g2int *lgrib)

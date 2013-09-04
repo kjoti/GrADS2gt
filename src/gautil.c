@@ -815,11 +815,10 @@ gadouble (*conv) (gadouble *, gadouble);
 gadouble *cvals,v;
 /* gadouble g1,g2; */
 gaint i,op,len,enum1;
-char *pos, *frst;
-char name[5],ename[16];
+char *pos;
+char name[15],ename[20];
 
   /* parse the dimension name */
-  frst = ch;
   i = 0;
   while (*ch>='a' && *ch<='z' && i<6) {
     name[i] = *ch;
@@ -827,7 +826,7 @@ char name[5],ename[16];
   }
   name[i] = '\0';
   if (i>4) {
-    gaprnt (0,"Syntax Error:  Invalid dimension expression\n");
+    gaprnt (0,"Syntax Error:  Invalid dimension expression \n");
     snprintf(pout,255,"  Expecting x/y/z/t/offt/e/lon/lat/lev/time/ens, found %s\n",name);
     gaprnt (0,pout);
     return (NULL);

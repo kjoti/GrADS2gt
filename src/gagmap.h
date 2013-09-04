@@ -119,6 +119,7 @@ gaint wtg2map (struct gafile *, struct gag2indx *);
 gaint g2grid_check (gribfield *, struct gafile *pfi, gaint r, gaint f);
 gaint g2time_check (gribfield *, g2int *, struct gafile *, gaint, gaint, gaint, gaint);
 gaint g2var_match (gribfield *, struct gafile *, gaint, gaint);
+gaint g2a_check (gribfield *, struct gavar *);
 gaint g2ens_match (gribfield *, struct gafile *);
 gaint g2ens_check (struct gaens *, gribfield *);
 gaint g2sp (gribfield *);

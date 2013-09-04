@@ -1,8 +1,16 @@
 <!--Copyright (C) 1988-2005 by the Institute of Global Environment and Society (IGES). See file COPYRIGHT for more information.-->
+<style type="text/css">
+body {
+	background-color: #e0f0ff;
+}
+</style>
+
 
 <h2><b>set vrange2</b></h2>
-<code> set vrange2 x1 x2</code><p>
-Specifies the range of the variable values for x-axis scaling (from x1
-- x2).  Reset by <code>clear</code> only.
-<H3>Usage Note</H3><P>
+<code> set vrange2 v1 v2</code>
+<p>
+When drawing a 2-D scatter plot  using graphics output type <code><a href="gradcomdsetgxout.html">gxout scatter</a></code>, this command specifies the range of values for the scale on the Y axis (from v1 to v2).
+<H3>Usage Note</H3><P> Reset by <code>clear</code> only.
+
+<P> Use the <code><a href="gradcomdsetvrange.html">set vrange</a></code> command to control the range of the X-axis values on your scatter plot.
 <H3>Examples</H3><P>

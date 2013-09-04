@@ -4,6 +4,8 @@
 
 /* Authored by B. Doty */
 
+/* Add caching of the map file if less than CACHEMAX in length.  10/2011 B. Doty */
+
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 
@@ -30,10 +32,32 @@ int gagby (char *, int, int);
 void gree();
 void *galloc(size_t,char *);
 
-static FILE *imap;
+static gaint imap;
 static gadouble lomin, lomax, lamin, lamax;
 static gadouble lonref;    /* Reference longitude for adjustment */
 static gaint adjtyp = 0;  /* Direction adjustment class */
+
+/* Caching stuff */
+
+#define CACHEMAX 2000000
+
+gaint gxwopen (char *, char *);
+gaint gxwread (char *, gaint);
+gaint gxwseek (gaint);
+void gxwclose (gaint);
+
+struct mapcache {
+  struct mapcache *forw;   /* Chain pointer */
+  gaint size;           /* size of the file cached here */
+  char *name;           /* file name cached here */
+  char *data;           /* contents of the file cached here */
+};
+static struct mapcache *manchor=NULL;  /* link list anchor */
+static struct mapcache *cmc;   /* pointer to currently "open" cached file*/
+static gaint mcpos;     /* current position in cached file */
+static gaint mclen;     /* length of the data in current cache */
+static FILE *mfile;     /* for file i/o instead of caching */
+static gaint cflag;     /* indicate if i/o from cache or file */
 
 void gxrsmapt (void) {
   adjtyp = 0;
@@ -54,17 +78,17 @@ char hdr[3],rec[1530];
   /* Open the map data set */
 
   if (*(mopt->mpdset)=='/' || *(mopt->mpdset)=='\\') {
-    imap = fopen(mopt->mpdset,"rb");
-    if (imap==NULL) {
+    imap = gxwopen(mopt->mpdset,"rb");
+    if (imap==0) {
       printf ("Open Error on Map Data Set: %s\n",mopt->mpdset);
       return;
     }
   } else {
     fname = gxgnam(mopt->mpdset);
-    imap = fopen(fname,"rb");
-    if (imap==NULL) {
-      imap = fopen(mopt->mpdset,"rb");
-      if (imap==NULL) {
+    imap = gxwopen(fname,"rb");
+    if (imap==0) {
+      imap = gxwopen(mopt->mpdset,"rb");
+      if (imap==0) {
         printf ("Open Error on Map Data Set: %s\n",fname);
         gree(fname,"f297");
         return;
@@ -77,7 +101,8 @@ char hdr[3],rec[1530];
 
   rnum = 0;
   while (1) {
-    rc = fread(hdr,1,3,imap);
+    if (cflag) rc = gxwread(hdr,3);
+    else  rc = fread(hdr,1,3,mfile);
     if (rc!=3) break;
     rnum++;
     i = gagby (hdr,0,1);
@@ -88,7 +113,8 @@ char hdr[3],rec[1530];
     if (i==2) {
       st1 = gagby(hdr,1,1);
       st2 = gagby(hdr,2,1);
-      fread(rec,1,16,imap);
+      if (cflag) gxwread(rec,16);
+      else fread(rec,1,16,mfile);
       spos = gagby(rec,0,4);
       ilon = gagby(rec,4,3);
       sln1 = ((float)ilon)/1e4;
@@ -104,10 +130,12 @@ char hdr[3],rec[1530];
       }
       if (flag==0) {
         if (spos==0) {
-          fclose(imap);
+          if (cflag) gxwclose(imap);
+          else fclose(mfile);
           return;
         }
-        fseek(imap,spos,0);
+        if (cflag) gxwseek(spos);
+        else fseek(mfile,spos,0);
         continue;
       }
       flag = 0;
@@ -124,10 +152,12 @@ char hdr[3],rec[1530];
       }
       if (flag==0) {
         if (spos==0) {
-          fclose(imap);
+          if (cflag) gxwclose(imap);
+          else fclose(mfile);
           return;
         }
-        fseek(imap,spos,0);
+        if (cflag) gxwseek(spos);
+        else fseek(mfile,spos,0);
       }
       continue;
     }
@@ -137,7 +167,8 @@ char hdr[3],rec[1530];
     /* Read the next record; convert the data points;
        and get the lat/lon bounds for this line segment */
 
-    fread(rec,1,num*6,imap);
+    if (cflag) gxwread(rec,num*6);
+    else fread(rec,1,num*6,mfile);
     if (*(mopt->mcol+type) == -9) continue;
     if (*(mopt->mcol+type) == -1) {
       gxcolr(mopt->dcol);
@@ -233,7 +264,8 @@ char hdr[3],rec[1530];
       lnfact += 360.0;
     }
   }
-  fclose (imap);
+  if (cflag) gxwclose (imap);
+  else fclose (mfile);
 }
 
 /* Routine to set up scaling for lat-lon projection.  The aspect
@@ -543,6 +575,8 @@ gadouble xx1,yy1,xx2,yy2,dir;
 
 /*  Set up Robinson Projection */
 
+static gadouble fudge;
+
 int gxrobi (struct mapprj *mpj) {
 gadouble lonmn, lonmx, latmn, latmx, xmin, xmax, ymin, ymax;
 gadouble x1,x2,y1,y2,xd,yd,xave,yave,w1;
@@ -554,8 +588,10 @@ gadouble x1,x2,y1,y2,xd,yd,xave,yave,w1;
 
   /* Check for errors */
 
+  fudge = 0.0;
   if (lonmn<-180.0 || lonmx>180.0 || latmn<-90.0 || latmx>90.0) {
-    return (1);
+    if (dequal(lonmn,0.0,1e-7) || dequal(lonmx,360.0,1e-7)) return (1);
+    else fudge = 180.0;
   }
   if (latmn>=latmx||lonmn>=lonmx||xmin>=xmax||ymin>=ymax) {
     return(1);
@@ -618,17 +654,17 @@ int i;
   rlat = rlat - (gadouble)i;
   if (i<0) {
     *y = -1.349;
-    *x = 1.399*rlon/180.0;
+    *x = 1.399*(rlon-fudge)/180.0;
     return;
   }
   if (i>=36) {
     *y = 1.349;
-    *x = 1.399*rlon/180.0;
+    *x = 1.399*(rlon-fudge)/180.0;
     return;
   }
   *y = rob1[i] + rlat*(rob1[i+1]-rob1[i]);
   *x = rob2[i] + rlat*(rob2[i+1]-rob2[i]);
-  *x = *x * rlon/180.0;
+  *x = *x * (rlon-fudge)/180.0;
   return;
 }
 
@@ -1131,4 +1167,143 @@ gaint i,j,ip,ncnt;
   }
   *newcnt = j;
   return (newxy);
+}
+
+/* If the file has not been read into cache, read it.  If the file
+   is alrady cached, set the pointer to it. */
+
+gaint gxwopen (char *name, char *opts) {
+FILE *ifile;
+struct mapcache *pmc, *tmppmc;
+gaint i,rc,flen;
+char *ch,*cdat,*fname;
+
+  cflag = 0;  /* indicate i/o from file; change later */
+
+  /* traverse link list to find this file */
+
+  pmc = manchor;
+  while (pmc) {
+    ch = pmc->name;
+    i = 0;
+    while (*(ch+i)) {
+      if (*(ch+i) != *(name+i)) break;
+      i++;
+    }
+    if (*(ch+i)=='\0') {
+      cmc = pmc;
+      mcpos = 0;
+      mclen = cmc->size;
+      cflag = 1;
+      return (1);
+    }
+    pmc = pmc->forw;
+  }
+
+  /* this file is not in the cache.  try to open it.  */
+
+  ifile = fopen(name,opts);
+  if (ifile==NULL) return(0);
+
+  /* check size of file */
+
+  fseek(ifile,0L,2);
+  flen = ftell(ifile);
+  fseek(ifile,0L,0);
+
+  /* if file is too big, do regular file i/o.  set this up.  */
+
+  if (flen > CACHEMAX) {
+    mfile = ifile;
+    return (2);
+  }
+
+  /* allocate memory for all the cache items */
+
+  cdat = (char *)malloc(flen);
+  if (cdat==NULL) {
+    mfile = ifile;
+    return (2);
+  }
+
+  i = 0;
+  while (i<9999 && *(name+i)) i++;
+  fname = (char *)malloc(i+2);
+  if (fname==NULL) {
+    free (cdat);
+    mfile = ifile;
+    return (2);
+  }
+  *(fname+i) = '\0';
+  i = 0;
+  while (i<9999 && *(name+i)) {
+    *(fname+i) = *(name+i);
+    i++;
+  }
+
+  pmc = (struct mapcache *)malloc(sizeof(struct mapcache));
+  if (pmc==NULL) {
+    free (cdat);
+    free (fname);
+    mfile = ifile;
+    return (2);
+  }
+
+  /* read in the file.  on error, fall back to file i/o. */
+
+  rc = fread(cdat,1,flen,ifile);
+  if (rc!=flen) {
+    mfile = ifile;
+    free (cdat);
+    free (fname);
+    free (pmc);
+    return (2);
+  }
+  fclose (ifile);
+
+  /* chain it up, set it up, and return */
+
+  pmc->forw = NULL;
+  pmc->size = flen;
+  pmc->name = fname;
+  pmc->data = cdat;
+  if (manchor==NULL) {
+    manchor = pmc;
+  } else {
+    tmppmc = manchor;
+    while (tmppmc->forw) tmppmc = tmppmc->forw;
+    tmppmc->forw = pmc;
+  }
+  mcpos = 0;   /* initial position in cache */
+  mclen = flen;
+  cflag = 1;   /* indicate cache i/o */
+  cmc = pmc;
+  return (1);
+}
+
+/* pull requested length of data from cache from the current cache location.
+   update the cache location.  Return the length of the data -- this can be
+   less than the requested length if the end of buffer is hit.  */
+
+gaint gxwread (char *rec, gaint len) {
+gaint i;
+char *cdat;
+
+  cdat = cmc->data;
+  i = 0;
+  while (i<len && mcpos<mclen) {
+    *(rec+i) = *(cdat+mcpos);
+    i++;  mcpos++;
+  }
+  return (i);
+}
+
+gaint gxwseek (gaint pos) {
+  mcpos = pos;
+}
+
+void gxwclose (gaint flag) {
+  cflag = 0;
+  mcpos = 0;
+  mclen = 0;
 }

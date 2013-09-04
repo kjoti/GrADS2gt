@@ -1961,10 +1961,11 @@ char stid[10];
 
 void gas1d (struct gacmn *pcm, gadouble cmin, gadouble cmax, gaint dim, gaint rotflg,
             struct gagrid *pgr, struct gastn *stn) {
-gadouble x1,x2,y1,y2,xt1,xt2,yt1,yt2;
+gadouble x1,x2,y1,y2,xt1,xt2,yt1,yt2,d2r;
 gadouble cint,cmn,cmx;
 gaint axmov;
 
+  d2r = M_PI/180;
   idiv = 1; jdiv = 1;   /* No grid expansion factor */
   gxrset(3);            /* Reset all scaling        */
   gxrsmapt();           /* Reset map type */
@@ -2117,8 +2118,8 @@ gaint axmov;
             gxproj(gaclx);
             gxback(gaaclx);
           }
-          x1 = sin(x1*3.1416/180.0);
-          x2 = sin(x2*3.1416/180.0);
+          x1 = sin(x1*d2r);
+          x2 = sin(x2*d2r);
         }
       }
     }
@@ -2204,8 +2205,8 @@ gaint axmov;
             gxproj(gaclx);
             gxback(gaaclx);
           }
-          x1 = sin(x1*3.1416/180.0);
-          x2 = sin(x2*3.1416/180.0);
+          x1 = sin(x1*d2r);
+          x2 = sin(x2*d2r);
         }
       }
     }
@@ -2237,9 +2238,10 @@ gaint axmov;
 /* Set up grid level scaling for a 2-D plot */
 
 void gas2d (struct gacmn *pcm, struct gagrid *pgr, gaint imap) {
-gadouble x1,x2,y1,y2,xt1,xt2,yt1,yt2;
+gadouble x1,x2,y1,y2,xt1,xt2,yt1,yt2,d2r;
 gaint idim,jdim;
 
+  d2r = M_PI/180;
   gxrset (3);       /* Reset all scaling */
   gxrsmapt();       /* Reset map type */
 
@@ -2297,8 +2299,8 @@ gaint idim,jdim;
         } else {
           gxproj(gaclx);
           gxback(gaaclx);
-          x1 = sin(x1*3.1416/180.0);
-          x2 = sin(x2*3.1416/180.0);
+          x1 = sin(x1*d2r);
+          x2 = sin(x2*d2r);
         }
       }
     }
@@ -2326,8 +2328,8 @@ gaint idim,jdim;
         } else {
           gxproj(gacly);
           gxback(gaacly);
-          y1 = sin(y1*3.1416/180.0);
-          y2 = sin(y2*3.1416/180.0);
+          y1 = sin(y1*d2r);
+          y2 = sin(y2*d2r);
         }
       }
     }
@@ -3244,11 +3246,11 @@ gaint scatcol[6] = {1,3,2,4,7,8};
 gaint scattyp[6] = {1,6,4,8,7,2};
 
 void gascat (struct gacmn *pcm) {
-struct gagrid *pgr1, *pgr2;
-gadouble *r1, *r2, x, y;
+struct gagrid *pgr1, *pgr2, *pgrc;
+gadouble *r1, *r2, *c, x, y;
 gadouble cmin1,cmax1,cmin2,cmax2,cint1,cint2;
-gaint siz,i,pass,im;
-char *r1mask, *r2mask;
+gaint siz,i,pass,im,flag,lcol,drawthismark;
+char *r1mask, *r2mask, *cmask;
 
   if (pcm->numgrd<2) {
     gaprnt (0,"Error plotting scatter field:  Only one grid provided\n");
@@ -3266,6 +3268,17 @@ char *r1mask, *r2mask;
     gaprnt (0,"Error plotting scatter plot:  Invalid grids\n");
     gaprnt (0,"   The two grids have difference scaling\n");
     return;
+  }
+  flag = 0;
+  if (pcm->numgrd>2) {
+    flag = 1;
+    pgrc = pcm->result[2].pgr;
+    if (pgrc->idim!=pgr1->idim || pgrc->jdim!=pgr2->jdim ||
+        gagchk(pgrc,pgr1,pgr1->idim) || gagchk(pgrc,pgr2,pgr2->jdim)) {
+      flag = 0;
+      gaprnt (0,"Error plotting scatter plot:  Invalid color grid");
+      gaprnt (0,"   Color grid ignored -- has different scaling");
+    }
   }
 
   pcm->xdim = 5;  /* hard coded 4's changed to 5's */
@@ -3297,6 +3310,14 @@ char *r1mask, *r2mask;
   gxwide (pcm->cthick);
   idiv = 1.0; jdiv = 1.0;
 
+  if (flag) {
+    gamnmx (pgrc);
+    if (pgrc->umin==0) {
+      gaprnt (0,"Cannot colorize scatterplot -- Color grid all undefined\n");
+      flag = 0;
+    } else gaselc(pcm,pgrc->rmin,pgrc->rmax);
+  }
+
   if (pcm->aflag != 0) {
     cmin1 = pcm->rmin;
     cmax1 = pcm->rmax;
@@ -3327,27 +3348,54 @@ char *r1mask, *r2mask;
       cmax2 = cmax2 + 2.0*cint2;
     }
   }
-  snprintf(pout,511,"%g %g %g %g \n",cmin1,cmax1,cmin2,cmax2);
+  snprintf(pout,255,"%g %g %g %g \n",cmin1,cmax1,cmin2,cmax2);
   gaprnt(2,pout);
   gxscal (pcm->xsiz1,pcm->xsiz2,pcm->ysiz1,pcm->ysiz2,
           cmin1,cmax1,cmin2,cmax2);
   pass = pcm->gpass[3];
   if (pass>5) pass=5;
-  if (pcm->ccolor<0) gxcolr(1);
-  else gxcolr(pcm->ccolor);
   gxwide (pcm->cthick);
   siz = pgr1->isiz*pgr1->jsiz;
   r1 = pgr1->grid;
   r2 = pgr2->grid;
   r1mask = pgr1->umask;
   r2mask = pgr2->umask;
+  if (flag) {
+    c = pgrc->grid;
+    cmask = pgrc->umask;
+  }
   for (i=0; i<siz; i++) {
     if (*r1mask!=0 && *r2mask!=0) {
-      gxconv (*r1,*r2,&x,&y,1);
-      im = pcm->cmark;
-      gxmark (im,x,y,pcm->digsiz*0.5);
+      drawthismark=1;
+      /* add color */
+      if (flag) {
+        if (*cmask==0) {
+          /* if color grid has missing data, use color 15 */
+          gxcolr(15);
+        }
+        else {
+          lcol = gashdc(pcm,*c);
+          if (lcol>-1) {
+            gxcolr(lcol);
+          }
+          else {
+            drawthismark=0;
+          }
+        }
+      }
+      else {
+        /* if no color grid is given, draw it the old way */
+        if (pcm->ccolor<0) gxcolr(1);
+        else gxcolr(pcm->ccolor);
+      }
+      if (drawthismark) {
+        gxconv (*r1,*r2,&x,&y,1);
+        im = pcm->cmark;
+        gxmark (im,x,y,pcm->digsiz*0.5);
+      }
     }
     r1++; r2++; r1mask++; r2mask++;
+    if (flag) { c++; cmask++; }
   }
 
   pcm->rmin = cmin1;
@@ -3389,7 +3437,7 @@ char *r1mask, *r2mask;
   pcm->gpass[3]++;
 }
 
-static gadouble a150 = 150.0*3.141592654/180.0;
+static gadouble a150 = 150.0*M_PI/180.0;
 
 void gaarrw (gadouble x, gadouble y, gadouble ang, gadouble siz, gadouble asiz) {
 gadouble xx,yy;
@@ -3903,7 +3951,7 @@ struct dbfld *fld=NULL,*newfld=NULL,*nextfld;
     /* call routine in gxcntr.c to write out contour line vertices and values */
     rc = gxshplin(sfid,dbfid,dbanch);
     if (rc>0) {
-      snprintf(pout,511,"%d contours written to shapefile %s\n",rc,fnroot);
+      snprintf(pout,255,"%d contours written to shapefile %s\n",rc,fnroot);
       gaprnt(2,pout);
     }
     else if (rc==-1) {
@@ -3928,7 +3976,7 @@ struct dbfld *fld=NULL,*newfld=NULL,*nextfld;
     /* call routine in gxshad2.c to write out polygon vertices and values */
     rc = s2shpwrt(sfid,dbfid,dbanch);
     if (rc>0) {
-      snprintf(pout,511,"%d polygons written to shapefile %s\n",rc,fnroot);
+      snprintf(pout,255,"%d polygons written to shapefile %s\n",rc,fnroot);
       gaprnt(2,pout);
     }
     else if (rc==-1) {
@@ -4140,9 +4188,9 @@ void gakml (struct gacmn *pcm) {
     rc = gxclvert(kmlfp);
     if (rc>0) {
       if (pcm->kmlname)
-        snprintf(pout,511,"%d contours written to KML file %s\n",rc,pcm->kmlname);
+        snprintf(pout,255,"%d contours written to KML file %s\n",rc,pcm->kmlname);
       else
-        snprintf(pout,511,"%d contours written to KML file grads.kml\n",rc);
+        snprintf(pout,255,"%d contours written to KML file grads.kml\n",rc);
       gaprnt(2,pout);
     }
     else err=1;
@@ -4186,9 +4234,9 @@ void gakml (struct gacmn *pcm) {
     rc = s2polyvert(kmlfp);
     if (rc>0) {
       if (pcm->kmlname)
-        snprintf(pout,511,"%d polygons written to KML file %s\n",rc,pcm->kmlname);
+        snprintf(pout,255,"%d polygons written to KML file %s\n",rc,pcm->kmlname);
       else
-        snprintf(pout,511,"%d polygons written to KML file grads.kml\n",rc);
+        snprintf(pout,255,"%d polygons written to KML file grads.kml\n",rc);
       gaprnt(2,pout);
     }
     else err=1;
@@ -6545,52 +6593,60 @@ gadouble v,s,plincr,lndif,ln,lt,cs;
         gxplot (x1,y1,2);
       }
     }
-    if (fabs(lnmin+180.0)<1.0 && fabs(lnmax-180.0)<1.0 &&
-        fabs(ltmin+90.0)<1.0 && fabs(ltmax-90.0)<1.0) {
+    /* these are labels when lon ranges from -180 to 180 */
+    if (fabs(lnmin+180.0)<1.0 && fabs(lnmax-180.0)<1.0 && fabs(ltmin+90.0)<1.0 && fabs(ltmax-90.0)<1.0) {
       cs = 0.10;
-      gxconv (-180.0,90.0,&x1,&y1,2);
-      gxchpl ("180",3,x1-cs*1.5,y1+cs*0.6,cs*1.1,cs,0.0);
-      gxconv (-90.0,90.0,&x1,&y1,2);
-      gxchpl ("90W",3,x1-cs*1.5,y1+cs*0.6,cs*1.1,cs,0.0);
-      gxconv (0.0,90.0,&x1,&y1,2);
-      gxchpl ("0",1,x1-cs*0.5,y1+cs*0.6,cs*1.1,cs,0.0);
-      gxconv (90.0,90.0,&x1,&y1,2);
-      gxchpl ("90E",3,x1-cs*1.5,y1+cs*0.6,cs*1.1,cs,0.0);
-      gxconv (180.0,90.0,&x1,&y1,2);
-      gxchpl ("180",3,x1-cs*1.5,y1+cs*0.6,cs*1.1,cs,0.0);
-      gxconv (-180.0,-90.0,&x1,&y1,2);
-      gxchpl ("180",3,x1-cs*1.5,y1-cs*1.6,cs*1.1,cs,0.0);
-      gxconv (-90.0,-90.0,&x1,&y1,2);
-      gxchpl ("90W",3,x1-cs*1.5,y1-cs*1.6,cs*1.1,cs,0.0);
-      gxconv (0.0,-90.0,&x1,&y1,2);
-      gxchpl ("0",1,x1-cs*0.5,y1-cs*1.6,cs*1.1,cs,0.0);
-      gxconv (90.0,-90.0,&x1,&y1,2);
-      gxchpl ("90E",3,x1-cs*1.5,y1-cs*1.6,cs*1.1,cs,0.0);
-      gxconv (180.0,-90.0,&x1,&y1,2);
-      gxchpl ("180",3,x1-cs*1.5,y1-cs*1.6,cs*1.1,cs,0.0);
+      gxconv (-180.0,90.0,&x1,&y1,2);   gxchpl ("180",3,x1-cs*1.5,y1+cs*0.6,cs*1.1,cs,0.0);
+      gxconv (-90.0,90.0,&x1,&y1,2);    gxchpl ("90W",3,x1-cs*1.5,y1+cs*0.6,cs*1.1,cs,0.0);
+      gxconv (0.0,90.0,&x1,&y1,2);      gxchpl ("0",  1,x1-cs*0.5,y1+cs*0.6,cs*1.1,cs,0.0);
+      gxconv (90.0,90.0,&x1,&y1,2);     gxchpl ("90E",3,x1-cs*1.5,y1+cs*0.6,cs*1.1,cs,0.0);
+      gxconv (180.0,90.0,&x1,&y1,2);    gxchpl ("180",3,x1-cs*1.5,y1+cs*0.6,cs*1.1,cs,0.0);
 
-      gxconv (-180.0,-60.0,&x1,&y1,2);
-      gxchpl ("60S",3,x1-cs*4.5,y1-cs*0.55,cs*1.1,cs,0.0);
-      gxconv (-180.0,-30.0,&x1,&y1,2);
-      gxchpl ("30S",3,x1-cs*4.0,y1-cs*0.55,cs*1.1,cs,0.0);
-      gxconv (-180.0,0.0,&x1,&y1,2);
-      gxchpl ("EQ",2,x1-cs*2.7,y1-cs*0.55,cs*1.1,cs,0.0);
-      gxconv (-180.0,60.0,&x1,&y1,2);
-      gxchpl ("60N",3,x1-cs*4.5,y1-cs*0.55,cs*1.1,cs,0.0);
-      gxconv (-180.0,30.0,&x1,&y1,2);
-      gxchpl ("30N",3,x1-cs*4.0,y1-cs*0.55,cs*1.1,cs,0.0);
+      gxconv (-180.0,-90.0,&x1,&y1,2);  gxchpl ("180",3,x1-cs*1.5,y1-cs*1.6,cs*1.1,cs,0.0);
+      gxconv (-90.0,-90.0,&x1,&y1,2);   gxchpl ("90W",3,x1-cs*1.5,y1-cs*1.6,cs*1.1,cs,0.0);
+      gxconv (0.0,-90.0,&x1,&y1,2);     gxchpl ("0",  1,x1-cs*0.5,y1-cs*1.6,cs*1.1,cs,0.0);
+      gxconv (90.0,-90.0,&x1,&y1,2);    gxchpl ("90E",3,x1-cs*1.5,y1-cs*1.6,cs*1.1,cs,0.0);
+      gxconv (180.0,-90.0,&x1,&y1,2);   gxchpl ("180",3,x1-cs*1.5,y1-cs*1.6,cs*1.1,cs,0.0);
 
-      gxconv (180.0,-60.0,&x1,&y1,2);
-      gxchpl ("60S",3,x1+cs*1.5,y1-cs*0.55,cs*1.1,cs,0.0);
-      gxconv (180.0,-30.0,&x1,&y1,2);
-      gxchpl ("30S",3,x1+cs*1.0,y1-cs*0.55,cs*1.1,cs,0.0);
-      gxconv (180.0,0.0,&x1,&y1,2);
-      gxchpl ("EQ",2,x1+cs*0.7,y1-cs*0.55,cs*1.1,cs,0.0);
-      gxconv (180.0,60.0,&x1,&y1,2);
-      gxchpl ("60N",3,x1+cs*1.5,y1-cs*0.55,cs*1.1,cs,0.0);
-      gxconv (180.0,30.0,&x1,&y1,2);
-      gxchpl ("30N",3,x1+cs*1.0,y1-cs*0.55,cs*1.1,cs,0.0);
+      gxconv (-180.0,-60.0,&x1,&y1,2);  gxchpl ("60S",3,x1-cs*4.5,y1-cs*0.55,cs*1.1,cs,0.0);
+      gxconv (-180.0,-30.0,&x1,&y1,2);  gxchpl ("30S",3,x1-cs*4.0,y1-cs*0.55,cs*1.1,cs,0.0);
+      gxconv (-180.0,0.0,&x1,&y1,2);    gxchpl ("EQ", 2,x1-cs*2.7,y1-cs*0.55,cs*1.1,cs,0.0);
+      gxconv (-180.0,30.0,&x1,&y1,2);   gxchpl ("30N",3,x1-cs*4.0,y1-cs*0.55,cs*1.1,cs,0.0);
+      gxconv (-180.0,60.0,&x1,&y1,2);   gxchpl ("60N",3,x1-cs*4.5,y1-cs*0.55,cs*1.1,cs,0.0);
 
+      gxconv (180.0,-60.0,&x1,&y1,2);   gxchpl ("60S",3,x1+cs*1.5,y1-cs*0.55,cs*1.1,cs,0.0);
+      gxconv (180.0,-30.0,&x1,&y1,2);   gxchpl ("30S",3,x1+cs*1.0,y1-cs*0.55,cs*1.1,cs,0.0);
+      gxconv (180.0,0.0,&x1,&y1,2);     gxchpl ("EQ", 2,x1+cs*0.7,y1-cs*0.55,cs*1.1,cs,0.0);
+      gxconv (180.0,30.0,&x1,&y1,2);    gxchpl ("30N",3,x1+cs*1.0,y1-cs*0.55,cs*1.1,cs,0.0);
+      gxconv (180.0,60.0,&x1,&y1,2);    gxchpl ("60N",3,x1+cs*1.5,y1-cs*0.55,cs*1.1,cs,0.0);
+
+    }
+    /* these are labels when lon ranges from 0 to 360 */
+    else if (fabs(lnmin+0.0)<1.0 && fabs(lnmax-360.0)<1.0 && fabs(ltmin+90.0)<1.0 && fabs(ltmax-90.0)<1.0) {
+      cs = 0.10;
+      gxconv (0.0,90.0,&x1,&y1,2);      gxchpl ("0",  1,x1-cs*0.5,y1+cs*0.6,cs*1.1,cs,0.0);
+      gxconv (90.0,90.0,&x1,&y1,2);     gxchpl ("90E",3,x1-cs*1.5,y1+cs*0.6,cs*1.1,cs,0.0);
+      gxconv (180.0,90.0,&x1,&y1,2);    gxchpl ("180",3,x1-cs*1.5,y1+cs*0.6,cs*1.1,cs,0.0);
+      gxconv (270.0,90.0,&x1,&y1,2);    gxchpl ("90W",3,x1-cs*1.5,y1+cs*0.6,cs*1.1,cs,0.0);
+      gxconv (360.0,90.0,&x1,&y1,2);    gxchpl ("0",  1,x1-cs*0.5,y1+cs*0.6,cs*1.1,cs,0.0);
+
+      gxconv (0.0,-90.0,&x1,&y1,2);     gxchpl ("0",  1,x1-cs*0.5,y1-cs*1.6,cs*1.1,cs,0.0);
+      gxconv (90.0,-90.0,&x1,&y1,2);    gxchpl ("90E",3,x1-cs*1.5,y1-cs*1.6,cs*1.1,cs,0.0);
+      gxconv (180.0,-90.0,&x1,&y1,2);   gxchpl ("180",3,x1-cs*1.5,y1-cs*1.6,cs*1.1,cs,0.0);
+      gxconv (270.0,-90.0,&x1,&y1,2);   gxchpl ("90W",3,x1-cs*1.5,y1-cs*1.6,cs*1.1,cs,0.0);
+      gxconv (360.0,-90.0,&x1,&y1,2);   gxchpl ("0",  1,x1-cs*0.5,y1-cs*1.6,cs*1.1,cs,0.0);
+
+      gxconv (0.0,-60.0,&x1,&y1,2);     gxchpl ("60S",3,x1-cs*4.5,y1-cs*0.55,cs*1.1,cs,0.0);
+      gxconv (0.0,-30.0,&x1,&y1,2);     gxchpl ("30S",3,x1-cs*4.0,y1-cs*0.55,cs*1.1,cs,0.0);
+      gxconv (0.0,0.0,&x1,&y1,2);       gxchpl ("EQ", 2,x1-cs*2.7,y1-cs*0.55,cs*1.1,cs,0.0);
+      gxconv (0.0,30.0,&x1,&y1,2);      gxchpl ("30N",3,x1-cs*4.0,y1-cs*0.55,cs*1.1,cs,0.0);
+      gxconv (0.0,60.0,&x1,&y1,2);      gxchpl ("60N",3,x1-cs*4.5,y1-cs*0.55,cs*1.1,cs,0.0);
+
+      gxconv (360.0,-60.0,&x1,&y1,2);   gxchpl ("60S",3,x1+cs*1.5,y1-cs*0.55,cs*1.1,cs,0.0);
+      gxconv (360.0,-30.0,&x1,&y1,2);   gxchpl ("30S",3,x1+cs*1.0,y1-cs*0.55,cs*1.1,cs,0.0);
+      gxconv (360.0,0.0,&x1,&y1,2);     gxchpl ("EQ", 2,x1+cs*0.7,y1-cs*0.55,cs*1.1,cs,0.0);
+      gxconv (360.0,30.0,&x1,&y1,2);    gxchpl ("30N",3,x1+cs*1.0,y1-cs*0.55,cs*1.1,cs,0.0);
+      gxconv (360.0,60.0,&x1,&y1,2);    gxchpl ("60N",3,x1+cs*1.5,y1-cs*0.55,cs*1.1,cs,0.0);
     }
     return;
   }  /* end of robinson projection case */
@@ -6831,23 +6887,23 @@ void gaalog2 (gadouble xin, gadouble yin, gadouble *xout, gadouble *yout) {
 /* cos lat scaling */
 
 void gaclx (gadouble xin, gadouble yin, gadouble *xout, gadouble *yout) {
-  *xout = sin(xin*3.1416/180.0);
+  *xout = sin(xin*M_PI/180);
   *yout = yin;
 }
 
 void gacly (gadouble xin, gadouble yin, gadouble *xout, gadouble *yout) {
   *xout = xin;
-  *yout = sin(yin*3.1416/180.0);
+  *yout = sin(yin*M_PI/180);
 }
 
 void gaaclx (gadouble xin, gadouble yin, gadouble *xout, gadouble *yout) {
-  *xout = asin(xin)*180.0/3.1416;
+  *xout = asin(xin)*180/M_PI;
   *yout = yin;
 }
 
 void gaacly (gadouble xin, gadouble yin, gadouble *xout, gadouble *yout) {
   *xout = xin;
-  *yout = asin(yin)*180.0/3.1416;
+  *yout = asin(yin)*180/M_PI;
 }
 
 

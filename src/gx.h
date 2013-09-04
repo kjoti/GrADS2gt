@@ -15,7 +15,7 @@
 
 #define HBUFSZ 10000000L
 #define BUFOPT 0
-#define pi 3.14159265358979
+#define pi M_PI
 
 /* Default directory containing the stroke and map data sets.
    User can override this default via setenv GADDIR */
@@ -193,7 +193,7 @@ struct gxcntr {
    gxmaskclear: Clear (unset) mask array
                                                            */
 
-void gxqdrgb (gaint, gaint *, gaint *, gaint *);
+void gxqdrgb (gaint, gaint *, gaint *, gaint *); /* query default color rgb values */
 void gxdbgn (gadouble, gadouble);
 void gxdbat (void);
 void gxdend (void);
