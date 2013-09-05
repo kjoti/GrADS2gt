@@ -1,0 +1,13 @@
+syntax: glob
+
+TAGS
+*~
+*.o
+*.log
+
+autom4te/*
+Makefile
+config.status
+stamp-h1
+buildinfo.h
+src/config.h
