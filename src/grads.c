@@ -281,7 +281,7 @@ for (i=0; i<32; i++) {
 }
 
 
-gafdef();
+gafdef2();
 
 gagx(&gcmn);
 

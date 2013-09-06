@@ -1,7 +1,7 @@
 /*
  * galudf.c -- GrADS Legacy User Defined Function
  *
- * Copyed from src/gafunc.c in GrADS 1.9b4:
+ * Copy from src/gafunc.c in version GrADS 1.9b4:
  *   ffuser()
  *   gafdef()
  */
@@ -22,24 +22,120 @@
 #include <string.h>
 #include "grads.h"
 
-
-static struct gaufb *ufba;  /* Anchor for user function defs */
 char *gxgnam(char *);       /* This is also in gx.h */
+
+static struct gaufb *ufba = NULL;  /* Anchor for user function defs */
+static char pout[256];   /* Build error msgs here */
+
+
+/*
+ * Write a record into the UDF transfer file.
+ * Return 0 if successful end.
+ */
+static int
+write_record(void *ptr, size_t size, int nelems, int is_seq, FILE *fp)
+{
+    int rsize = size * nelems;
+
+    if (is_seq && fwrite(&rsize, sizeof(int), 1, fp) != 1)
+        return -1;
+
+    if (fwrite(ptr, size, nelems, fp) != nelems)
+        return -1;
+
+    if (is_seq && fwrite(&rsize, sizeof(int), 1, fp) != 1)
+        return -1;
+
+    return 0;
+}
+
+
+/*
+ * Write float data (gadouble -> float).
+ *
+ * Return value:
+ *    0: successful end
+ *   -1: error
+ *
+ * Compatible with version GrADS 1.9 UDF.
+ */
+static int
+write_float(gadouble *ptr, int nelems, int is_seq, FILE *fp)
+{
+    float *buf;
+    int i, rval;
+
+    if ((buf = malloc(sizeof(float) * nelems)) == NULL)
+        return -1;
+
+    for (i = 0; i < nelems; i++)
+        buf[i] = (float)ptr[i];
+
+    rval = write_record(buf, sizeof(float), nelems, is_seq, fp);
+    free(buf);
+    return rval;
+}
+
+
+/*
+ * Read a record from the UDF transfer file .
+ * Return 0 if successful end.
+ */
+static int
+read_record(void *ptr, size_t size, int nelems, int is_seq, FILE *fp)
+{
+    int rsize = 0;
+
+    if (is_seq && fread(&rsize, sizeof(int), 1, fp) != 1
+        && rsize != size * nelems)
+        return -1;
+
+    if (fread(ptr, size, nelems, fp) != nelems)
+        return -1;
+
+    if (is_seq && fread(&rsize, sizeof(int), 1, fp) != 1
+        && rsize != size * nelems)
+        return -1;
+
+    return 0;
+}
+
+
+/*
+ * Read float data.
+ */
+static int
+read_float(gadouble *ptr, size_t nelems, int is_seq, FILE *fp)
+{
+    float *buf;
+    int i, rval;
+
+    if ((buf = malloc(sizeof(float) * nelems)) == NULL)
+        return -1;
+
+    rval = read_record(buf, sizeof(float), nelems, is_seq, fp);
+    if (rval == 0)
+        for (i = 0; i < nelems; i++)
+            ptr[i] = (gadouble)buf[i];
+
+    free(buf);
+    return rval;
+}
 
 
 /* Handle user specified function call.  The args are written
    out, the user's process is invoked, and the result is read
    back in.  */
 
-int ffuser (struct gaufb *ufb, struct gafunc *pfc, struct gastat *pst) {
+gaint ffuser (struct gaufb *ufb, struct gafunc *pfc, struct gastat *pst) {
 FILE *ifile,*ofile;
 struct gagrid *pgr;
 struct dt dtim;
-float (*conv) (float *, float);
-float rvals[20],*v;
+gadouble (*conv) (gadouble *, gadouble);
+gadouble *v;
+float rvals[20];
 int rc,iarg,siz,i;
 char *ch,rec[80];
-int rdw;
 
   /* Check number of args */
 
@@ -63,13 +159,8 @@ int rdw;
   /* Write hearder record to transfer file */
 
   rvals[0] = (float)pfc->argnum;
-  if (ufb->sflg) {
-    rdw = sizeof(float)*20;
-    fwrite (&rdw,sizeof(int),1,ofile);
-  }
-  rc = fwrite (rvals,sizeof(float),20,ofile);
-  if (rc<20) goto werr;
-  if (ufb->sflg) fwrite (&rdw,sizeof(int),1,ofile);
+  if (write_record(rvals, sizeof(float), 20, ufb->sflg, ofile) < 0)
+      goto werr;
 
   /* Write args to the transfer file */
 
@@ -80,11 +171,11 @@ int rdw;
     if (ufb->atype[iarg]==1) {
       rc = gaexpr(pfc->argpnt[iarg],pst);         /* Evaluate      */
       if (rc) {                  /*mf ---- add fclose of the udf output file ---- mf*/
-	fclose(ofile);
-	return (rc);
+        fclose(ofile);
+        return (rc);
       }
       if (pst->type!=1) {
-	fclose(ofile);           /*mf ---- add fclose of the udf output file ---- mf*/
+        fclose(ofile);           /*mf ---- add fclose of the udf output file ---- mf*/
         gafree (pst);
         return(-1);
       }
@@ -132,76 +223,49 @@ int rdw;
           rvals[10] = *(pgr->jvals);
         }
       }
-      siz = pgr->isiz*pgr->jsiz;                 /* Write header */
-      if (ufb->sflg) {
-        rdw = sizeof(float)*20;
-        fwrite (&rdw,sizeof(int),1,ofile);
-      }
-      rc = fwrite(rvals,sizeof(float),20,ofile);
-      if (rc<20) {
-        gafree(pst);
+
+      /* Write header */
+      if (write_record(rvals, sizeof(float), 20, ufb->sflg, ofile) < 0)
         goto werr;
-      }                                          /* Write grid   */
-      if (ufb->sflg) fwrite (&rdw,sizeof(int),1,ofile);
-      if (ufb->sflg) {
-        rdw = sizeof(float)*siz;
-        fwrite (&rdw,sizeof(int),1,ofile);
-      }
-      rc = fwrite(pgr->grid,sizeof(float),siz,ofile);
-      if (rc<siz) {
-        gafree(pst);
+
+      /* Write grid */
+      siz = pgr->isiz * pgr->jsiz;
+      if (write_float(pgr->grid, siz, ufb->sflg, ofile) < 0)
         goto werr;
-      }
-      if (ufb->sflg) fwrite (&rdw,sizeof(int),1,ofile);
+
       if (pgr->idim>-1) {                  /* write i dim scaling */
         v = pgr->grid;
         if (pgr->idim<3) {
           conv = pgr->igrab;
           for (i=pgr->dimmin[pgr->idim];i<=pgr->dimmax[pgr->idim];i++) {
-            *v = conv(pgr->ivals,(float)i);
+            *v = conv(pgr->ivals,(gadouble)i);
             v++;
           }
         } else {
           for (i=pgr->dimmin[pgr->idim];i<=pgr->dimmax[pgr->idim];i++) {
-            *v = (float)i;
+            *v = (gadouble)i;
             v++;
           }
         }
-        if (ufb->sflg) {
-          rdw = sizeof(float)*pgr->isiz;
-          fwrite (&rdw,sizeof(int),1,ofile);
-        }
-        rc = fwrite(pgr->grid,sizeof(float),pgr->isiz,ofile);
-        if (rc<pgr->isiz) {
-          gafree(pst);
+        if (write_float(pgr->grid, pgr->isiz, ufb->sflg, ofile) < 0)
           goto werr;
-        }
-        if (ufb->sflg) fwrite (&rdw,sizeof(int),1,ofile);
       }
       if (pgr->jdim>-1) {                /* write j dim scaling */
         v = pgr->grid;
         if (pgr->jdim<3) {
           conv = pgr->jgrab;
           for (i=pgr->dimmin[pgr->jdim];i<=pgr->dimmax[pgr->jdim];i++) {
-            *v = conv(pgr->jvals,(float)i);
+            *v = conv(pgr->jvals,(gadouble)i);
             v++;
           }
         } else {
           for (i=pgr->dimmin[pgr->jdim];i<=pgr->dimmax[pgr->jdim];i++) {
-            *v = (float)i;
+            *v = (gadouble)i;
             v++;
           }
         }
-        if (ufb->sflg) {
-          rdw = sizeof(float)*pgr->jsiz;
-          fwrite (&rdw,sizeof(int),1,ofile);
-        }
-        rc = fwrite(pgr->grid,sizeof(float),pgr->jsiz,ofile);
-        if (rc<pgr->jsiz) {
-          gafree(pst);
+        if (write_float(pgr->grid, pgr->jsiz, ufb->sflg, ofile) < 0)
           goto werr;
-        }
-        if (ufb->sflg) fwrite (&rdw,sizeof(int),1,ofile);
       }
       gafree(pst);     /* Done with expr */
     }
@@ -209,19 +273,14 @@ int rdw;
     /* Handle Value */
 
     else if (ufb->atype[iarg]==2) {
-      if (valprs(pfc->argpnt[iarg],rvals)==NULL) {
+      if (getflt(pfc->argpnt[iarg],rvals)==NULL) {
         sprintf (pout,"Error from %s: Invalid Argument\n",ufb->name);
         gaprnt (0,pout);
         sprintf (pout,"  Expecting arg %i to be a constant\n",iarg);
         gaprnt (0,pout);
       }
-      if (ufb->sflg) {
-        rdw = sizeof(float);
-        fwrite (&rdw,sizeof(int),1,ofile);
-      }
-      rc = fwrite(rvals,sizeof(float),1,ofile);
-      if (rc<1) goto werr;
-      if (ufb->sflg) fwrite (&rdw,sizeof(int),1,ofile);
+      if (write_record(rvals, sizeof(float), 1, ufb->sflg, ofile) < 0)
+        goto werr;
     }
 
     /* Handle Character */
@@ -234,13 +293,8 @@ int rdw;
         rec[i] = *ch;
         i++; ch++;
       }
-      if (ufb->sflg) {
-        rdw = 80;
-        fwrite (&rdw,sizeof(int),1,ofile);
-      }
-      rc = fwrite(rec,1,80,ofile);
-      if (rc<80) goto werr;
-      if (ufb->sflg) fwrite (&rdw,sizeof(int),1,ofile);
+      if (write_record(rec, 1, 80, ufb->sflg, ofile) < 0)
+        goto werr;
     }
   }
 
@@ -269,13 +323,8 @@ int rdw;
 
   /* Read the header record, which contains the return code */
 
-  if (ufb->sflg) {
-    fread(&rdw,sizeof(int),1,ifile);
-    if (rdw!=sizeof(float)*20) goto ferr;
-  }
-  rc = fread(rvals,sizeof(float),20,ifile);
-  if (rc<20) goto rerr;
-  if (ufb->sflg) fread(&rdw,sizeof(int),1,ifile);
+  if (read_record(rvals, sizeof(float), 20, ufb->sflg, ifile) < 0)
+    goto rerr;
   rc = (int)(*rvals+0.1);
   if (rc!=0) {
     fclose(ifile);   /*mf ---- add fclose of the udf input file ---- mf*/
@@ -284,13 +333,8 @@ int rdw;
 
   /* If all is ok, read the grid header */
 
-  if (ufb->sflg) {
-    fread(&rdw,sizeof(int),1,ifile);
-    if (rdw!=sizeof(float)*20) goto ferr;
-  }
-  rc = fread(rvals,sizeof(float),20,ifile);
-  if (rc<20) goto rerr;
-  if (ufb->sflg) fread(&rdw,sizeof(int),1,ifile);
+  if (read_record(rvals, sizeof(float), 20, ufb->sflg, ifile) < 0)
+    goto rerr;
 
   /* Start building the gagrid block */
 
@@ -329,27 +373,27 @@ int rdw;
 
   if (pgr->idim>-1 && pgr->ilinr==1) {     /* Linear scaling info */
     if (pgr->idim==3) {
-      v = (float *)malloc(sizeof(float)*8);
+      v = (gadouble *)malloc(sizeof(gadouble)*8);
       if (v==NULL) goto merr;
-      *v = rvals[11];
-      *(v+1) = rvals[12];
-      *(v+2) = rvals[13];
-      *(v+3) = rvals[14];
-      *(v+4) = rvals[15];
-      *(v+6) = rvals[16];
-      *(v+5) = rvals[17];
+      *v     = (gadouble)rvals[11];
+      *(v+1) = (gadouble)rvals[12];
+      *(v+2) = (gadouble)rvals[13];
+      *(v+3) = (gadouble)rvals[14];
+      *(v+4) = (gadouble)rvals[15];
+      *(v+6) = (gadouble)rvals[16];
+      *(v+5) = (gadouble)rvals[17];
       *(v+7) = -999.9;
       pgr->ivals = v;
       pgr->iavals = v;
     } else {
-      v = (float *)malloc(sizeof(float)*6);
+      v = (gadouble *)malloc(sizeof(gadouble)*6);
       if (v==NULL) goto merr;
-      *v = rvals[8];
-      *(v+1) = rvals[7]-rvals[8];
+      *v     = (gadouble)rvals[8];
+      *(v+1) = (gadouble)(rvals[7]-rvals[8]);
       *(v+2) = -999.9;
       pgr->ivals = v;
-      *(v+3) = 1.0 / rvals[8];
-      *(v+4) = -1.0 * (rvals[7]-rvals[8]) / rvals[8];
+      *(v+3) = (gadouble)(1.0 / rvals[8]);
+      *(v+4) = (gadouble)(-1.0 * (rvals[7]-rvals[8]) / rvals[8]);
       *(v+5) = -999.9;
       pgr->iavals = v+3;
       pgr->iabgr = liconv;
@@ -358,27 +402,27 @@ int rdw;
   }
   if (pgr->jdim>-1 && pgr->jlinr==1) {     /* Linear scaling info */
     if (pgr->jdim==3) {
-      v = (float *)malloc(sizeof(float)*8);
+      v = (gadouble *)malloc(sizeof(gadouble)*8);
       if (v==NULL) goto merr;
-      *v = rvals[11];
-      *(v+1) = rvals[12];
-      *(v+2) = rvals[13];
-      *(v+3) = rvals[14];
-      *(v+4) = rvals[15];
-      *(v+6) = rvals[16];
-      *(v+5) = rvals[17];
+      *v     = (gadouble)rvals[11];
+      *(v+1) = (gadouble)rvals[12];
+      *(v+2) = (gadouble)rvals[13];
+      *(v+3) = (gadouble)rvals[14];
+      *(v+4) = (gadouble)rvals[15];
+      *(v+6) = (gadouble)rvals[16];
+      *(v+5) = (gadouble)rvals[17];
       *(v+7) = -999.9;
       pgr->jvals = v;
       pgr->javals = v;
     } else {
-      v = (float *)malloc(sizeof(float)*6);
+      v = (gadouble *)malloc(sizeof(gadouble)*6);
       if (v==NULL) goto merr;
-      *v = rvals[10];
-      *(v+1) = rvals[9]-rvals[10];
+      *v     = (gadouble)rvals[10];
+      *(v+1) = (gadouble)(rvals[9]-rvals[10]);
       *(v+2) = -999.9;
       pgr->jvals = v;
-      *(v+3) = 1.0 / rvals[10];
-      *(v+4) = -1.0 * (rvals[9]-rvals[10]) / rvals[10];
+      *(v+3) = (gadouble)(1.0 / rvals[10]);
+      *(v+4) = (gadouble)(-1.0 * (rvals[9]-rvals[10]) / rvals[10]);
       *(v+5) = -999.9;
       pgr->javals = v+3;
       pgr->jabgr = liconv;
@@ -389,37 +433,38 @@ int rdw;
   /* Read in the data */
 
   siz = pgr->isiz * pgr->jsiz;
-  v = (float *)malloc(sizeof(float)*siz);
+  v = (gadouble *)malloc(sizeof(gadouble)*siz);
   if (v==NULL) {
     free(pgr);
     goto merr;
   }
-  if (ufb->sflg) {
-    fread(&rdw,sizeof(int),1,ifile);
-    if (rdw!=sizeof(float)*siz) goto ferr;
-  }
-  rc = fread(v,sizeof(float),siz,ifile);
-  if (rc<siz) goto rerr;
-  if (ufb->sflg) fread(&rdw,sizeof(int),1,ifile);
+  if (read_float(v, siz, ufb->sflg, ifile) < 0)
+    goto rerr;
   pgr->grid = v;
+
+  /* set umask */
+  if ((pgr->umask = malloc(siz)) == NULL) {
+    free(v);
+    free(pgr);
+    goto merr;
+  }
+  for (i = 0; i < siz; i++)
+    pgr->umask[i] = (v[i] == pgr->undef) ? 0 : 1;
 
   /* Read in non-linear scaling info, if any */
 
   if (pgr->idim>-1 && pgr->ilinr==0) {
-    v = (float *)malloc(sizeof(float)*(pgr->isiz+2));
+    v = (gadouble *)malloc(sizeof(gadouble)*(pgr->isiz+2));
     if (v==NULL) {
       free(pgr->grid);
       free(pgr);
       goto merr;
     }
     *v = pgr->isiz;
-    if (ufb->sflg) {
-      fread(&rdw,sizeof(int),1,ifile);
-      if (rdw!=sizeof(float)*pgr->isiz) goto ferr;
-    }
-    rc = fread(v+1,sizeof(float),pgr->isiz,ifile);
-    if (ufb->sflg) fread(&rdw,sizeof(int),1,ifile);
-    if (rc<pgr->isiz) goto rerr;
+
+    if (read_float(v + 1, pgr->isiz, ufb->sflg, ifile) < 0)
+      goto rerr;
+
     *(v+pgr->isiz+1) = -999.9;
     pgr->ivals = v;
     pgr->iavals = v;
@@ -427,20 +472,17 @@ int rdw;
     pgr->igrab = gr2lev;
   }
   if (pgr->jdim>-1 && pgr->jlinr==0) {
-    v = (float *)malloc(sizeof(float)*(pgr->jsiz+2));
+    v = (gadouble *)malloc(sizeof(gadouble)*(pgr->jsiz+2));
     if (v==NULL) {
       free(pgr->grid);
       free(pgr);
       goto merr;
     }
     *v = pgr->jsiz;
-    if (ufb->sflg) {
-      fread(&rdw,sizeof(int),1,ifile);
-      if (rdw!=sizeof(float)*pgr->jsiz) goto ferr;
-    }
-    rc = fread(v+1,sizeof(float),pgr->jsiz,ifile);
-    if (rc<pgr->jsiz) goto rerr;
-    if (ufb->sflg) fread(&rdw,sizeof(int),1,ifile);
+
+    if (read_float(v + 1, pgr->jsiz, ufb->sflg, ifile) < 0)
+      goto rerr;
+
     *(v+pgr->jsiz+1) = -999.9;
     pgr->jvals = v;
     pgr->javals = v;
@@ -507,7 +549,7 @@ derr:
    The file name is pointed to by the GAFDEF environment variable;
    if unset then no user functions will be set up */
 
-void gafdef (void) {
+void gafdef2 (void) {
 struct gaufb *ufb, *oufb;
 char *cname;
 FILE *cfile;
@@ -670,4 +712,27 @@ wname:
   sprintf (pout,"  File name is: %s\n",cname);
   gaprnt (0,pout);
   return;
+}
+
+
+void gaqufb (void) {
+struct gaufb *ufb;
+char name[20];
+int i;
+
+  ufb = ufba;
+  while (ufb) {
+    for (i=0; i<8; i++) name[i] = ufb->name[i];
+    name[8] = '\0';
+    sprintf (pout,"%s  Args: %i %i  Exec: %s\n",name,ufb->alo,ufb->ahi,
+              ufb->fname);
+    gaprnt (2,pout);
+    ufb = ufb->ufb;
+  }
+}
+
+
+struct gaufb *get_ludf(void)
+{
+  return ufba;
 }

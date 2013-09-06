@@ -88,7 +88,7 @@ grads_SOURCES          = grads.c gxsubs.c gxmeta.c gxchpl.c gxcntr.c gxstrm.c \
 			 gscrpt.c gamach.c bufrstn.c gabufr.c gabufrtbl.c \
 			 gxX.c gxdxwd.c galloc.c $(src_gui) $(src_gadap) \
 			 gaddes.c gaio.c gacfg.c gauser.c gasdf.c gatxt.c \
-			 gacal.c caltime.c $(src_gtool3)
+			 gacal.c galudf.c caltime.c $(src_gtool3)
 
 # Sources that will not always be compiled
 # Since gradsc is the only GrADS binary that is not conditionally compiled,

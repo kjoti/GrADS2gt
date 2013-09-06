@@ -24,7 +24,6 @@
 /* expose Mike Fiorino's global struct to these routines for warning level setting */
 extern struct gamfcmn mfcmn;
 
-static struct gaufb *ufba;  /* Anchor for user function defs */
 char *gxgnam(char *);       /* This is also in gx.h */
 
 /* Function routine names.  Add a new function by putting the
@@ -117,7 +116,7 @@ gaint (*fpntr)(struct gafunc *, struct gastat *)=NULL;
 
   /* Find this function name and get the function pointer. */
 
-  ufb = ufba;
+  ufb = get_ludf();
   while (ufb) {
     if (cmpwrd(ufb->name,name)) break;
     ufb = ufb->ufb;
@@ -239,7 +238,10 @@ gaint (*fpntr)(struct gafunc *, struct gastat *)=NULL;
 
   /* Everything is all set.  Call the function routine.               */
 
-  rc = (*fpntr)(pfc, pst2);           /* Call the function       */
+  if (ufb)
+    rc = ffuser(ufb, pfc, pst2);
+  else
+    rc = (*fpntr)(pfc, pst2);           /* Call the function       */
 
   if (rc==-1) {
     snprintf(pout,255,"Error in %s : Arg was stn data type\n",name);
@@ -6704,7 +6706,7 @@ void gafdef (void) {
 /* char rec[260],*ch; */
 /* gaint i,j,pass; */
 
-  ufba = NULL;
+  /* ufba = NULL; */
   return;
 
   /* remainder of subroutine commented out pending implementation of DLLs */

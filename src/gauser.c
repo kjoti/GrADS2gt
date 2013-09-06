@@ -37,6 +37,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <limits.h>
 #include <math.h>
 #include "grads.h"
@@ -3593,7 +3594,7 @@ gadouble minvals[4], maxvals[4];
   }
 
   else if (cmpwrd(arg,"udft")) {
-    gaprnt(2,"Warning: User Defined Functions have been disabled in this version of GrADS\n");
+    gaqufb();
     return (0);
   }
 

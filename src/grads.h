@@ -946,6 +946,12 @@ char *rtnprs (char *, char *, struct gastat *) ;
 gaint gafopr (struct gastat *, struct gastat *, gaint );
 void gafdef (void);
 
+/* Funtions in GALUDF */
+gaint ffuser (struct gaufb *ufb, struct gafunc *pfc, struct gastat *pst);
+void gafdef2 (void);
+void gaqufb (void);
+struct gaufb *get_ludf (void);
+
 /* Functions in GAIO:
     gaggrd: Get a grid from a data file
     gagrow: Get a row of data, possibly wrapped, from the file
