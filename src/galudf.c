@@ -1,9 +1,10 @@
 /*
  * galudf.c -- GrADS Legacy User Defined Function
  *
- * Copy from src/gafunc.c in version GrADS 1.9b4:
+ * Copy these functions from src/gafunc.c in version GrADS 1.9b4:
  *   ffuser()
  *   gafdef()
+ *   gaqufb()
  */
 
 #ifdef HAVE_CONFIG_H
@@ -102,7 +103,7 @@ read_record(void *ptr, size_t size, int nelems, int is_seq, FILE *fp)
 
 
 /*
- * Read float data.
+ * Read float data (float -> gadouble).
  */
 static int
 read_float(gadouble *ptr, size_t nelems, int is_seq, FILE *fp)
@@ -225,13 +226,17 @@ char *ch,rec[80];
       }
 
       /* Write header */
-      if (write_record(rvals, sizeof(float), 20, ufb->sflg, ofile) < 0)
+      if (write_record(rvals, sizeof(float), 20, ufb->sflg, ofile) < 0) {
+        gafree(pst);
         goto werr;
+      }
 
       /* Write grid */
       siz = pgr->isiz * pgr->jsiz;
-      if (write_float(pgr->grid, siz, ufb->sflg, ofile) < 0)
+      if (write_float(pgr->grid, siz, ufb->sflg, ofile) < 0) {
+        gafree(pst);
         goto werr;
+      }
 
       if (pgr->idim>-1) {                  /* write i dim scaling */
         v = pgr->grid;
@@ -247,8 +252,10 @@ char *ch,rec[80];
             v++;
           }
         }
-        if (write_float(pgr->grid, pgr->isiz, ufb->sflg, ofile) < 0)
+        if (write_float(pgr->grid, pgr->isiz, ufb->sflg, ofile) < 0) {
+          gafree(pst);
           goto werr;
+        }
       }
       if (pgr->jdim>-1) {                /* write j dim scaling */
         v = pgr->grid;
@@ -264,8 +271,10 @@ char *ch,rec[80];
             v++;
           }
         }
-        if (write_float(pgr->grid, pgr->jsiz, ufb->sflg, ofile) < 0)
+        if (write_float(pgr->grid, pgr->jsiz, ufb->sflg, ofile) < 0) {
+          gafree(pst);
           goto werr;
+        }
       }
       gafree(pst);     /* Done with expr */
     }
