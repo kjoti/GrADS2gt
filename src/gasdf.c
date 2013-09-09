@@ -714,7 +714,10 @@ utUnit timeunit ;
           pfi->calendar = CALTIME_GREGORIAN;
         }
       }
-      mfcmn.cal365 = pfi->calendar;
+      if (mfcmn.cal365 < 0)
+        mfcmn.cal365 = pfi->calendar;
+      if (mfcmn.cal365 != pfi->calendar)
+        gaprnt(0, "gasdf: Calendar type in the SDF file is ignored.\n");
 
       /* set dimension size */
       for (i=0;i<pfi->nsdfdims;i++) {
