@@ -190,3 +190,20 @@ invalid_date(const struct dt *dtim)
 
     return ct_verify_date(type, dtim->yr, dtim->mo, dtim->dy);
 }
+
+
+/*
+ * return the day of year.
+ */
+int
+get_day_of_year(const struct dt *dtim)
+{
+    caltime origin, curr;
+
+    set_cal(&curr, dtim, mfcmn.cal365);
+
+    origin = curr;
+    origin.month = origin.day = origin.sec = 0;
+
+    return ct_diff_days(&curr, &origin) + 1;
+}
