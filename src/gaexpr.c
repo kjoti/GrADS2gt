@@ -714,7 +714,7 @@ size_t sz;
 
 
 /*
- *
+ * lookup a file where the variable 'vname' is defined.
  */
 struct gafile *
 lookupfile(const struct gastat *pst, const char *vname)
