@@ -357,7 +357,7 @@ hdr_x11 = gx.h bitmaps.h
 hdr_sdf = gasdf.h gasdf_std_time.h
 hdr_gui = gagui.h
 hdr_png = mtables.c
-hdr_gtool3 = gagt3.h
+hdr_gtool3 = gagt3.h gagt3_version.h
 noinst_HEADERS = $(hdr_core) $(hdr_x11) $(hdr_sdf) $(hdr_png) \
 		      $(hdr_gui) $(hdr_bufr) $(hdr_gtool3)
 
