@@ -77,7 +77,6 @@ static struct gtoptions opttab[] = {
 };
 
 
-
 #ifndef HAVE_STRLCPY
 /* strlcpy() first appeared in OpenBSD 2.4 */
 size_t
@@ -271,8 +270,15 @@ opt_tdefine(const char *args)
  * check edef-option (printf-format).
  *
  * ex.)
- *   run%02d ... ok.
- *   run%s   ... NG.
+ *  assert(check_ename_format("%d") == 0);
+ *  assert(check_ename_format("%02d") == 0);
+ *  assert(check_ename_format("run%02d") == 0);
+ *  assert(check_ename_format("%%run%02d") == 0);
+ *  assert(check_ename_format("%%run%02d%%") == 0);
+ *  assert(check_ename_format("%s") < 0);
+ *  assert(check_ename_format("%d %s") < 0);
+ *  assert(check_ename_format("%s %d") < 0);
+ *  assert(check_ename_format("% d") < 0);
  */
 static int
 check_ename_format(const char *fmt)
@@ -291,9 +297,6 @@ check_ename_format(const char *fmt)
             p++;
             continue;
         }
-
-        if (count > 0)
-            return -1;
 
         /* skip '%' */
         ++p;
@@ -318,7 +321,7 @@ check_ename_format(const char *fmt)
         }
         p++;
     }
-    return 0;
+    return count == 1 ? 0 : -1;
 }
 
 

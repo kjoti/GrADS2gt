@@ -1391,13 +1391,7 @@ gafndt_impl(char *out, size_t outsize, const char *in,
         snprintf(out,sz,"%02i",dtimi->mn);
         out+=2;  in+=4;
       } else if (*(in+2)=='j' && *(in+3)=='3') {
-        doy = dtimi->dy;
-        mo = dtimi->mo-1;
-        while (mo>0) {
-          doy += mosiz[mo];
-          if (mo==2 && qleap(dtimi->yr)) doy+=1;
-          mo--;
-        }
+        doy = get_day_of_year(dtimi);
         snprintf(out,sz,"%03i",doy);
         out+=3;  in+=4;
       } else {
@@ -1478,13 +1472,7 @@ gafndt_impl(char *out, size_t outsize, const char *in,
       out+=2;  in+=3;
     } else if (*in=='%' && *(in+1)=='j' && *(in+2)=='3') {   /* julian day */
       tused=1;
-      doy = dtim->dy;
-      mo = dtim->mo-1;
-      while (mo>0) {
-        doy += mosiz[mo];
-        if (mo==2 && qleap(dtim->yr)) doy+=1;
-        mo--;
-      }
+      doy = get_day_of_year(dtim);
       snprintf(out,sz,"%03i",doy);
       out+=3;  in+=3;
     }

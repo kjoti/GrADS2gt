@@ -1188,6 +1188,7 @@ gaint timdif(const struct dt *dtim1, const struct dt *dtim2);
 gadouble t2gr(const gadouble *vals, const struct dt *dtim);
 void gr2t(const gadouble *vals, gadouble gr, struct dt *dtim);
 int invalid_date(const struct dt *dtim);
+int get_day_of_year(const struct dt *dtim);
 
 gaint qleap (gaint);
 char *adtprs (char *, struct dt *, struct dt *);
