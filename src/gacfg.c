@@ -52,6 +52,7 @@ const char *nc_inq_libvers(void);
 
 #if GTOOL3 == 1
 #include "gtool3.h"
+#include "gagt3_version.h"
 #endif
 
 #if USEGADAP==1
@@ -251,6 +252,8 @@ snprintf(cmd,255,"Config: v%s",GRADS_VERSION);
  gaprnt(verbose, cmd);
 #if GTOOL3 == 1
  snprintf(cmd, 255, "      %s\n", GT3_version());
+ gaprnt(verbose, cmd);
+ snprintf(cmd, 255, "      GTOOL3 extension patch: %d\n", GAGT3_PATCHLEVEL);
  gaprnt(verbose, cmd);
 #endif
 
