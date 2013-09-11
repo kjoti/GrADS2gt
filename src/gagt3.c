@@ -39,16 +39,6 @@
 extern struct gamfcmn mfcmn;
 static int gt_caltype = CAL_UNDEF;
 
-/* cf. calendar type in caltime.h */
-static const char *calendar_name[] = {
-    "gregorian",
-    "noleap",
-    "all_leap",
-    "360_day",
-    "julian",
-    "unknown"
-};
-
 /* GTOPTION: tdef */
 struct opt_tdef {
     int num, yr, mo, dy, hr, mn, modur, mndur;
@@ -166,6 +156,30 @@ reverse_levs(FLOAT vals[], int num)
 }
 
 
+static const char *
+calendar_name(int calendar)
+{
+    const char *name;
+
+    name = ct_calendar_name(calendar);
+    return name ? name : "unknown";
+}
+
+
+/*
+ * set GrADS global calendar if it is undefined.
+ */
+static int
+set_global_calendar(int calendar)
+{
+    if (mfcmn.cal365 >= 0 && mfcmn.cal365 != calendar)
+        return -1;
+
+    mfcmn.cal365 = calendar;
+    return 0;
+}
+
+
 /*
  * "calendar" option via gtoptions.
  */
@@ -191,7 +205,7 @@ opt_calendar(const char *args)
     if (ch == NULL) {
         my_gaprnt(0, "current calendar type: %s\n",
                   gt_caltype == CAL_UNDEF
-                  ? "(undefined)" : calendar_name[gt_caltype]);
+                  ? "(undefined)" : calendar_name(gt_caltype));
         return 0;
     }
 
@@ -1253,7 +1267,6 @@ gt3ddes(struct gafile *pfi, const char *alias)
      */
     if (gt_caltype != CAL_UNDEF) {
         pfi->calendar = gt_caltype;
-        mfcmn.cal365 = gt_caltype;
         gt_caltype = CAL_UNDEF; /* reset */
     } else {
         int caltype;
@@ -1263,9 +1276,17 @@ gt3ddes(struct gafile *pfi, const char *alias)
             my_gaprnt(0, "Warning: %s: cannot guess Calendar.\n", pfi->name);
             caltype = CALTIME_GREGORIAN;
         }
-        my_gaprnt(0, "Calendar: %s\n", calendar_name[caltype]);
         pfi->calendar = caltype;
-        mfcmn.cal365 = caltype;
+    }
+    if (set_global_calendar(pfi->calendar) == 0)
+        my_gaprnt(0, "The global calendar is set to %s.\n",
+                  calendar_name(pfi->calendar));
+    else {
+        my_gaprnt(0, "Warning: The calendar in this file is %s,\n"
+                  "    but the global calendar (%s) remains unchanged.\n",
+                  calendar_name(pfi->calendar),
+                  calendar_name(mfcmn.cal365));
+        my_gaprnt(0, "Use \"set dfile\" to change the global calendar.\n");
     }
 
     /*
