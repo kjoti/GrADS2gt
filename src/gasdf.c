@@ -1979,6 +1979,7 @@ gaint findZ(struct gafile *pfi, struct gavar **Zcoordptr, gaint *ispressptr) {
         if (!strncasecmp(attr->value, "hybrid_sigma_pressure", 21)) match=1;
         if (!strncasecmp(attr->value, "mb", 2)) match=1;
         if (!strncasecmp(attr->value, "millibar", 8)) match=1;
+        if (!strncasecmp(attr->value, "hPa", 3)) match=1;
         if (match) {
           *Zcoordptr = lclvar ;
           *ispressptr = 1 ;
