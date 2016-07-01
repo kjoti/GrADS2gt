@@ -1,6 +1,4 @@
-/*  Copyright (C) 1988-2011 by Brian Doty and the
-    Institute of Global Environment and Society (IGES).
-    See file COPYRIGHT for more information.   */
+/* Copyright (C) 1988-2016 by George Mason University. See file COPYRIGHT for more information. */
 
 /* Authored by B. Doty */
 
@@ -65,9 +63,8 @@ gaint size;
   pass++;
 
   cmdlen = strlen(expr);
-/*   size = cmdlen * ( 7 + sizeof(struct smem) ); */
   size = sizeof(struct smem[cmdlen+10]);
-  stack = (struct smem *)malloc(size);
+  stack = (struct smem *)galloc(size,"stack");
   if (stack==NULL) {
     gaprnt (0,"Memory Allocation Error:  parser stack\n");
     return (1);
@@ -139,8 +136,8 @@ gaint size;
       }
 
       else {
-        cont=0; err=1;
         gaprnt (0,"Syntax Error:  Expected operand or '('\n");
+        cont=0; err=1;
       }
 
     } else {                         /* Expect operator or ')'      */
@@ -218,21 +215,22 @@ gaint size;
     }
 
 /*  release any memory still hung off the stack  */
-    for (i=0; i<curr; i++) {
+    for (i=0; i<=curr; i++) {
       if (stack[i].type==-1) {
         pgr = stack[i].obj.pgr;
         gagfre(pgr);
+        pst->result.pgr=NULL;
       } else if (stack[i].type==-2) {
         stn = stack[i].obj.stn;
         for (j=0; j<BLKNUM; j++) {
-          if (stn->blks[j] != NULL) free(stn->blks[j]);
+          if (stn->blks[j] != NULL) gree(stn->blks[j],"f172");
         }
-        free(stn);
+        gree(stn);
+        pst->result.stn=NULL;
       }
     }
   }
-
-  free(stack);
+  gree(stack);
   pass--;
   return (err);
 }
@@ -460,8 +458,14 @@ char *uval1,*uval2;
           else *val2 = *val1 / *val2;
         }
       } else if (op==10) {
-        if (swap) *val2 = pow(*val2,*val1);
-        else *val2 = pow(*val1,*val2);
+        if (swap) {
+          if (isnan(pow(*val2,*val1))) *uval2 = 0;
+          else *val2 = pow(*val2,*val1);
+        }
+        else {
+          if (isnan(pow(*val1,*val2))) *uval2 = 0;
+          else *val2 = pow(*val1,*val2);
+        }
       } else if (op==11)  *val2 = hypot(*val1,*val2);
       else if (op==12) {
         if (*val1==0.0 && *val2==0.0) *val2 = 0.0;
@@ -586,8 +590,14 @@ gaint swap,i,j,flag,dimtyp;
         }
       }
       else if (op==10) {
-        if (swap) rpt1->val = pow(rpt2->val,rpt1->val);
-        else rpt1->val = pow(rpt1->val,rpt2->val);
+        if (swap) {
+          if (isnan(pow(rpt2->val,rpt1->val))) rpt1->umask = 0;
+          else rpt1->val = pow(rpt2->val,rpt1->val);
+        }
+        else {
+          if (isnan(pow(rpt1->val,rpt2->val))) rpt1->umask = 0;
+          else rpt1->val = pow(rpt1->val,rpt2->val);
+        }
       }
       else if (op==11)
         rpt1->val = hypot(rpt1->val,rpt2->val);
@@ -650,8 +660,14 @@ gaint i;
       }
     }
     else if (op==10) {
-      if (swap) rpt->val = pow(val,rpt->val);
-      else rpt->val = pow(rpt->val,val);
+      if (swap) {
+        if (isnan(pow(val,rpt->val))) rpt->umask = 0;
+        else rpt->val = pow(val,rpt->val);
+      }
+      else {
+        if (isnan(pow(rpt->val,val))) rpt->umask = 0;
+        else rpt->val = pow(rpt->val,val);
+      }
     }
     else if (op==11)
       rpt->val = hypot(rpt->val,val);
@@ -1367,7 +1383,6 @@ size_t sz;
     gaprnt (0,"Memory Allocation Error:  Station Request Block \n");
     return (NULL);
   }
-
   stn->rnum = 0;
   stn->rpt = NULL;
   stn->pfi = pfi;

@@ -6,6 +6,7 @@ dnl  program. The merged "aclocal.m4" file is in turn used by the "autoconf"
 dnl  program to generate the "configure" script. 
 dnl
 
+
 dnl GA_SET_SUPPLIBS : Find a supplibs directory. 
 dnl		      If SUPPLIBS environment variable is not set, then 
 dnl  		      search for "supplibs" in the paths given in the args
@@ -73,6 +74,23 @@ AC_DEFUN([GA_UNSET_FLAGS],
   LIBS=$ga_saved_libs
 ])
 
+dnl GA_SET_CAIRO_FLAGS : Sets the compile and link paths to place where cairo is installed
+dnl 		   and saves original settings for restoration by GA_UNSET_FLAGS
+dnl  no args
+
+AC_DEFUN([GA_SET_CAIRO_FLAGS],
+[
+  # Use to make temporary changes to -I and -L paths 
+  # Just for use during tests, because configure and make may run 
+  # from different directories. 
+  ga_saved_cppflags=$CPPFLAGS
+  ga_saved_ldflags=$LDFLAGS
+  ga_saved_libs=$LIBS
+  CPPFLAGS="-I/opt/local/include/cairo"
+  LDFLAGS="-L/opt/local/lib"
+
+])
+
 dnl GA_SET_LIB_VAR : Puts necessary linker options to link with libraries given into
 dnl                  a shell variable. They will have the form 'supplib_dir/libname.a'.
 dnl   args:	   : shell-variable-name, list-of-libraries (e.g. [readline termcap])
@@ -82,6 +100,17 @@ AC_DEFUN([GA_SET_LIB_VAR],
   ga_lib_suffix='.a'
   for ga_lib_name in $2 ; do
       $1="$$1 ${ga_lib_prefix}${ga_lib_name}${ga_lib_suffix}"
+  done  
+])
+
+dnl GA_SET_DYNLIB_VAR : Puts necessary linker options to link dynamically with libraries given into
+dnl                  a shell variable. They will have the form '-lname'.
+dnl   args:	   : shell-variable-name, list-of-libraries (e.g. [cairo_libs cairo])
+AC_DEFUN([GA_SET_DYNLIB_VAR],
+[
+  ga_lib_prefix='-l'
+  for ga_lib_name in $2 ; do
+      $1="$$1 ${ga_lib_prefix}${ga_lib_name}"
   done  
 ])
 
@@ -95,4 +124,19 @@ AC_DEFUN([GA_SET_INCLUDE_VAR],
   for ga_include_name in $2 ; do
       $1="$$1 ${ga_include_prefix}/${ga_include_name}"
   done  
+])
+
+dnl GA_SET_CAIRO_INCLUDE : Puts necessary options to compile with cairo include directory
+dnl   no args
+AC_DEFUN([GA_SET_CAIRO_INCLUDE],
+[
+  $1="-I/opt/local/include/cairo"
+])
+
+dnl GA_SET_CAIRO_LIB : Puts necessary options to compile with cairo library 
+dnl   no args
+AC_DEFUN([GA_SET_CAIRO_LIB],
+[
+  ga_lib_prefix='$(supp_lib_dir)'
+  $1="-L${ga_lib_prefix} -lcairo "
 ])

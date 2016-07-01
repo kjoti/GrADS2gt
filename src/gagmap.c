@@ -1,20 +1,17 @@
-/*  Copyright (C) 1988-2011 by Brian Doty and the
-    Institute of Global Environment and Society (IGES).
-    See file COPYRIGHT for more information.   */
+/* Copyright (C) 1988-2016 by George Mason University. See file COPYRIGHT for more information. */
 
-/*  Values output into the grib1 map file:
+/*  Values output into the GRIB1 map file:
      Header:
-     hipnt info: 0 - version number (1)
-                 1 - number of times in file
+     hipnt info: 0 - version number
+                 1 - size of time axis
                  2 - number of records per time
                  3 - Grid type
-                   255 - user defined grid.  descriptor
-                         describes grid exactly; one record
-                         per grid.
-                    29 - Predefined grid set 29 and 30.
-                         Two records per grid.
+                     255: user defined grid. 1 record per grid.
+                     29: predefined grid set 29 and 30. 2 records per grid.
+                 4 - size of off_t index array  (added for version 4)
+                 5 - size of ensemble axis  (added for version 5)
      hfpnt info:  None
-     Info:
+     Indices:
      intpnt info (for each mapped grib record) :
                  0 - position of start of data in file
                  1 - position of start of bit map in file
@@ -23,6 +20,7 @@
                  0 - decimal scale factor for this record
                  1 - binary scale factor
                  2 - reference value
+
 */
 
 #ifdef HAVE_CONFIG_H
@@ -67,7 +65,7 @@ gaint gribmap (void) {
 #if GRIB2
  unsigned char *cgrib=NULL;
  g2int  listsec0[3],listsec1[13],numlocal,numfields,n;
- g2int  unpack,expand,lgrib;
+ g2int  unpack=0,expand=0,lgrib;
  off_t iseek,lskip;
  gribfield  *gfld;
  size_t  lengrib;
@@ -75,20 +73,16 @@ gaint gribmap (void) {
 #endif
  char *ch=NULL;
  gaint ret,ierr,flag,rcgr,record;
- gaint rc,i,e,tmin=0,tmax=0,told,tcur,fnum,didmatch=0;
- gaint sp,sp2,ioff,eoff,it,write_map;
+ gaint rc,i,t,e,ee,r,tmin=0,tmax=0,told,tcur,fnum,didmatch=0;
+ gaint sp,sp2,ioff,eoff,tstart,estart,it;
+ gaint oldver,newver,oldtrecs=0,oldtsz=0,oldesz=0,oldbigflg,oldeoff,oldioff,oldi;
  struct gafile *pfi;
  struct dt dtim,dtimi;
  struct gaens *ens;
  struct gaindxb indxbb;
 
-#if GRIB2
- unpack=0;
- expand=0;
-#endif
+ /* initialize a few things */
  mfile=NULL;
- write_map=1;
-
  pindxb = &indxbb;
 
  /* Get the descriptor file name */
@@ -103,32 +97,282 @@ gaint gribmap (void) {
  /* Allocate memory for gafile structure */
  pfi = getpfi();
  if (pfi==NULL) {
-   printf ("gribmap error: unable to allocate memory for gafile structure\n");
-   return(1);
+   printf ("gribmap: ERROR! unable to allocate memory for gafile structure\n"); return(1);
  }
 
  /* Parse the descriptor file */
- rc = gaddes (ifile, pfi, 0);
+ if (update | upgrade | downgrade) {
+   /* if updating, upgrading, or downgrading ... read the index file too */
+   rc = gaddes (ifile, pfi, 1);
+   if (rc) printf("gribmap: ERROR! unable to parse the data descriptor file or the existing index file\n");
+ }
+ else {
+   rc = gaddes (ifile, pfi, 0);
+   if (rc) printf("gribmap: ERROR! unable to parse the data descriptor file\n");
+ }
  if (rc) return(1);
 
- /* Check index flags */
+ /* Make sure this is a GRIB dataset */
  if (pfi->idxflg!=1 && pfi->idxflg!=2) {
-   printf ("gribmap error: data descriptor file is not for GRIB data\n");
-   return(1);
+   printf ("gribmap: ERROR! data descriptor file is not for GRIB data\n"); return(1);
  }
 
- /* * GRIB1 * */
- else if (pfi->idxflg==1) {
+ /* Upgrade or Downgrade the version of the index file */
+ if (upgrade || downgrade) {
+
+   /* * * GRIB1 index file upgrade/downgrade * * */
+   if (pfi->idxflg==1) {
+     if (upgrade && pfi->pindx->type == g1ver) {
+       printf("gribmap: GRIB1 index file version is already up to date\n"); return (0);
+     }
+     if (downgrade)
+       if (pfi->pindx->type==4 || (pfi->pindx->type==5 && *(pfi->pindx->hipnt+4)>0)) {
+       printf("gribmap: GRIB1 index file was created with the \"-big\" option and cannot be downgraded \n");
+       return (0);
+     }
+     if (upgrade)
+       printf("gribmap: upgrading GRIB1 index file from version %d to %d\n",pfi->pindx->type,g1ver);
+     else
+       printf("gribmap: downgrading GRIB1 index file from version %d to 1\n",pfi->pindx->type);
+
+     /* Set up a new gaindx structure and copy info from pfi->pindx */
+     if ((pindx = (struct gaindx *)galloc(sizeof(struct gaindx),"pindxgm"))==NULL) {
+       printf ("gribmap: ERROR! malloc failed for new pindx structure\n"); return(1);
+     }
+     if (upgrade) {
+       pindx->type  = g1ver;
+       pindx->hinum = 6;     /* new # of ints in the header */
+     }
+     else {
+       pindx->type  = 1;     /* the original, an oldie but goodie */
+       pindx->hinum = 4;     /* old # of ints in the header */
+     }
+     pindx->hfnum  = 0;     /* # of floats in the header, always zero */
+     pindx->intnum = pfi->pindx->intnum;
+     pindx->fltnum = pfi->pindx->fltnum;
+
+     /* allocate memory for new arrays */
+     if ((pindx->hipnt = (gaint *)galloc(sizeof(gaint)*pindx->hinum,"hipntgm"))==NULL) {
+       printf ("gribmap: ERROR! malloc failed for new hipnt array\n"); return(1);
+     }
+     if ((pindx->intpnt = (gaint *)galloc(sizeof(gaint)*pindx->intnum,"intpntgm"))==NULL) {
+       printf ("gribmap: ERROR! malloc failed for new intpnt array\n"); return(1);
+     }
+     if ((pindx->fltpnt = (gafloat *)galloc(sizeof(gafloat)*pindx->fltnum,"fltpntgm"))==NULL) {
+       printf ("gribmap: ERROR! malloc failed for new fltpnt array\n"); return(1);
+     }
+     pindxb->bignum = 0;    /* assume big file offsets are not in use */
+     if (upgrade) {
+       if (pfi->pindx->type==4) {
+         pindxb->bignum = pfi->pindxb->bignum;
+         if ((pindxb->bigpnt = (off_t *)galloc(sizeof(off_t)*pindxb->bignum,"bigpntgm"))==NULL) {
+           printf ("gribmap: ERROR! malloc failed for new bigpnt array\n"); return(1);
+         }
+       }
+     }
+
+     /* set the values of the header integers */
+     if (upgrade)
+       *(pindx->hipnt+0) = g1ver;
+     else
+       *(pindx->hipnt+0) = 1;
+     *(pindx->hipnt+1) = pfi->dnum[3];
+     *(pindx->hipnt+2) = pfi->trecs;
+     *(pindx->hipnt+3) = pfi->grbgrd;
+     if (pfi->grbgrd<-900) *(pindx->hipnt+3) = 255;
+     if (upgrade) {
+       if (pfi->pindx->type==4)
+         *(pindx->hipnt+4) = pfi->pindxb->bignum;
+       else
+         *(pindx->hipnt+4) = 0;
+       *(pindx->hipnt+5) = pfi->dnum[4];
+     }
+
+     /* copy the index arrays */
+     for (i=0; i<pindx->intnum; i++) *(pindx->intpnt+i) = *(pfi->pindx->intpnt+i);
+     for (i=0; i<pindx->fltnum; i++) *(pindx->fltpnt+i) = *(pfi->pindx->fltpnt+i);
+     if (upgrade) {
+       if (pfi->pindx->type==4)
+         for (i=0; i<pindxb->bignum; i++) *(pindxb->bigpnt+i) = *(pfi->pindxb->bigpnt+i);
+     }
+
+     /* write out the new index file */
+     rc = wtg1map(pfi,pindx,pindxb);
+     return (rc);
+   } /* end of GRIB1 index file upgrade/downgrade */
+
+#if GRIB2
+   /* * * GRIB2 index file upgrade/downgrade * * */
+   else {
+     if (upgrade && pfi->g2indx->version == g2ver) {
+       printf("gribmap: GRIB2 index file version is already up to date\n"); return (0);
+     }
+     if (downgrade)
+       if (pfi->g2indx->version==2 || (pfi->g2indx->version==3 && pfi->g2indx->bigflg)) {
+       printf("gribmap: GRIB2 index file was created with the \"-big\" option and cannot be downgraded \n");
+       return (0);
+     }
+     if (upgrade)
+       printf("gribmap: upgrading GRIB2 index file from version %d to %d\n",pfi->g2indx->version,g2ver);
+     else
+       printf("gribmap: downgrading GRIB2 index file from version %d to 1\n",pfi->g2indx->version);
+
+     /* Set up new g2index structure and copy info from pfi->g2indx */
+     if ((g2indx = (struct gag2indx *)malloc(sizeof(struct gag2indx)))==NULL) {
+       printf ("gribmap: ERROR! malloc failed for new g2indx\n"); return(1);
+     }
+     if (upgrade)
+       g2indx->version = g2ver;
+     else
+       g2indx->version = 1;
+     g2indx->g2intnum = pfi->g2indx->g2intnum;
+     g2indx->g2intpnt = NULL;
+
+     if (upgrade) {
+       if (pfi->g2indx->version==2)
+         g2indx->bigflg = 1;
+       else
+         g2indx->bigflg = 0;
+       g2indx->trecs = pfi->trecs;
+       g2indx->tsz = pfi->dnum[3];
+       g2indx->esz = pfi->dnum[4];
+       g2indx->g2bigpnt = NULL;
+     }
+
+     /* allocate memory and copy index arrays */
+     if ((g2indx->g2intpnt = (gaint *)malloc(sizeof(gaint)*g2indx->g2intnum))==NULL) {
+       printf ("gribmap: ERROR! malloc failed for new g2intpnt array\n"); return(1);
+     }
+     for (i=0; i<g2indx->g2intnum; i++) *(g2indx->g2intpnt+i) = *(pfi->g2indx->g2intpnt+i);
+     if (upgrade) {
+       if (g2indx->bigflg) {
+         if ((g2indx->g2bigpnt = (off_t *)malloc(sizeof(off_t)*g2indx->g2intnum))==NULL) {
+           printf ("gribmap: ERROR! malloc failed for new g2bigpnt array\n"); return(1);
+         }
+         for (i=0; i<g2indx->g2intnum; i++) *(g2indx->g2bigpnt+i) = *(pfi->g2indx->g2bigpnt+i);
+       }
+     }
+
+     /* Write out the new index file */
+     rc = wtg2map(pfi,g2indx);
+     return (rc);
+   } /* end of GRIB2 index file upgrade */
+#endif
+ } /* end of upgrade/downgrade code */
+
+
+ /* If updating the index file, check info in the existing file */
+ if (update) {
+
+   if (pfi->idxflg==1 && pfi->grbgrd==29) {
+     printf("gribmap: ERROR! Index files for grbgrd 29 cannot be updated.\n"); return(1);
+   }
+   /* make sure the existing map will have the metadata we need */
+   if (pfi->idxflg==1) {
+     oldver = pfi->pindx->type;
+     newver = g1ver;
+   }
+#if GRIB2
+   else {
+     oldver = pfi->g2indx->version;
+     newver = g2ver;
+   }
+#endif
+   if (oldver < newver) {
+     printf("gribmap: ERROR! Existing index file is an old version and cannot be updated.\n");
+     printf("* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *\n");
+     printf("* To use the update feature without having to re-scan all files, follow these steps:  *\n");
+     printf("*   1. Edit your descriptor file so that the TDEF and EDEF entries match the grid     *\n");
+     printf("*      dimensions when the existing index file was created (i.e., undo your update.)  *\n");
+     printf("*   2. Run gribmap with the \"-new\" option to upgrade the version of the index file.   *\n");
+     printf("*   3. Re-implement the changes to the TDEF or EDEF entries in your descriptor file   *\n");
+     printf("*      that expand the grid dimensions. Only one dimension can be updated at a time.  *\n");
+     printf("*   4. Run gribmap with the -u option.                                                *\n");
+     printf("* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *\n");
+     return(1);
+   }
+   /* get metadata from existing index */
+   if (pfi->idxflg==1) {
+     oldtrecs = *(pfi->pindx->hipnt+2);
+     oldtsz = *(pfi->pindx->hipnt+1);
+     oldesz = *(pfi->pindx->hipnt+5);
+     oldbigflg = *(pfi->pindx->hipnt+4);
+   }
+#if GRIB2
+   else {
+     oldtrecs = pfi->g2indx->trecs;
+     oldtsz = pfi->g2indx->tsz;
+     oldesz = pfi->g2indx->esz;
+     oldbigflg = pfi->g2indx->bigflg;
+   }
+#endif
+
+   /* compare new and old metadata to see what needs to be updated */
+   if (oldtrecs != pfi->trecs) {
+     printf("gribmap: ERROR! number of XY grids in existing index file doesn't match descriptor file. \n");
+     return(1);
+   }
+   if (oldtsz != pfi->dnum[3]) {
+     if (oldtsz > pfi->dnum[3]) {
+       printf("gribmap: ERROR! size of T axis in descriptor file is smaller than in existing index file. \n");
+       return(1);
+     }
+     printf("gribmap: updating the size of the T axis from %d to %d\n",oldtsz,pfi->dnum[3]);
+     update++;   /* increment by 1 to update T dimension */
+   }
+   if (oldesz != pfi->dnum[4]) {
+     if (oldesz > pfi->dnum[4]) {
+       printf("gribmap: ERROR! Size of E axis in descriptor file is smaller than in existing index file. \n");
+       return(1);
+     }
+     printf("gribmap: updating the size of the E axis from %d to %d\n",oldesz,pfi->dnum[4]);
+     update+=2;   /* increment by 2 to update E dimension */
+   }
+   /* additional checks on the results from comparing E and T sizes */
+   /* update=2 : T only
+      update=3 : E only
+      update=4 : both T and E (not allowed) */
+   if (update==1) {
+     printf("gribmap: Sizes of T and E axes in descriptor file are the same as in existing index file. \n");
+     printf("         Nothing needs to be updated, so a new map file will not be created. \n");
+     return(0);
+   }
+   if (update==4) {
+     printf("gribmap: ERRROR! Two dimensions cannot be updated at the same time. \n");
+     printf("                 Update one dimension first (it can be T or E), then update the other. \n");
+     return(1);
+   }
+   if (update==3 && pfi->dnum[4]>1 && pfi->tmplat==1) {
+     printf("gribmap: ERROR! The E axis cannot be updated when data files are only templated over T. \n");
+     return(1);
+   }
+   /* make sure bigflg matches for existing and new map */
+   if (oldbigflg==0 && bigflg>0) {
+     printf("gribmap: ERROR! Existing index file is not for large files. \n");
+     printf("                If new data files are < 2GB, remove the \"-big\" option. \n");
+     printf("                If new data files are >= 2GB, remove the \"-u\" option. \n");
+     return(1);
+   }
+   if (oldbigflg>0 && bigflg==0) {
+     printf("gribmap: Warning! Existing index file is for large files; adding \"-big\" option for the update. \n");
+     bigflg = 1;
+   }
+ } /* end of update code common for both GRIB1 and GRIB2 */
+
+
+
+ /* * * * * * *
+  * * GRIB1 * *
+  * * * * * * */
+ if (pfi->idxflg==1) {
 
    /* Allocate memory for gaindx structure */
-   sz = sizeof(struct gaindx);
-   pindx = (struct gaindx *)galloc(sz,"pindxgm");
-   if (pindx==NULL) {
-     printf ("grib1map error: unable to allocate memory for pindx\n");
+   if ((pindx = (struct gaindx *)galloc(sizeof(struct gaindx),"pindxgm"))==NULL) {
+     printf ("gribmap: ERROR! unable to allocate memory for pindx\n");
      return(1);
    }
 
-   /* Save the initial time from the descriptor file for the tau0 option and the map file */
+   /* Save the initial time from the descriptor file for the tau0 option */
    btimdd.yr = *(pfi->abvals[3]);
    btimdd.mo = *(pfi->abvals[3]+1);
    btimdd.dy = *(pfi->abvals[3]+2);
@@ -151,7 +395,7 @@ gaint gribmap (void) {
          pfi->linear[0]!=1 || pfi->linear[1]!=1 ||
          *(pfi->grvals[0])!= 2.5 || *(pfi->grvals[0]+1) != -2.5 ||
          *(pfi->grvals[1])!= 2.5 || *(pfi->grvals[1]+1) != -92.5 ) {
-       printf("grib1map error: grid specification for GRIB grid type 29/30.\n");
+       printf("gribmap: ERROR! grid specification for GRIB grid type 29/30.\n");
        printf("                grid scaling must indicate a 2.5 x 2.5 grid\n");
        printf("                grid size must be 144 x 73\n");
        printf("                grid must go from 0 to 357.5 and -90 to 90\n");
@@ -163,55 +407,140 @@ gaint gribmap (void) {
    }
 
    /* Set up grib1 index and initialize values */
-   pindx->type   = g1ver;
-   pindx->hinum  = 4;
-   if (bigflg) pindx->hinum  = 5;
-   pindx->hfnum  = 0;
-   if (bigflg) pindx->intnum = nrec * pfi->trecs * pfi->dnum[3] * pfi->dnum[4];
-   else pindx->intnum = nrec * ng1elems * pfi->trecs * pfi->dnum[3] * pfi->dnum[4];
-   pindx->fltnum = nrec * ng1elems * pfi->trecs * pfi->dnum[3] * pfi->dnum[4];
-   if (bigflg) pindxb->bignum = 2 * nrec * pfi->trecs * pfi->dnum[3] * pfi->dnum[4];
-   sz = sizeof(gaint)*pindx->hinum;
-   pindx->hipnt  = (gaint *)galloc(sz,"hipntgm");
-   sz = sizeof(gaint)*pindx->intnum;
-   pindx->intpnt = (gaint *)galloc(sz,"intpntgm");
-   sz = sizeof(gafloat)*pindx->fltnum;
-   pindx->fltpnt = (gafloat *)galloc(sz,"fltpntgm");
-   if (pindx->hipnt==NULL || pindx->intpnt==NULL || pindx->fltpnt==NULL) {
-     printf ("grib1map error: unable to allocate memory for index pointers\n");
-     return(1);
+   /* nrec is the number of records per grid (usually only 1)
+      pfi-trecs is the number of XY grids per time step
+      pfi->dnum[3] is the number of time steps
+      pfi->dnum[4] is the number of ensembles */
+   pindx->type = g1ver;
+   pindx->hfnum  = 0;     /* # of floats in the header, always zero */
+   pindx->hinum  = 6;     /* # of ints in the header */
+   if (bigflg) {
+     /* factors of 1 and 2 add up to ng1elems */
+     pindx->intnum  = 1 * nrec * pfi->trecs * pfi->dnum[3] * pfi->dnum[4];
+     pindxb->bignum = 2 * nrec * pfi->trecs * pfi->dnum[3] * pfi->dnum[4];
+   }
+   else {
+     pindx->intnum  = ng1elems * nrec * pfi->trecs * pfi->dnum[3] * pfi->dnum[4];
+     pindxb->bignum = 0;
+   }
+   pindx->fltnum = ng1elems * nrec * pfi->trecs * pfi->dnum[3] * pfi->dnum[4];
+
+   if ((pindx->hipnt = (gaint *)galloc(sizeof(gaint)*pindx->hinum,"hipntgm"))==NULL) {
+     printf ("gribmap: ERROR! malloc failed for hipnt array\n"); return(1);
+   }
+   if ((pindx->intpnt = (gaint *)galloc(sizeof(gaint)*pindx->intnum,"intpntgm"))==NULL) {
+     printf ("gribmap: ERROR! malloc failed for intpnt array\n"); return(1);
+   }
+   if ((pindx->fltpnt = (gafloat *)galloc(sizeof(gafloat)*pindx->fltnum,"fltpntgm"))==NULL) {
+     printf ("gribmap: ERROR! malloc failed for fltpnt array\n"); return(1);
    }
    if (bigflg) {
-     sz = sizeof(off_t)*pindxb->bignum;
-     pindxb->bigpnt = (off_t *)galloc(sz,"bigpntgm");
-     if (pindxb->bigpnt==NULL) {
-       printf ("grib1map error: unable to allocate memory for index pointers\n");
-       return(1);
+     if ((pindxb->bigpnt = (off_t *)galloc(sizeof(off_t)*pindxb->bignum,"bigpntgm"))==NULL) {
+       printf ("gribmap: ERROR! malloc failed for bigpnt array\n"); return(1);
      }
    }
+   /* initialize values in the index arrays */
    for (i=0; i<pindx->intnum; i++) *(pindx->intpnt+i) = -999;
    for (i=0; i<pindx->fltnum; i++) *(pindx->fltpnt+i) = -999;
    if (bigflg) {
       for (i=0; i<pindxb->bignum; i++) *(pindxb->bigpnt+i) = (off_t)-999;
    }
+   /* set the values of the 6 header integers */
    *(pindx->hipnt+0) = g1ver;
    *(pindx->hipnt+1) = pfi->dnum[3];
    *(pindx->hipnt+2) = pfi->trecs;
    *(pindx->hipnt+3) = pfi->grbgrd;
    if (pfi->grbgrd<-900) *(pindx->hipnt+3) = 255;
-   if (bigflg) *(pindx->hipnt+4) = pindxb->bignum;
+   *(pindx->hipnt+4) = pindxb->bignum;
+   *(pindx->hipnt+5) = pfi->dnum[4];
 
-   /* Loop over all files in the data set */
+   if (update) {
+     /* copy the existing index data into new index buffer */
+     for (e=0; e < oldesz; e++ ) {
+       for (t=0; t < oldtsz; t++) {
+         oldeoff = e * oldtrecs * oldtsz;
+         oldioff = t * oldtrecs;
+         eoff = e * pfi->trecs * pfi->dnum[3];
+         ioff = t * pfi->trecs;
+
+         /* when updating a grib1 index file, nrec is always 1 and joff is always 0.
+            nrec=2 and joff>0 are for grbgrd==29, but we aren't updating that ancient format.
+            in gribfill() subroutine, the file offset koff = nrec*ng1elems*(eoff+ioff)+joff
+            but here it is just ng1elems*(eoff+ioff)  */
+         if (bigflg) {
+           /* copy the int array (here 1 means ng1elems-2) */
+           for (r=0; r<1*oldtrecs; r+=1) {
+             oldi = 1*(oldeoff+oldioff);
+             i = 1*(eoff+ioff);
+             *(pindx->intpnt+i+r) = *(pfi->pindx->intpnt+oldi+r);
+           }
+           /* copy the off_t arrays (here 2 means ng1elems-1) */
+           for (r=0; r<2*oldtrecs; r+=2) {
+             oldi = 2*(oldeoff+oldioff);
+             i = 2*(eoff+ioff);
+             *(pindxb->bigpnt+i+r+0) = *(pfi->pindxb->bigpnt+oldi+r+0);
+             *(pindxb->bigpnt+i+r+1) = *(pfi->pindxb->bigpnt+oldi+r+1);
+           }
+         } else {
+           /* copy the int array */
+           for (r=0; r<ng1elems*oldtrecs; r+=ng1elems) {
+             oldi = ng1elems*(oldeoff+oldioff);
+             i = ng1elems*(eoff+ioff);
+             *(pindx->intpnt+i+r+0) = *(pfi->pindx->intpnt+oldi+r+0);
+             *(pindx->intpnt+i+r+1) = *(pfi->pindx->intpnt+oldi+r+1);
+             *(pindx->intpnt+i+r+2) = *(pfi->pindx->intpnt+oldi+r+2);
+           }
+         }
+         /* copy the float array */
+         for (r=0; r<ng1elems*oldtrecs; r+=ng1elems) {
+           oldi = ng1elems*(oldeoff+oldioff);
+           i = ng1elems*(eoff+ioff);
+           *(pindx->fltpnt+i+r+0) = *(pfi->pindx->fltpnt+oldi+r+0);
+           *(pindx->fltpnt+i+r+1) = *(pfi->pindx->fltpnt+oldi+r+1);
+           *(pindx->fltpnt+i+r+2) = *(pfi->pindx->fltpnt+oldi+r+2);
+         }
+       }
+     }
+     /* set start points for axes that are being updated */
+     if (update==2) {                /* T only */
+       tstart = oldtsz;
+       estart = 1;
+     }
+     else if (update==3) {           /* E only */
+       tstart = 0;
+       estart = oldesz + 1;
+     }
+     else {                          /* shouldn't get here, but just in case... */
+       tstart=0;
+       estart=1;
+     }
+   }
+   else {
+     /* start at the beginning when creating a new map file */
+     tstart=0;
+     estart=1;
+   }
+
+   /* if updating the map, advance through the chain of ensemble structures to starting point */
+   if (estart>1) {
+     ee=1;
+     ens=pfi->ens1;
+     while (ee<estart) { ee++; ens++; }
+   }
+   else {
+     ee=1;
+     ens=pfi->ens1;
+   }
+   /* Begin looping over all files that need to be scanned in the data set */
    gfile = NULL;
-   for (e=1,ens=pfi->ens1; e<=pfi->dnum[4]; e++,ens++) {
-     tcur = 0;
-     while (1) {    /* loop over all times for this ensemble */
+   /* Loop over ensembles */
+   for (e=ee; e<=pfi->dnum[4]; e++) {
+     tcur = tstart;
+     /* Loop over all times for this ensemble */
+     while (1) {
        if (pfi->tmplat) {
          /* make sure no file is open */
-         if (gfile!=NULL) {
-           fclose(gfile);
-           gfile=NULL;
-         }
+         if (gfile!=NULL) { fclose(gfile); gfile=NULL; }
          /* advance to first valid time step for this ensemble */
          if (tcur==0) {
            told = 0;
@@ -221,51 +550,46 @@ gaint gribmap (void) {
          else {  /* tcur!=0 */
            told = pfi->fnums[(e-1)*pfi->dnum[3]+tcur-1];
            /* increment time step until fnums changes */
-           while (told==pfi->fnums[(e-1)*pfi->dnum[3]+tcur-1] && tcur<=pfi->dnum[3]) {
-             tcur++;
-           }
+           while (told==pfi->fnums[(e-1)*pfi->dnum[3]+tcur-1] && tcur<=pfi->dnum[3]) tcur++;
          }
-
          /* make sure we haven't advanced past end of time axis */
          if (tcur>pfi->dnum[3]) break;
-
          /* check if we're past all valid time steps for this ensemble */
          if ((told != -1) && (pfi->fnums[(e-1)*pfi->dnum[3]+tcur-1] == -1)) break;
-
          /* Find the range of t indexes that have the same fnums value.
             These are the times that are contained in this particular file */
          tmin = tcur;
          tmax = tcur-1;
          fnum = pfi->fnums[(e-1)*pfi->dnum[3]+tcur-1];
-
          if (fnum != -1) {
            while (fnum == pfi->fnums[(e-1)*pfi->dnum[3]+tmax]) tmax++;
            gr2t(pfi->grvals[3], (gadouble)tcur, &dtim);
            gr2t(pfi->grvals[3], ens->gt, &dtimi);
            ch = gafndt(pfi->name, &dtim, &dtimi, pfi->abvals[3], pfi->pchsub1, pfi->ens1,tcur,e,&flag);
            if (ch==NULL) {
-             printf(" grib1map error: couldn't determine data file name for e=%d t=%d\n",e,tcur);
+             printf("gribmap: ERROR! unable to determine data file name for e=%d t=%d\n",e,tcur);
              return(1);
            }
          }
        }
        else {
-         /* Data set is not templated */
+         /* Data set is not templated, only one data file to open*/
          ch = pfi->name;
          tmin = 1;
          tmax = pfi->dnum[3];
        }
 
        /* Open this GRIB file and position to start of first record */
-       if (!quiet) printf(" grib1map:  opening GRIB file: %s \n",ch);
+       if (!quiet) printf("gribmap: opening GRIB file %s \n",ch);
        gfile = fopen(ch,"rb");
        if (gfile==NULL) {
          if (pfi->tmplat) {
-           if (!quiet) printf (" grib1map warning: could not open GRIB file: %s\n",ch);
-           continue;
-         } else {
-           printf (" grib1map error: could not open GRIB file: %s\n",ch);
-           return(1);
+           if (!quiet) printf ("gribmap: Warning! could not open GRIB file %s\n",ch);
+           fflush(stdout); continue;
+         }
+         else {
+           printf ("gribmap: ERROR! could not open GRIB file %s\n",ch);
+           fflush(stdout); return(1);
          }
        }
        if (pfi->tmplat) gree(ch,"312");
@@ -282,7 +606,7 @@ gaint gribmap (void) {
          fseeko (gfile,(off_t)0,0);
          rc = fread (rec,1,100,gfile);
          if (rc<100) {
-           printf (" grib1map error: I/O error reading header\n");
+           printf ("gribmap: ERROR! I/O error reading header\n");
            return(1);
          }
          len = gagby(rec,88,4);
@@ -305,12 +629,12 @@ gaint gribmap (void) {
 
        /* see how we did */
        if (rc==50) {
-         printf (" grib1map error: I/O error reading GRIB file\n");
-         printf ("                 possible cause is premature EOF\n");
+         printf ("gribmap: ERROR! I/O error reading GRIB file\n");
+         printf ("                possible cause is premature EOF\n");
          break;
        }
        if (rc>1 && rc!=98) {
-         printf (" grib1map error: GRIB file format error (rc = %i)\n",rc);
+         printf ("gribmap: ERROR! GRIB file format error (rc = %i)\n",rc);
          return(rc);
        }
 
@@ -318,9 +642,10 @@ gaint gribmap (void) {
        if (!pfi->tmplat) break;
 
      } /* end of while (1) loop */
-   } /* end of for (e=1; e<=pfi->dnum[4]; e++) loop */
+     ens++;
+   } /* end of loop over ensemble members: for (e=1; e<=pfi->dnum[4]; e++) */
 
-   if (!quiet) printf (" grib1map:  reached end of files\n");
+   if (!quiet) printf ("gribmap: reached end of files\n");
 
    /* check if file closed already for case where template was set,
       but it was not templated and the template code above closed it. */
@@ -329,89 +654,120 @@ gaint gribmap (void) {
      gfile=NULL;
    }
 
-   /* open the map file */
+   /* Write out the index file */
    if (write_map) {
-     mfile = fopen(pfi->mnam,"wb");
-     if (mfile==NULL) {
-       printf (" grib1map error: could not open index file: %s\n",pfi->mnam);
-       return(1);
-     }
-     else {
-       if (!quiet) printf(" grib1map:  writing the map...\n\n");
-       /* output the map depending on version # */
-       if (g1ver==1 || g1ver==4) {
-         fwrite (pindx,sizeof(struct gaindx),1,mfile);
-         if (pindx->hinum>0)  fwrite(pindx->hipnt,sizeof(gaint),pindx->hinum,mfile);
-         if (pindx->hfnum>0)  fwrite(pindx->hfpnt,sizeof(gafloat),pindx->hfnum,mfile);
-         if (pindx->intnum>0) fwrite(pindx->intpnt,sizeof(gaint),pindx->intnum,mfile);
-         if (pindx->fltnum>0) fwrite(pindx->fltpnt,sizeof(gafloat),pindx->fltnum,mfile);
-         if (g1ver==4) {
-           if (pindxb->bignum>0) fwrite(pindxb->bigpnt,sizeof(off_t),pindxb->bignum,mfile);
-         }
-         fclose (mfile);
-       }
-       else {
-         rc = wtgmap();
-         if (rc == 601) {
-           printf(" grib1map error: overflow in float -> IBM float conversion\n");
-           fclose (mfile);
-           return (601);
-         }
-         fclose (mfile);
-       }
-     }
+     rc = wtg1map(pfi,pindx,pindxb);
+     if (rc) return (rc);
    }
    return (didmatch);
- }
+
+ }  /* end of GRIB1 handling */
 
 #if GRIB2
- else /* GRIB2 */ {
+ /* * * * * * *
+  * * GRIB2 * *
+  * * * * * * */
+ else {
 
-   /* Set up g2index and initialize values */
+   /* Set up new g2index structure and initialize values */
    g2indx = (struct gag2indx *)malloc(sizeof(struct gag2indx));
    if (g2indx==NULL) {
-     printf ("gribmap error: unable to allocate memory for g2indx\n");
+     printf ("gribmap: ERROR! unable to allocate memory for g2indx\n");
      fflush(stdout);
      return(1);
    }
+   g2indx->version = g2ver;
+   /* ng2elems is 2: fieldnum and file position are written into the map file for each record.
+      Without bigflg, both of these numbers are integers;
+        g2intnum gets a factor of 2 (ng2elems) because the integer array contains both numbers.
+      When bigflg is set, fieldnum is an integer, and fileposition is an off_t (large files);
+        g2intnum has a factor of 1 (ng2elems-1) because the integer array contains only fieldnum
+        and a separate array (g2bigpnt) is written out as off_t with file positions. */
    if (bigflg) {
-     g2indx->version = 2;
-     g2indx->g2intnum =  (ng2elems-1) * pfi->trecs * pfi->dnum[3] * pfi->dnum[4];
+     g2indx->g2intnum = (ng2elems-1) * pfi->trecs * pfi->dnum[3] * pfi->dnum[4];
    } else {
-     g2indx->version = 1;
      g2indx->g2intnum = ng2elems * pfi->trecs * pfi->dnum[3] * pfi->dnum[4];
    }
+   g2indx->bigflg = bigflg;
+   g2indx->trecs = pfi->trecs;
+   g2indx->tsz = pfi->dnum[3];
+   g2indx->esz = pfi->dnum[4];
+   g2indx->g2intpnt = NULL;
+   g2indx->g2bigpnt = NULL;
+
+   /* allocate memory and intialize index arrays */
    g2indx->g2intpnt = (gaint *)malloc(sizeof(gaint)*g2indx->g2intnum);
    if (g2indx->g2intpnt==NULL) {
-     printf ("gribmap error: unable to allocate memory for g2indx->g2intpnt\n");
-     fflush(stdout);
-     goto err;
+     printf ("gribmap: ERROR! unable to allocate memory for g2indx->g2intpnt\n");
+     fflush(stdout); goto err;
    }
    for (i=0; i<g2indx->g2intnum; i++) g2indx->g2intpnt[i] = -999;
    if (bigflg) {
-     sz = pfi->trecs * pfi->dnum[3] * pfi->dnum[4];
-     g2indx->g2bigpnt = (off_t *)malloc(sizeof(off_t)*sz);
+     g2indx->g2bigpnt = (off_t *)malloc(sizeof(off_t)*g2indx->g2intnum);
      if (g2indx->g2bigpnt==NULL) {
-       printf ("gribmap error: unable to allocate memory for g2indx->g2bigpnt\n");
-       fflush(stdout);
-       goto err;
+       printf ("gribmap: ERROR! unable to allocate memory for g2indx->g2bigpnt\n");
+       fflush(stdout); goto err;
      }
-     for (i=0; i<sz; i++) g2indx->g2bigpnt[i] = (off_t)-999;
+     for (i=0; i<g2indx->g2intnum; i++) g2indx->g2bigpnt[i] = (off_t)-999;
    }
 
-   /* Break out point for case with E>1 but data files are only templated over T */
-   if (pfi->dnum[4]>1 && pfi->tmplat==1) {
-     /* Loop over all files in the data set */
-     gfile=NULL;
-     e=1;
-     ens=pfi->ens1;
-     tcur = 0;
-     while (1) {  /* loop over all times */
-       /* make sure no file is open */
-       if (gfile!=NULL) {
-         fclose(gfile);
-         gfile=NULL;
+   if (update) {
+     /* copy the existing index data into new index buffer */
+     for (e=0; e < oldesz; e++ ) {
+       for (t=0; t < oldtsz; t++) {
+         oldeoff = e * oldtrecs * oldtsz;
+         oldioff = t * oldtrecs;
+         eoff = e * g2indx->trecs * g2indx->tsz;
+         ioff = t * g2indx->trecs;
+         if (bigflg) {
+           for (r=0; r<(ng2elems-1)*oldtrecs; r+=(ng2elems-1)) {
+             oldi = (ng2elems-1)*(oldeoff+oldioff);
+             i = (ng2elems-1)*(eoff+ioff);
+             *(g2indx->g2bigpnt+i+r) = *(pfi->g2indx->g2bigpnt+oldi+r);
+             *(g2indx->g2intpnt+i+r) = *(pfi->g2indx->g2intpnt+oldi+r);
+           }
+         } else {
+           for (r=0; r<ng2elems*oldtrecs; r+=ng2elems) {
+             oldi = ng2elems*(oldeoff+oldioff);
+             i = ng2elems*(eoff+ioff);
+             *(g2indx->g2intpnt+i+r+0) = *(pfi->g2indx->g2intpnt+oldi+r+0);
+             *(g2indx->g2intpnt+i+r+1) = *(pfi->g2indx->g2intpnt+oldi+r+1);
+           }
+         }
        }
+     }
+     /* set start points for axes that are being updated */
+     if (update==2) {                /* T only */
+       tstart = oldtsz;
+       estart = 1;
+     }
+     else if (update==3) {           /* E only */
+       tstart = 0;
+       estart = oldesz + 1;
+     }
+     else {                          /* shouldn't get here, but just in case... */
+       tstart=0;
+       estart=1;
+     }
+   }
+   else {
+     /* start at the beginning when creating a new map file */
+     tstart=0;
+     estart=1;
+   }
+
+   /* Break out point for case with E>1 but data files are only templated over T
+      (all ensemble members are in one file) */
+   if (pfi->dnum[4]>1 && pfi->tmplat==1) {
+     /* initialize a few things */
+     gfile = NULL;
+     e = 1;
+     ens = pfi->ens1;
+     tcur = tstart;
+
+     /* Loop over all files in the data set */
+     while (1) {
+       if (gfile!=NULL) { fclose(gfile); gfile=NULL; }  /* make sure no file is open */
        if (tcur==0) { /* first time step */
          told = 0;
          tcur = 1;
@@ -419,13 +775,10 @@ gaint gribmap (void) {
        else {  /* tcur!=0 */
          told = pfi->fnums[(e-1)*pfi->dnum[3]+tcur-1];
          /* increment time step until fnums changes */
-         while (told==pfi->fnums[(e-1)*pfi->dnum[3]+tcur-1] && tcur<=pfi->dnum[3]) {
-           tcur++;
-         }
+         while (told==pfi->fnums[(e-1)*pfi->dnum[3]+tcur-1] && tcur<=pfi->dnum[3]) tcur++;
        }
        /* make sure we haven't advanced past end of time axis */
        if (tcur>pfi->dnum[3]) break;
-
 
        /* Find the range of t indexes that have the same fnums value.
           These are the times that are contained in this particular file */
@@ -436,26 +789,26 @@ gaint gribmap (void) {
          while (fnum == pfi->fnums[(e-1)*pfi->dnum[3]+tmax]) tmax++;
          gr2t(pfi->grvals[3], (gadouble)tcur, &dtim);
          gr2t(pfi->grvals[3], ens->gt, &dtimi);
-         ch = gafndt(pfi->name, &dtim, &dtimi, pfi->abvals[3], pfi->pchsub1, pfi->ens1,tcur,e,&flag);
+         ch = gafndt(pfi->name, &dtim, &dtimi, pfi->abvals[3], pfi->pchsub1, pfi->ens1, tcur, e, &flag);
          if (ch==NULL) {
-           printf("gribmap error: couldn't determine data file name for e=%d t=%d\n",e,tcur);
-           fflush(stdout);
-           goto err;
+           printf("gribmap: ERROR! couldn't determine data file name for e=%d t=%d\n",e,tcur);
+           fflush(stdout); goto err;
          }
        }
-       /* Open this GRIB file and position to start of first record (s/b subroutine) */
+
+       /* Open this GRIB file and position to start of first record */
        if (!quiet) printf("gribmap: scanning GRIB2 file: %s \n",ch);
        fflush(stdout);
        gfile = fopen(ch,"rb");
        if (gfile==NULL) {
-         if (!quiet) printf ("gribmap warning: could not open GRIB file: %s\n",ch);
-         fflush(stdout);
-         continue;
+         if (!quiet) printf ("gribmap: Warning! could not open GRIB file: %s\n",ch);
+         fflush(stdout); continue;
        }
        gree(ch,"f311a");
+
        /* Loop over fields in the grib file and find matches */
-       iseek=(off_t)0;
-       record=1;
+       iseek = (off_t)0;
+       record = 1;
        while (1) {
          /* move to next grib message in file */
          gaseekgb(gfile,iseek,32000,&lskip,&lgrib);
@@ -465,41 +818,35 @@ gaint gribmap (void) {
          sz = lgrib;
          cgrib = (unsigned char *)galloc(sz,"cgrib2");
          if (cgrib == NULL) {
-           printf("gribmap error: unable to allocate memory for record %d at byte %jd\n",record,(intmax_t)iseek);
-           fflush(stdout);
-           goto err;
+           printf("gribmap: ERROR! unable to allocate memory for record %d at byte %jd\n",record,(intmax_t)iseek);
+           fflush(stdout); goto err;
          }
          ret = fseeko(gfile,lskip,SEEK_SET);
          lengrib = fread(cgrib,sizeof(unsigned char),lgrib,gfile);
          if (lengrib < lgrib) {
-           printf("gribmap error: unable to read record %d at byte %jd\n",record,(intmax_t)iseek);
-           fflush(stdout);
-           goto err;
+           printf("gribmap: ERROR! unable to read record %d at byte %jd\n",record,(intmax_t)iseek);
+           fflush(stdout); goto err;
          }
 
          /* Check for ultra long length -- which we do not yet handle */
-
          if (gagby(cgrib,8,4)!=0 || gagbb(cgrib+12,0,1)!=0) {
-           printf("gribmap error: grib2 record too long! record %d at byte %jd\n",record,(intmax_t)iseek);
-           fflush(stdout);
-           goto err;
+           printf("gribmap: ERROR! grib2 record too long! record %d at byte %jd\n",record,(intmax_t)iseek);
+           fflush(stdout); goto err;
          }
 
          /* Get info about grib2 message */
          ierr = 0;
          ierr = g2_info(cgrib,listsec0,listsec1,&numfields,&numlocal);
          if (ierr) {
-           printf("gribmap error: g2_info failed: ierr=%d\n",ierr);
-           fflush(stdout);
-           goto err;
+           printf("gribmap: ERROR! g2_info failed: ierr=%d\n",ierr);
+           fflush(stdout); goto err;
          }
          for (n=0; n<numfields; n++) {
            ierr = 0;
            ierr = g2_getfld(cgrib,n+1,unpack,expand,&gfld);
            if (ierr) {
-             printf("gribmap error: g2_getfld failed: ierr=%d\n",ierr);
-             fflush(stdout);
-             goto err;
+             printf("gribmap: ERROR! g2_getfld failed: ierr=%d\n",ierr);
+             fflush(stdout); goto err;
            }
 
            /* get statistical process type from grib field */
@@ -526,237 +873,240 @@ gaint gribmap (void) {
              g2_free(gfld);
              break;
            }
-           it = (it-1)*pfi->trecs;  /* number of records per time */
+           it = (it-1)*pfi->trecs;  /* (it-1)*number of records per time */
 
            /* Check if the variable is a match */
            ioff = g2var_match(gfld,pfi,sp,sp2);
            if (ioff==-999) {
+             if (verb) printf("\n");
              fflush(stdout);
              g2_free(gfld);
              break;
            }
 
-           /* check if ensemble codes match */
-           e = g2ens_match(gfld,pfi);
-           if (e==-999) {
+           /* check if any ensemble codes match */
+           ee = g2ens_match(gfld,pfi);
+           if (ee==-999) {
+             if (verb) printf("\n");
              fflush(stdout);
              g2_free(gfld);
              break;
            }
-           eoff = (e-1)*pfi->dnum[3]*pfi->trecs;  /* number of records per ensemble */
+           eoff = (ee-1)*pfi->dnum[3]*pfi->trecs;  /* (ee-1)*number of records per ensemble */
 
            /* fill in the gribmap entry */
            if (verb) printf("  MATCH \n");
            fflush(stdout);
-           g2fill (eoff,it+ioff,ng2elems,iseek,n+1,g2indx);
+           g2fill (eoff, it+ioff, ng2elems, iseek, n+1, g2indx);
            g2_free(gfld);
          }
          /* free memory containing grib record */
          gree(cgrib,"f310");
          cgrib=NULL;
-         record++;                 /* increment grib record counter */
+         record++;                    /* increment grib record counter */
          iseek = lskip+(off_t)lgrib;  /* increment byte offset to next grib msg in file */
        }  /* end of while(1) loop over all fields in the grib message*/
+
      } /* end of while loop over all times */
 
    }
    else {
-   /* All data sets except those that have E>1 but are templated only over T */
+     /* Begin handling for all other data sets */
 
-   /* Loop over all files in the data set */
-   gfile=NULL;
-   for (e=1,ens=pfi->ens1; e<=pfi->dnum[4]; e++,ens++) {
-     tcur = 0;
-     while (1) {  /* loop over all times for this ensemble */
-       if (pfi->tmplat) {
-         /* make sure no file is open */
-         if (gfile!=NULL) {
-           fclose(gfile);
-           gfile=NULL;
-         }
-         /* advance to first valid time step for this ensemble */
-         if (tcur==0) {
-           told = 0;
-           tcur = 1;
-           while (pfi->fnums[(e-1)*pfi->dnum[3]+tcur-1] == -1) tcur++;
-         }
-         else {  /* tcur!=0 */
-           told = pfi->fnums[(e-1)*pfi->dnum[3]+tcur-1];
-           /* increment time step until fnums changes */
-           while (told==pfi->fnums[(e-1)*pfi->dnum[3]+tcur-1] && tcur<=pfi->dnum[3]) {
-             tcur++;
-           }
-         }
-
-         /* make sure we haven't advanced past end of time axis */
-         if (tcur>pfi->dnum[3]) break;
-
-         /* check if we're past all valid time steps for this ensemble */
-         if ((told != -1) && (pfi->fnums[(e-1)*pfi->dnum[3]+tcur-1] == -1)) break;
-
-         /* Find the range of t indexes that have the same fnums value.
-            These are the times that are contained in this particular file */
-         tmin = tcur;
-         tmax = tcur-1;
-         fnum = pfi->fnums[(e-1)*pfi->dnum[3]+tcur-1];
-         if (fnum != -1) {
-           while (fnum == pfi->fnums[(e-1)*pfi->dnum[3]+tmax]) tmax++;
-           gr2t(pfi->grvals[3], (gadouble)tcur, &dtim);
-           gr2t(pfi->grvals[3], ens->gt, &dtimi);
-           ch = gafndt(pfi->name, &dtim, &dtimi, pfi->abvals[3], pfi->pchsub1, pfi->ens1,tcur,e,&flag);
-           if (ch==NULL) {
-             printf("gribmap error: couldn't determine data file name for e=%d t=%d\n",e,tcur);
-             fflush(stdout);
-             goto err;
-           }
-         }
-       }
-       else {
-         /* only one data file to open */
-         ch = pfi->name;
-         tmin = 1;
-         tmax = pfi->dnum[3];
-       }
-
-       /* Open this GRIB file and position to start of first record (s/b subroutine) */
-       if (!quiet) printf("gribmap: scanning GRIB2 file: %s \n",ch);
-       fflush(stdout);
-       gfile = fopen(ch,"rb");
-       if (gfile==NULL) {
+     /* If updating the map, advance through chain of ensemble structures to starting point */
+     if (estart>1) {
+       ee=1;
+       ens=pfi->ens1;
+       while (ee<estart) { ee++; ens++; }
+     }
+     else {
+       ee=1;
+       ens=pfi->ens1;
+     }
+     /* Begin looping over all files that need to be scanned in the data set */
+     gfile=NULL;
+     /* Loop over ensembles */
+     for (e=ee; e<=pfi->dnum[4]; e++) {
+       tcur = tstart;
+       /* Loop over all times for this ensemble */
+       while (1) {
          if (pfi->tmplat) {
-           if (!quiet) printf ("gribmap warning: could not open GRIB file: %s\n",ch);
-           fflush(stdout);
-           continue;
+           /* make sure no file is open */
+           if (gfile!=NULL) { fclose(gfile); gfile=NULL; }
+           /* advance to first valid time step for this ensemble */
+           if (tcur==0) {
+             told = 0;
+             tcur = 1;
+             while (pfi->fnums[(e-1)*pfi->dnum[3]+tcur-1] == -1) tcur++;
+           }
+           else {  /* tcur!=0 */
+             told = pfi->fnums[(e-1)*pfi->dnum[3]+tcur-1];
+             /* increment time step until fnums changes */
+             while (told==pfi->fnums[(e-1)*pfi->dnum[3]+tcur-1] && tcur<=pfi->dnum[3]) tcur++;
+           }
+           /* make sure we haven't advanced past end of time axis */
+           if (tcur>pfi->dnum[3]) break;
+           /* check if we're past all valid time steps for this ensemble */
+           if ((told != -1) && (pfi->fnums[(e-1)*pfi->dnum[3]+tcur-1] == -1)) break;
+           /* Find the range of t indexes that have the same fnums value.
+              These are the times that are contained in this particular file */
+           tmin = tcur;
+           tmax = tcur-1;
+           fnum = pfi->fnums[(e-1)*pfi->dnum[3]+tcur-1];
+           if (fnum != -1) {
+             while (fnum == pfi->fnums[(e-1)*pfi->dnum[3]+tmax]) tmax++;
+             gr2t(pfi->grvals[3], (gadouble)tcur, &dtim);
+             gr2t(pfi->grvals[3], ens->gt, &dtimi);
+             ch = gafndt(pfi->name, &dtim, &dtimi, pfi->abvals[3], pfi->pchsub1, pfi->ens1, tcur, e, &flag);
+             if (ch==NULL) {
+               printf("gribmap: ERROR! Unable to determine data file name for e=%d t=%d\n",e,tcur);
+               fflush(stdout); goto err;
+             }
+           }
          }
          else {
-           printf ("gribmap error: could not open GRIB file: %s\n",ch);
-           fflush(stdout);
-           goto err;
-         }
-       }
-       if (pfi->tmplat) gree(ch,"f311");
-
-       /* Loop over fields in the grib file and find matches */
-       iseek=(off_t)0;
-       record=1;
-       while (1) {
-         /* move to next grib message in file */
-         gaseekgb(gfile,iseek,32000,&lskip,&lgrib);
-         if (lgrib == 0) break;    /* end loop at EOF or problem */
-
-         /* read the message into memory */
-         sz = lgrib;
-         cgrib = (unsigned char *)galloc(sz,"cgrib2");
-         if (cgrib == NULL) {
-           printf("gribmap error: unable to allocate memory for record %d at byte %jd\n",record,(intmax_t)iseek);
-           fflush(stdout);
-           goto err;
-         }
-         ret = fseeko(gfile,lskip,SEEK_SET);
-         lengrib = fread(cgrib,sizeof(unsigned char),lgrib,gfile);
-         if (lengrib < lgrib) {
-           printf("gribmap error: unable to read record %d at byte %jd\n",record,(intmax_t)iseek);
-           fflush(stdout);
-           goto err;
+           /* not templated -- only one data file to open */
+           ch = pfi->name;
+           tmin = 1;
+           tmax = pfi->dnum[3];
          }
 
-         /* Check for ultra long length -- which we do not yet handle */
-         if (gagby(cgrib,8,4)!=0 || gagbb(cgrib+12,0,1)!=0) {
-           printf("gribmap error: grib2 record length too long! record %d at byte %jd\n",record,(intmax_t)iseek);
-           fflush(stdout);
-           goto err;
-         }
-
-         /* Get info about grib2 message */
-         ierr = 0;
-         ierr = g2_info(cgrib,listsec0,listsec1,&numfields,&numlocal);
-         if (ierr) {
-           printf("gribmap error: g2_info failed: ierr=%d\n",ierr);
-           fflush(stdout);
-           goto err;
-         }
-         for (n=0; n<numfields; n++) {
-           ierr = 0;
-           ierr = g2_getfld(cgrib,n+1,unpack,expand,&gfld);
-           if (ierr) {
-             printf("gribmap error: g2_getfld failed: ierr=%d\n",ierr);
-             fflush(stdout);
-             goto err;
-           }
-
-           /* get statistical process type from grib field */
-           sp = g2sp(gfld);
-           sp2 = g2sp2(gfld);
-
-           /* print out useful codes from grib2 field */
-           if (verb) g2prnt(gfld,record,n+1,sp,sp2);
-
-           /* Check grid properties */
-           rc = g2grid_check(gfld,pfi,record,n+1);
-           if (rc) {
-             if (verb) printf("\n");
-             fflush(stdout);
-             g2_free(gfld);
-             break;
-           }
-
-           /* Check time values in grib field */
-           it = g2time_check(gfld,listsec1,pfi,record,n+1,tmin,tmax);
-           if (it==-99) {
-             if (verb) printf("\n");
-             fflush(stdout);
-             g2_free(gfld);
-             break;
-           }
-           it = (it-1)*pfi->trecs;  /* number of records per time */
-
-           /* Check if the variable is a match */
-           ioff = g2var_match(gfld,pfi,sp,sp2);
-           if (ioff==-999) {
-             fflush(stdout);
-             g2_free(gfld);
-             break;
-           }
+         /* Open this GRIB file and position to start of first record */
+         if (!quiet) printf("gribmap: scanning GRIB2 file: %s \n",ch);
+         fflush(stdout);
+         gfile = fopen(ch,"rb");
+         if (gfile==NULL) {
            if (pfi->tmplat) {
-             /* make sure grib codes match for this ensemble */
-             rc = g2ens_check(ens,gfld);
-             if (rc==1) {
-               fflush(stdout);
-               g2_free(gfld);
-               break;
-             }
+             if (!quiet) printf ("gribmap: Warning! could not open GRIB file: %s\n",ch);
+             fflush(stdout); continue;
            }
            else {
-             /* check if ensemble codes match */
-             e = g2ens_match(gfld,pfi);
-             if (e==-999) {
+             printf ("gribmap: ERROR! could not open GRIB file: %s\n",ch);
+             fflush(stdout); goto err;
+           }
+         }
+         if (pfi->tmplat) gree(ch,"f311");
+
+         /* Loop over fields in the grib file and find matches */
+         iseek=(off_t)0;
+         record=1;
+         while (1) {
+           /* move to next grib message in file */
+           gaseekgb(gfile,iseek,32000,&lskip,&lgrib);
+           if (lgrib == 0) break;    /* end loop at EOF or problem */
+
+           /* read the message into memory */
+           cgrib = (unsigned char *)galloc(lgrib,"cgrib2");
+           if (cgrib == NULL) {
+             printf("gribmap: ERROR! malloc failed for record %d at byte %jd\n",record,(intmax_t)iseek);
+             fflush(stdout); goto err;
+           }
+           ret = fseeko(gfile,lskip,SEEK_SET);
+           lengrib = fread(cgrib,sizeof(unsigned char),lgrib,gfile);
+           if (lengrib < lgrib) {
+             printf("gribmap: ERROR! unable to read record %d at byte %jd\n",record,(intmax_t)iseek);
+             fflush(stdout); goto err;
+           }
+
+           /* Check for ultra long length -- which we do not yet handle */
+           if (gagby(cgrib,8,4)!=0 || gagbb(cgrib+12,0,1)!=0) {
+             printf("gribmap: ERROR! grib2 record length too long! record %d at byte %jd\n",record,(intmax_t)iseek);
+             fflush(stdout); goto err;
+           }
+
+           /* Get info about grib2 message */
+           ierr = 0;
+           ierr = g2_info(cgrib,listsec0,listsec1,&numfields,&numlocal);
+           if (ierr) {
+             printf("gribmap: ERROR! g2_info failed: ierr=%d\n",ierr);
+             fflush(stdout); goto err;
+           }
+           for (n=0; n<numfields; n++) {
+             ierr = 0;
+             ierr = g2_getfld(cgrib,n+1,unpack,expand,&gfld);
+             if (ierr) {
+               printf("gribmap: ERROR! g2_getfld failed: ierr=%d\n",ierr);
+               fflush(stdout); goto err;
+             }
+
+             /* get statistical process type from grib field */
+             sp = g2sp(gfld);
+             sp2 = g2sp2(gfld);
+
+             /* print out useful codes from grib2 field */
+             if (verb) g2prnt(gfld,record,n+1,sp,sp2);
+
+             /* Check grid properties */
+             rc = g2grid_check(gfld,pfi,record,n+1);
+             if (rc) {
+               if (verb) printf("\n");
                fflush(stdout);
                g2_free(gfld);
                break;
              }
+
+             /* Check time values in grib field */
+             it = g2time_check(gfld,listsec1,pfi,record,n+1,tmin,tmax);
+             if (it==-99) {
+               if (verb) printf("\n");
+               fflush(stdout);
+               g2_free(gfld);
+               break;
+             }
+             it = (it-1)*pfi->trecs;  /* number of records per time */
+
+             /* Check if the variable is a match */
+             ioff = g2var_match(gfld,pfi,sp,sp2);
+             if (ioff==-999) {
+               if (verb) printf("\n");
+               fflush(stdout);
+               g2_free(gfld);
+               break;
+             }
+             if (pfi->tmplat) {
+               /* make sure grib codes match for this ensemble */
+               rc = g2ens_check(ens,gfld);
+               if (rc==1) {
+                 if (verb) printf("\n");
+                 fflush(stdout);
+                 g2_free(gfld);
+                 break;
+               }
+               else ee = e;
+             }
+             else {
+               /* check if any ensemble codes match */
+               ee = g2ens_match(gfld,pfi);
+               if (ee==-999) {
+                 if (verb) printf("\n");
+                 fflush(stdout);
+                 g2_free(gfld);
+                 break;
+               }
+             }
+             eoff = (ee-1)*pfi->dnum[3]*pfi->trecs;  /* (ee-1)*number of records per ensemble */
+
+             /* fill in the gribmap entry */
+             if (verb) printf("  MATCH \n");
+             fflush(stdout);
+             g2fill (eoff,it+ioff,ng2elems,lskip,n+1,g2indx);
+             g2_free(gfld);
+
            }
-           eoff = (e-1)*pfi->dnum[3]*pfi->trecs;  /* number of records per ensemble */
+           /* free memory containing grib record */
+           gree(cgrib,"f310");
+           cgrib=NULL;
+           record++;                     /* increment grib record counter */
+           iseek = lskip+(off_t)lgrib;   /* increment byte offset to next grib msg in file */
 
-           /* fill in the gribmap entry */
-           if (verb) printf("  MATCH \n");
-           fflush(stdout);
-           g2fill (eoff,it+ioff,ng2elems,lskip,n+1,g2indx);
-           g2_free(gfld);
+         }  /* end of while(1) loop over all fields in the grib message*/
 
-         }
-         /* free memory containing grib record */
-         gree(cgrib,"f310");
-         cgrib=NULL;
-         record++;                 /* increment grib record counter */
-         iseek = lskip+(off_t)lgrib;   /* increment byte offset to next grib msg in file */
+         /* break out if not templating -- only need to scan one grib file */
+         if (!pfi->tmplat) goto done;
 
-       }  /* end of while(1) loop over all fields in the grib message*/
-
-       /* break out if not templating -- only need to scan one grib file */
-       if (!pfi->tmplat) goto done;
-
-     } /* end of while(1) loop over all grib files for a given ensemble member*/
-   } /* end of loop over ensemble members: for (e=1,ens=pfi->ens1; e<=pfi->dnum[4]; e++,ens++) */
+       } /* end of while(1) loop over all grib files for a given ensemble member*/
+       ens++;
+     } /* end of loop over ensemble members: for (e=1; e<=pfi->dnum[4]; e++) */
    } /* end of else statement for if (pfi->dnum[4]>1 && pfi->tmplat==1)  */
 
    if (!quiet) printf ("gribmap: reached end of files\n");
@@ -772,14 +1122,18 @@ done:
 
    /* Write out the index file */
    if (write_map) {
-     rc=wtg2map(pfi,g2indx);
+     rc = wtg2map(pfi,g2indx);
      if (rc) return (rc);
    }
+
    return(0);
 
 err:
-   if (g2indx->g2intpnt) gree(g2indx->g2intpnt,"f314");
-   if (g2indx) gree(g2indx,"f315");
+   if (g2indx) {
+     if (g2indx->g2intpnt) gree(g2indx->g2intpnt,"f314");
+     if (g2indx->g2bigpnt) gree(g2indx->g2bigpnt,"f314");
+     gree(g2indx,"f315");
+   }
    if (cgrib) gree(cgrib,"f316");
    return(1);
  }
@@ -821,7 +1175,7 @@ gaint gribhdr (struct grhdr *ghdr) {
  }
 
  if (i == scanlim) {
-   printf("grib1map error: GRIB header not found in scanning between records\n");
+   printf("gribmap: ERROR! GRIB header not found in scanning between records\n");
    printf("                try increasing the value of the -s argument\n");
 
    if (scaneof) return(98);
@@ -846,7 +1200,7 @@ gaint gribhdr (struct grhdr *ghdr) {
  cpos = fpos;
  ghdr->vers = gagby(rec,7,1);
  if (ghdr->vers>1) {
-   printf ("grib1map error: file is not GRIB version 0 or 1, version number is %i\n",ghdr->vers);
+   printf ("gribmap: ERROR! file is not GRIB version 0 or 1, version number is %i\n",ghdr->vers);
    if (scaneof) return(98);
    return (99);
  }
@@ -949,8 +1303,8 @@ gaint gribhdr (struct grhdr *ghdr) {
  if (ghdr->fcstt>-900) {
    if (ghdr->tri==7)
      timsub(&(ghdr->btim),&atim);
-   else
-     timadd(&(ghdr->btim),&atim);
+   else {
+   timadd(&(ghdr->btim),&atim);}
    ghdr->dtim.yr = atim.yr;
    ghdr->dtim.mo = atim.mo;
    ghdr->dtim.dy = atim.dy;
@@ -1174,7 +1528,7 @@ gaint gribrec (struct grhdr *ghdr, struct gafile *pfi, struct gaindx *pindx,
  /* Check if valid time matches range of times for this file  */
  if (it<tmin || it>tmax) {
    if (verb) {
-     printf("----- Time out of file limits: ");
+     printf("-%d-- Time out of file limits: ",it);
      gribpr(ghdr);
    }
    return(39);
@@ -1234,17 +1588,21 @@ gaint gribrec (struct grhdr *ghdr, struct gafile *pfi, struct gaindx *pindx,
 }
 
 
-/* Routine to fill in values for this record, now that we have found how it matches.
-   We are not handling the time aspect as yet */
+/* Routine to fill in the index values for this record, now that we have found that it matches.  */
 
 void gribfill (gaint eoff, gaint ioff, gaint joff, gaint nsiz, struct grhdr *ghdr, struct gaindx *pindx) {
 gaint boff,koff;
 
-  koff = nsiz*(eoff+ioff) + joff;
+/* the variable nsiz=nrec*ng1elems;
+   nrec=1 unless we're dealing with gribgrd 29 which has 2 grids per record so nrec=2
+   ng1elems=3 */
+  koff = nsiz*(eoff+ioff) + joff;   /* use this when bigflg is not set */
   if (bigflg) {
+    /* ldpos and lbpos are type off_t instead of int */
     boff = 2*(eoff+ioff) + joff;
     *(pindxb->bigpnt+boff) = ghdr->ldpos;
     if (ghdr->bmsflg) *(pindxb->bigpnt+boff+1) = ghdr->lbpos;
+    /* bnum is still written out as an int */
     boff = (eoff+ioff) + joff;
     *(pindx->intpnt+boff) = ghdr->bnum;
   } else {
@@ -1280,12 +1638,14 @@ void gribpr(struct grhdr *ghdr) {
 }
 
 
-/* Routine to write out machine independent grib1 map file */
+/* Routine to write out machine independent grib1 map file
+   This subroutine was used with g1ver=2 or 3, but is now deprecated with g1ver=5.
+ */
 
 gaint wtgmap(void) {
 gaint i,nb,bcnt,idum;
 gafloat fdum;
-unsigned char *map;
+unsigned char *map=NULL;
 unsigned char ibmfloat[4];
 
  /* calculate the size of the version==1 index file */
@@ -1304,7 +1664,7 @@ unsigned char ibmfloat[4];
  /* allocate space for the map */
  map = (unsigned char *)malloc(nb);
  if (map == NULL) {
-   fprintf(stderr,"grib1map error: memory allocation error creating the map\n");
+   fprintf(stderr,"gribmap: ERROR! failed to allocate %d bytes for the map \n",nb);
    return(60);
  }
 
@@ -1384,6 +1744,62 @@ void putint(gaint dum, unsigned char *buf, gaint *off) {
 
 }
 
+/* New routine to write out a GRIB1 map file (for g1ver 4+) */
+
+gaint wtg1map(struct gafile *pfi, struct gaindx *pindx, struct gaindxb *pindxb) {
+  FILE *mfile=NULL;
+  gaint rc;
+
+  mfile = fopen(pfi->mnam,"wb");
+  if (mfile==NULL) {
+    printf ("gribmap: ERROR! Could not create GRIB1 index file: %s\n",pfi->mnam);
+    return(1);
+  }
+  printf("gribmap: writing the GRIB1 index file (version %d) \n",pindx->type);
+
+  rc = fwrite (pindx,sizeof(struct gaindx),1,mfile);
+  if (rc!=1) {
+    printf("gribmap: ERROR! Unable to write pindx structure to GRIB1 index file\n");
+    fflush(stdout); return(1);
+  }
+  if (pindx->hinum>0) {
+    rc = fwrite(pindx->hipnt,sizeof(gaint),pindx->hinum,mfile);
+    if (rc!=pindx->hinum) {
+      printf("gribmap: ERROR! Unable to write header integers to GRIB1 index file\n");
+      fflush(stdout); return(1);
+    }
+  }
+  if (pindx->hfnum>0) {
+    rc = fwrite(pindx->hfpnt,sizeof(gafloat),pindx->hfnum,mfile);
+    if (rc!=pindx->hfnum) {
+      printf("gribmap: ERROR! Unable to write header floats to GRIB1 index file\n");
+      fflush(stdout); return(1);
+    }
+  }
+  if (pindx->intnum>0) {
+    rc = fwrite(pindx->intpnt,sizeof(gaint),pindx->intnum,mfile);
+    if (rc!=pindx->intnum) {
+      printf("gribmap: ERROR! Unable to write index integers to GRIB1 index file\n");
+      fflush(stdout); return(1);
+    }
+  }
+  if (pindx->fltnum>0) {
+    rc = fwrite(pindx->fltpnt,sizeof(gafloat),pindx->fltnum,mfile);
+    if (rc!=pindx->fltnum) {
+      printf("gribmap: ERROR! Unable to write index floats to GRIB1 index file\n");
+      fflush(stdout); return(1);
+    }
+  }
+  if (pindxb->bignum>0) {
+    rc = fwrite(pindxb->bigpnt,sizeof(off_t),pindxb->bignum,mfile);
+    if (rc!=pindxb->bignum) {
+      printf("gribmap: ERROR! Unable to write index off_ts to GRIB1 index file\n");
+      fflush(stdout); return(1);
+    }
+  }
+  fclose (mfile);
+  return(0);
+}
 
 #if GRIB2
 
@@ -1391,7 +1807,7 @@ void putint(gaint dum, unsigned char *buf, gaint *off) {
 void g2fill (gaint eoff, gaint ioff, gaint ng2elems, off_t iseek, g2int fldnum,
                 struct gag2indx *g2indx) {
 gaint joff;
-  if (g2indx->version == 2) {
+  if (g2indx->bigflg) {
     joff = eoff+ioff;
     ioff = (ng2elems-1)*(eoff+ioff);
     *(g2indx->g2bigpnt+joff) = iseek;
@@ -1403,68 +1819,114 @@ gaint joff;
   }
 }
 
-/* Routine to write out grib2 index file
+/* Routine to write out grib2 index file.
+   All versions of the index file are machine dependent.
+   A test to see if byte-swapping is required is done
+   in gaddes.c, when the data descriptor file is opened.
 
-     g2ver=1 : machine dependent. contains the version number, followed by
+     g2ver=1 : contains the version number, followed by
                the array size N, followed by the array of N numbers.
                All are 4-byte integers (type gaint).
-     g2ver=2 : machine dependent. contains the version number, followed by
+     g2ver=2 : contains the version number, followed by
                the array size N, followed by the array of N numbers that are
                4 byte ints, followed by an array of N numbers that are 8 byte
                off_t integers.
-
-     A test to see if byte-swapping is required to read the index file is done
-     in gaddes.c, when the data descriptor file is opened.
+     g2ver=3 : contains the version number,
+               followed by five integers: bigflg, trecs, tsz, esz, array size (N),
+               then the arrays of index values (N integers).
+               If bigflg is set, then off_t array is in use.
 */
-
-
 gaint wtg2map(struct gafile *pfi, struct gag2indx *g2indx) {
   FILE *mfile;
-  gaint rc;
+  gaint rc,i;
 
-  /* open the index file */
+  /* open the index file for writing */
   mfile = fopen(pfi->mnam,"wb");
   if (mfile==NULL) {
-    printf ("error: Unable to open index file: %s\n",pfi->mnam);
-    fflush(stdout);
-    return(1);
+    printf ("gribmap: Error! Unable to open index file: %s\n",pfi->mnam);
+    fflush(stdout); return(1);
   }
-
-  printf("gribmap: Writing out the index file \n");
+  printf("gribmap: Writing out the GRIB2 index file (version %d)\n",g2indx->version);
   /* write the version number */
   rc = fwrite(&g2indx->version, sizeof(gaint),1,mfile);
   if (rc!=1) {
-    printf("error: Unable to write version number to index file, rc=%d \n",rc);
-    fflush(stdout);
-    return(1);
+    printf("gribmap: ERROR! Unable to write version number to index file, rc=%d \n",rc);
+    fflush(stdout); return(1);
+  }
+  if (g2indx->version>1) {
+    /* write bigflg */
+    rc = fwrite(&g2indx->bigflg, sizeof(gaint),1,mfile);
+    if (rc!=1) {
+      printf("gribmap: ERROR! Unable to write bigflg to index file, rc=%d \n",rc);
+      fflush(stdout); return(1);
+    }
+    /* write trecs */
+    rc = fwrite(&g2indx->trecs, sizeof(gaint),1,mfile);
+    if (rc!=1) {
+      printf("gribmap: ERROR! Unable to write trecs to index file, rc=%d \n",rc);
+      fflush(stdout); return(1);
+    }
+    /* write tsz */
+    rc = fwrite(&g2indx->tsz, sizeof(gaint),1,mfile);
+    if (rc!=1) {
+      printf("gribmap: ERROR! Unable to write tsz to index file, rc=%d \n",rc);
+      fflush(stdout); return(1);
+    }
+    /* write esz */
+    rc = fwrite(&g2indx->esz, sizeof(gaint),1,mfile);
+    if (rc!=1) {
+      printf("gribmap: ERROR! Unable to write esz to index file, rc=%d \n",rc);
+      fflush(stdout); return(1);
+    }
   }
   /* write the array size */
   rc = fwrite(&g2indx->g2intnum,sizeof(gaint),1,mfile);
   if (rc!=1) {
-    printf("error: Unable to write g2intnum to index file, rc=%d \n",rc);
-    fflush(stdout);
-    return(1);
+    printf("gribmap: ERROR! Unable to write g2intnum to index file, rc=%d \n",rc);
+    fflush(stdout); return(1);
   }
-  /* writhe the array of index values */
+  /* write the the array of index values */
   rc = fwrite(g2indx->g2intpnt,sizeof(gaint),g2indx->g2intnum,mfile);
   if (rc!=g2indx->g2intnum) {
-    printf("error: Unable to write g2intpnt to index file, rc=%d \n",rc);
-    fflush(stdout);
-    return(1);
+    printf("gribmap: ERROR! Unable to write g2intpnt to index file, rc=%d \n",rc);
+    fflush(stdout); return(1);
   }
-
-  /* if version 2, write the the array of off_t values */
-  if (g2indx->version==2) {
-    rc = fwrite(g2indx->g2bigpnt,sizeof(off_t),g2indx->g2intnum,mfile);
-    if (rc!=g2indx->g2intnum) {
-      printf("error: Unable to write g2bigpnt to index file, rc=%d \n",rc);
-      fflush(stdout);
-      return(1);
+  if (g2indx->version>1) {
+    /* if bigflg is set, write the the array of off_t values */
+    if (g2indx->bigflg==1) {
+      rc = fwrite(g2indx->g2bigpnt,sizeof(off_t),g2indx->g2intnum,mfile);
+      if (rc!=g2indx->g2intnum) {
+        printf("gribmap: ERROR! Unable to write g2bigpnt to index file, rc=%d \n",rc);
+        fflush(stdout); return(1);
+      }
     }
   }
   fclose(mfile);
-  return(0);
 
+  /* JMA's extra debugging step: look for variables in descriptor file that were not matched.
+     Only the first three time steps for the first ensemble member are checked.  */
+/*   gaint joff,ioff,toff,eoff,e,t,tmax; */
+/*   for (e=0; e<1; e++) { */
+/*     eoff=e*pfi->dnum[3]*pfi->trecs; */
+/*     (pfi->dnum[3]>1) ? (tmax=2) : (tmax=1) ; */
+/*     for (t=0; t<tmax; t++) { */
+/*       toff=t*pfi->trecs; */
+/*       for (i=0; i<pfi->trecs; i++) { */
+/*      ioff=toff+i; */
+/*      if (g2indx->bigflg) { */
+/*        joff = eoff+ioff; */
+/*        if (g2indx->g2bigpnt[joff] <-900)  */
+/*          printf("JMA variable record %d is unmatched for e=%d, t=%d\n",i+1,e+1,t+1); */
+/*      } else { */
+/*        joff = 2*(eoff+ioff); */
+/*        if (g2indx->g2intpnt[joff] < -900) */
+/*          printf("JMA variable record %d is unmatched for e=%d, t=%d\n",i+1,e+1,t+1); */
+/*      } */
+/*       } */
+/*     } */
+/*   } */
+
+  return(0);
 }
 
 /* Checks grid properties for a grib2 field.
@@ -1509,7 +1971,7 @@ gaint xsize=0,ysize=0;
 gaint g2time_check (gribfield *gfld, g2int *listsec1, struct gafile *pfi,
                     gaint r, gaint f, gaint tmin, gaint tmax) {
   struct dt tref,tfld,tvalid;
-  gaint it,tfield,trui_idx,endyr_idx;
+  gaint it,tfield,trui_idx,endyr_idx=0;
   gafloat t;
   gadouble v1,delta;
   /* Get reference time from Section 1 of GRIB message */
@@ -1529,8 +1991,9 @@ gaint g2time_check (gribfield *gfld, g2int *listsec1, struct gafile *pfi,
     tvalid.mn = tref.mn;
   }
   else {
-    /* For fields at a point in time (PDT<8 or PDT=15 or PDT=48) */
-    if (gfld->ipdtnum < 8 || gfld->ipdtnum==15 || gfld->ipdtnum==48) {
+    /* For fields at a point in time (PDT<8 or PDT=15 or PDT=48 or PDT=60) */
+    if (gfld->ipdtnum < 8 || gfld->ipdtnum==15 || gfld->ipdtnum==48 || gfld->ipdtnum==60) {
+      /* trui==Time Range Unit Indicator, trui_idx is the 0-based index for the entries in the PDT 4.n list  */
       trui_idx=7;
       if (gfld->ipdtnum==48) trui_idx=18;
       if      (gfld->ipdtmpl[trui_idx]== 0) tfld.mn = gfld->ipdtmpl[trui_idx+1];
@@ -1554,12 +2017,14 @@ gaint g2time_check (gribfield *gfld, g2int *listsec1, struct gafile *pfi,
     }
     /* For fields that are statistically processed over a time interval
        e.g. averages, accumulations, extremes, et al. */
-    else if (gfld->ipdtnum == 8 || gfld->ipdtnum==9 || gfld->ipdtnum==11 || gfld->ipdtnum==12) {
+    else if ((gfld->ipdtnum>=8 && gfld->ipdtnum<=12) ||  gfld->ipdtnum==61) {
       trui_idx=7;
       if      (gfld->ipdtnum==8)  endyr_idx=15;
       else if (gfld->ipdtnum==9)  endyr_idx=22;
+      else if (gfld->ipdtnum==10) endyr_idx=16;
       else if (gfld->ipdtnum==11) endyr_idx=18;
       else if (gfld->ipdtnum==12) endyr_idx=17;
+      else if (gfld->ipdtnum==61) endyr_idx=24;
 
       if (tauave==0) {
         /* valid time is the end of the overall time interval */
@@ -1621,6 +2086,7 @@ gaint g2time_check (gribfield *gfld, g2int *listsec1, struct gafile *pfi,
            tvalid.yr,tvalid.mo,tvalid.dy,tvalid.hr,tvalid.mn,it,tmin,tmax);
     return(-99);
   }
+  if (verb) printf("valid at %4d-%02d-%02d-%02d:%02d (t=%d)",tvalid.yr,tvalid.mo,tvalid.dy,tvalid.hr,tvalid.mn,it);
   return (it);
 }
 
@@ -1629,9 +2095,9 @@ gaint g2time_check (gribfield *gfld, g2int *listsec1, struct gafile *pfi,
 
 gaint g2var_match (gribfield *gfld, struct gafile *pfi, gaint sp, gaint sp2) {
   struct gavar *pvar;
-  gadouble lev1,lev2,z,ll,ul;
+  gadouble lev1,lev2,z;
   gadouble (*conv) (gadouble *, gadouble);
-  gaint rc1,rc2,rc3,rc4,rc5,rc6,lev_idx,match;
+  gaint rc1,rc2,rc3,rc4,rc5,rc6,lev_idx;
   gaint i,ioff,iz;
 
   lev_idx=9;
@@ -1749,6 +2215,10 @@ gaint g2a_check (gribfield *gfld, struct gavar *pvar) {
         match=1;
     }
   }
+  /* percentile forecasts */
+  else if (gfld->ipdtnum==6 || gfld->ipdtnum==10) {
+    if ((gaint)pvar->units[16]==(gaint)gfld->ipdtmpl[15]) match=1; /* percentiles match */
+  }
   /* optical properties of aerosol */
   else if (gfld->ipdtnum==48) {
     s1 = scaled2dbl(gfld->ipdtmpl[4],gfld->ipdtmpl[5]);
@@ -1795,44 +2265,39 @@ gaint g2a_check (gribfield *gfld, struct gavar *pvar) {
   return(match);
 }
 
-/* Loops over ensembles to see if ensemble codes match current grib2 field
-   If size of ensemble dimension is 1, no checks are done, returns e=1.
+/* Loops over ensembles to see if any of the ensemble codes match current grib2 field.
    Returns ensemble index e if codes are present and match, -999 otherwise */
 gaint g2ens_match (gribfield *gfld, struct gafile *pfi) {
   struct gaens *ens;
   gaint e;
   e=1;
-  if (pfi->dnum[4]==1) {
-    e=1;
-    return(e);
-  }
-  else {
-    for (e=1,ens=pfi->ens1; e<=pfi->dnum[4]; e++,ens++) {
-      /* No grib codes and not an ensemble PDT */
-      if (ens->grbcode[0]==-999 && ens->grbcode[1]==-999 &&
-          (gfld->ipdtnum!=1 && gfld->ipdtnum!=2 && gfld->ipdtnum!=11 && gfld->ipdtnum!=12)) {
-        return(e);
-      }
-      if (ens->grbcode[0]>-900) {
-        if (ens->grbcode[1]>-900) {
-          /* PDT 1 or 11 */
-          if ((gfld->ipdtnum==1 || gfld->ipdtnum==11) &&
-              ((ens->grbcode[0] == gfld->ipdtmpl[15]) &&
-               (ens->grbcode[1] == gfld->ipdtmpl[16]))) {
-            return(e);
-          }
+  ens=pfi->ens1;
+  for (e=1; e<=pfi->dnum[4]; e++) {
+    if (ens->grbcode[0]>-900) {
+      if (ens->grbcode[1]>-900) {
+        /* PDT 1, 11, 60 or 61 */
+        if ((gfld->ipdtnum==1 || gfld->ipdtnum==11 || gfld->ipdtnum==60 || gfld->ipdtnum==61) &&
+            ((ens->grbcode[0] == gfld->ipdtmpl[15]) &&
+             (ens->grbcode[1] == gfld->ipdtmpl[16]))) {
+          return(e);
         }
-        else {
-          /* PDT 2 or 12 */
-          if ((gfld->ipdtnum==2 || gfld->ipdtnum==12) &&
-              (ens->grbcode[0] == gfld->ipdtmpl[15])) {
-            return(e);
-          }
+      }
+      else {
+        /* PDT 2 or 12 */
+        if ((gfld->ipdtnum==2 || gfld->ipdtnum==12) &&
+            (ens->grbcode[0] == gfld->ipdtmpl[15])) {
+          return(e);
         }
       }
     }
-    return(-999);
+    /* No grib codes and not an ensemble PDT */
+    if (ens->grbcode[0]==-999 && ens->grbcode[1]==-999 &&
+        (gfld->ipdtnum!=1 && gfld->ipdtnum!=2 && gfld->ipdtnum!=11 && gfld->ipdtnum!=12)) {
+      return(e);
+    }
+    ens++;
   }
+  return(-999);
 }
 
 /* Checks ensemble codes, if provided in descriptor file.
@@ -1840,8 +2305,8 @@ gaint g2ens_match (gribfield *gfld, struct gafile *pfi) {
 gaint g2ens_check (struct gaens *ens, gribfield *gfld) {
   if (ens->grbcode[0]>-900) {
     if (ens->grbcode[1]>-900) {
-      /* PDT 1 or 11 */
-      if ((gfld->ipdtnum==1 || gfld->ipdtnum==11) &&
+      /* PDT 1, 11, 60 or 61 */
+      if ((gfld->ipdtnum==1 || gfld->ipdtnum==11 || gfld->ipdtnum==60 || gfld->ipdtnum==61) &&
           ((ens->grbcode[0] == gfld->ipdtmpl[15]) &&
            (ens->grbcode[1] == gfld->ipdtmpl[16]))) return(0);
       else return(1);
@@ -1870,6 +2335,7 @@ gaint g2sp (gribfield *gfld) {
   if (gfld->ipdtnum == 11) sp = gfld->ipdtmpl[26];
   if (gfld->ipdtnum == 12) sp = gfld->ipdtmpl[25];
   if (gfld->ipdtnum == 15) sp = gfld->ipdtmpl[15];
+  if (gfld->ipdtnum == 61) sp = gfld->ipdtmpl[32];
   if (sp==255) sp = -999;
   return(sp);
 }
@@ -1885,7 +2351,7 @@ gaint g2sp2(gribfield *gfld) {
 
 /* prints out relevant info from a grib2 record */
 void g2prnt (gribfield *gfld, gaint r, g2int f, gaint sp, gaint sp2) {
-  gaint atyp,styp,wtyp,lev_idx;
+  gaint atyp,styp,wtyp,lev_idx,i;
   gadouble ll,ul,s1,s2,w1,w2;
 
   lev_idx=9;
@@ -1894,7 +2360,7 @@ void g2prnt (gribfield *gfld, gaint r, g2int f, gaint sp, gaint sp2) {
   /* print record/field number */
   printf("%d.%ld: ",r,f);
   /* print level info */
-  if (gfld->ipdtmpl[lev_idx+1]==-127)
+  if (gfld->ipdtmpl[lev_idx+1]<0)
     printf("lev1=%ld ",gfld->ipdtmpl[lev_idx]); /* just print the level1 type */
   else
     printf("lev1=%ld,%g ",gfld->ipdtmpl[lev_idx],scaled2dbl(gfld->ipdtmpl[lev_idx+1],gfld->ipdtmpl[lev_idx+2]));
@@ -1961,7 +2427,7 @@ void g2prnt (gribfield *gfld, gaint r, g2int f, gaint sp, gaint sp2) {
       printf("var=%ld,%ld,%ld,%d,%d ",gfld->discipline,gfld->ipdtmpl[0], gfld->ipdtmpl[1],sp,sp2);
   }
   /* print ensemble info */
-  if (gfld->ipdtnum==1 || gfld->ipdtnum==11)
+  if (gfld->ipdtnum==1 || gfld->ipdtnum==11 || gfld->ipdtnum==60 || gfld->ipdtnum==61)
     printf("ens=%d,%d ",(gaint)gfld->ipdtmpl[15],(gaint)gfld->ipdtmpl[16]);
   if (gfld->ipdtnum==2 || gfld->ipdtnum==12)
     printf("ens=%d ",(gaint)gfld->ipdtmpl[15]);

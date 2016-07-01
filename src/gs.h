@@ -1,6 +1,4 @@
-/*  Copyright (C) 1988-2011 by Brian Doty and the
-    Institute of Global Environment and Society (IGES).
-    See file COPYRIGHT for more information.   */
+/* Copyright (C) 1988-2016 by George Mason University. See file COPYRIGHT for more information. */
 
 #define RSIZ 3600  /* increased from 600 in version 1.9 */
 

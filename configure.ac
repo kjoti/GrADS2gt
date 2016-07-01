@@ -7,7 +7,7 @@ dnl  See acinclude.m4 for definitions of the GA_xxx macros
 
 # The version number
 # below is the "master" version that will appear in all code, etc.
-AC_INIT(GrADS, [2.0.2], [jma@iges.org])
+AC_INIT(GrADS, [2.1.0], [jadams21@gmu.edu])
 
 # Require autoconf 2.52 (comes with Mac OS X 10.2) or newer
 AC_PREREQ(2.52)
@@ -20,7 +20,8 @@ AC_CONFIG_AUX_DIR(etc)
 # disable dependency checking
 AM_INIT_AUTOMAKE([1.6 no-define no-dependencies])
 
-AM_CONFIG_HEADER([src/config.h])
+#AM_CONFIG_HEADER([src/config.h])
+AC_CONFIG_HEADERS([src/config.h])
 
 # The following macro prevents annoying interactions between CVS and
 # automake, which result in make attempting to invoke autotools
@@ -40,6 +41,8 @@ AC_ARG_WITH(readline, [AC_HELP_STRING([--with-readline],
                                       [command line editing])])
 AC_ARG_WITH(printim,  [AC_HELP_STRING([--with-printim],
                                       [image output])])
+AC_ARG_WITH(cairo,    [AC_HELP_STRING([--with-cairo],
+                                      [cairo image rendering])])
 AC_ARG_WITH(grib2,    [AC_HELP_STRING([--with-grib2],
                                       [GRIB2 data format])])
 AC_ARG_WITH(sdf,      [AC_HELP_STRING([--with-sdf],
@@ -120,7 +123,7 @@ dnl    guilibadd="-lSM -lICE"
 
   *darwin*)
     is_darwin="yes"
-    LDFLAGS="$LDFLAGS -lSystemStubs"
+#    LDFLAGS="$LDFLAGS -lSystemStubs"
   ;;
 
   cray-*-*)
@@ -205,6 +208,10 @@ AC_TYPE_OFF_T
 AC_SYS_LARGEFILE
 AC_FUNC_FSEEKO
 
+
+
+
+
 # ----------------------------------------------------
 # Check for optional feature support
 # ----------------------------------------------------
@@ -250,7 +257,6 @@ AC_ARG_VAR(SUPPLIBS,
            [Custom path (must be absolute) to a GrADS supplib distribution])
 
 
-
 # ----------------------------------------------------
 # Check for optional feature support
 # ----------------------------------------------------
@@ -264,6 +270,7 @@ use_geotiff=no
 have_zlib=no
 have_libpng=no
 have_jpeg=no
+have_xml2=no
 use_printim=no
 use_grib2=no
 have_udunits=no
@@ -273,6 +280,7 @@ use_nc=no
 use_nc4=no
 use_dap=no
 use_gadap=no
+use_cairo=no
 
 # look for libraries to support gui interface
 echo
@@ -455,8 +463,8 @@ if test "$with_printim" != "no" ; then
       ])
     ])
     GA_UNSET_FLAGS
-    GA_SET_FLAGS([libpng12])
-    AC_CHECK_LIB([png12], [main],
+    GA_SET_FLAGS([libpng15])
+    AC_CHECK_LIB([png15], [main],
     [ have_libpng=yes
     ])
     GA_UNSET_FLAGS
@@ -472,9 +480,9 @@ if test "$with_printim" != "no" ; then
         [ use_printim=yes
           GA_SET_INCLUDE_VAR([printim_inc], [gd])
 	  if test "$have_jpeg" = "yes" ; then
-	    GA_SET_LIB_VAR([printim_libs], [gd png12 z jpeg])
+	    GA_SET_LIB_VAR([printim_libs], [gd png15 z jpeg])
 	  else
-  	    GA_SET_LIB_VAR([printim_libs], [gd png12 z])
+  	    GA_SET_LIB_VAR([printim_libs], [gd png15 z])
           fi
         ])
       ])
@@ -494,14 +502,90 @@ if test "$with_printim" != "no" ; then
 fi
 if test "$use_printim" != "yes" ; then
   AC_DEFINE(GXPNG, 0, [Enable printim using zlib, libpng, and libgd])
-  echo "- printim disabled (Warning: gxtran will not be built)"
+  echo "- printim disabled"
 else
-  extra_utils="$extra_utils gxtran"
   AC_SUBST(printim_inc)
   AC_SUBST(printim_libs)
   AC_DEFINE(GXPNG, 1, [Enable printim using zlib, libpng, and libgd])
   echo "+ printim enabled"
 fi
+
+# Look for libraries to support cairo graphics library
+echo
+if test "$with_cairo" != "no" ; then
+  # check if supplibs directory exists
+  if test "Z$ga_supplib_dir" != "Z" ; then
+    echo "Checking in supplibs for libraries to support cairo ..."
+    # zlib
+    if test "$have_zlib" = "no" ; then
+      GA_SET_FLAGS([zlib])
+      AC_CHECK_HEADERS([zlib.h],
+      [ AC_CHECK_LIB([z], [compress],
+        [ have_zlib=yes
+        ])
+      ])
+      GA_UNSET_FLAGS
+    fi
+    # libpng
+    if test "$have_libpng" = "no" ; then
+      GA_SET_FLAGS([libpng15])
+      AC_CHECK_LIB([png15], [main],
+      [ have_libpng=yes
+      ])
+      GA_UNSET_FLAGS
+    fi
+    # libxml2
+    if test "$have_xml2" = "no" ; then
+      GA_SET_FLAGS([libxml2])
+      AC_CHECK_LIB([xml2], [main],
+      [ have_xml2=yes
+      ])
+      GA_UNSET_FLAGS
+    fi
+
+    if test "$have_xml2" = "yes"; then
+    if test "$have_zlib" = "yes" -a "$have_libpng" = "yes"; then
+      # pixman, fontconfig, freetype, Xrender, and cairo
+      # check for required header files
+      GA_SET_FLAGS([cairo fontconfig freetype2 pixman-1])
+      AC_CHECK_HEADER(cairo.h,
+      [ AC_CHECK_HEADER(cairo-xlib.h,
+      [ AC_CHECK_HEADER(fontconfig.h,
+      [ AC_CHECK_HEADER(ft2build.h,
+      [ AC_CHECK_HEADER(pixman.h,
+      [ AC_CHECK_LIB(pixman-1,main,
+  	[ AC_CHECK_LIB(fontconfig,main,
+          [ AC_CHECK_LIB(freetype,main,
+            [ AC_CHECK_LIB(Xrender,main,
+              [ AC_CHECK_LIB(cairo,main,
+                [ use_cairo="yes"
+                  GA_SET_INCLUDE_VAR([cairo_inc], [cairo freetype2 fontconfig libpng15 pixman-1])
+                  GA_SET_LIB_VAR(cairo_libs, [cairo Xrender fontconfig freetype pixman-1 png15 xml2 z])
+	        ])
+              ])
+            ])
+          ])
+        ])
+      ])
+      ])
+      ])
+      ])
+      ])
+      GA_UNSET_FLAGS
+    fi
+    fi
+  fi
+fi
+if test "$use_cairo" != "yes" ; then
+  AC_DEFINE(USECAIRO, 0, [Caiiro not enabled])
+  echo "- cairo disabled"
+else
+  AC_SUBST(cairo_inc)
+  AC_SUBST(cairo_libs)
+  AC_DEFINE(USECAIRO, 1, [Cairo enabled])
+  echo "+ cairo enabled"
+fi
+
 
 # look for libraries to support grib2
 echo
@@ -519,8 +603,8 @@ if test "$with_grib2" != "no" ; then
       GA_UNSET_FLAGS
     fi
     if test "$have_libpng" = "no" ; then
-      GA_SET_FLAGS([libpng12])
-      AC_CHECK_LIB([png12], [main],
+      GA_SET_FLAGS([libpng15])
+      AC_CHECK_LIB([png15], [main],
       [ have_libpng=yes
       ])
       GA_UNSET_FLAGS
@@ -538,7 +622,7 @@ if test "$with_grib2" != "no" ; then
         [ AC_CHECK_LIB([grib2c], [main],
           [ use_grib2=yes
             GA_SET_INCLUDE_VAR([grib2_inc], [grib2c])
-            GA_SET_LIB_VAR([grib2_libs], [grib2c jasper png12 z])
+            GA_SET_LIB_VAR([grib2_libs], [grib2c jasper png15 z])
           ])
         ])
         GA_UNSET_FLAGS
@@ -939,6 +1023,19 @@ if test "$use_printim" = "yes" ; then
    echo "  |  + printim enabled            |"
 else
    echo "  |  - printim disabled           |"
+fi
+if test "$use_cairo" = "yes" ; then
+   echo "  |  + cairo enabled              |"
+else
+   echo "  |  - cairo disabled             |"
+   echo "  |                               |"
+   echo "  |  * * * * * * * * * * * * * *  |"
+   echo "  |  *      !! WARNING !!      *  |"
+   echo "  |  *  THIS VERSION OF GrADS  *  |"
+   echo "  |  *    WILL NOT COMPILE     *  |"
+   echo "  |  *     WITHOUT CAIRO!      *  |"
+   echo "  |  * * * * * * * * * * * * * *  |"
+   echo "  |                               |"
 fi
 if test "$use_grib2" = "yes" ; then
    echo "  |  + grib2 enabled              |"

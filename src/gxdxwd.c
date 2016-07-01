@@ -1,3 +1,4 @@
+/* Copyright (C) 1988-2016 by George Mason University. See file COPYRIGHT for more information. */
 
 /*
  * Include ./configure's header file

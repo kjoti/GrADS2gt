@@ -1,3 +1,5 @@
+/* Copyright (C) 1988-2016 by George Mason University. See file COPYRIGHT for more information. */
+
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 

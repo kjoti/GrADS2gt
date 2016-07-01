@@ -1,6 +1,4 @@
-/*  copyright (C) 1988-2010 by Brian Doty and the
-    Institute of Global Environment and Society (IGES).
-    See file COPYRIGHT for more information.   */
+/* Copyright (C) 1988-2016 by George Mason University. See file COPYRIGHT for more information. */
 
 /* Authored by B. Doty */
 
@@ -41,6 +39,10 @@
 #include "grads.h"
 #include "gx.h"
 
+#ifdef OPENGRADS
+#include "gaudx.h"
+#endif
+
 char *gatxtl(char *str, int level);
 
 extern struct gamfcmn mfcmn;
@@ -65,10 +67,14 @@ gaint gacmd (char *com, struct gacmn *pcm, gaint exflg) {
 struct gafile *pfi,*pfi2;
 struct gadefn *pdf,*pdf2;
 struct gaclct *clct,*clct2;
-gaint rc,reinit,fnum,i,len,retcod,flag,xin,yin,bwin,gifflg,tcolor;
-char cc[260], bgImage[256], fgImage[256];
-char *cmd,*rslt,*ccc,*ch;
+gaint rc,reinit,fnum,i,j,len,retcod,flag,xin,yin,bwin,fmtflg,tcolor,pos,size,*ioff,rem;
+gadouble border,*dx,*dy;
+gafloat *rvals=NULL,*ivals=NULL,*jvals=NULL,*ival,*jval;
+char cc[260], bgImage[256], fgImage[256], pdefname[256];
+char *cmd,*rslt,*ccc,*ch,ext[10];
 size_t sz;
+char *formats[7] = {"EPS","PS","PDF","SVG","PNG","GIF","JPG"};
+FILE *pdefid=NULL;
 
   ccc = NULL;
   gaiomg();   /* enable interpolation message */
@@ -77,9 +83,9 @@ size_t sz;
   while(*(com+len)) len++;
   len++;
   sz = len+1;
-  ccc = (char *)galloc(sz,"ccc");
+  ccc = (char *)galloc(sz,"cmd");
   if (ccc==NULL) {
-    gaprnt(0,"Memory allocation error: Command Proecessing\n");
+    gaprnt(0,"Memory allocation error: Command Processing\n");
     return(1);
   }
   for (i=0; i<len; i++) *(ccc+i) = *(com+i);
@@ -96,6 +102,7 @@ size_t sz;
   if (*cmd>='a' && *cmd<='z') {
     i = 0;
     ch = cmd;
+    /* defined variable names are alphanumeric, and must start with a letter */
     while ( (*ch>='a' && *ch<='z') || (*ch>='0' && *ch<='9' ) ) {
       i++;
       if (i>16) break;
@@ -120,7 +127,19 @@ size_t sz;
     }
   }
 
-  if (!(cmpwrd("clear",cmd) || cmpwrd("c",cmd))) gxfrme (9);
+#ifdef OPENGRADS
+  /* OpenGrADS User Defined Extensions */
+  savpcm = pcm;
+  retcod = (int) gaudc (com);
+  if ( retcod >= 0 ) goto retrn; /* found a udc, all done */
+  else retcod = 0;               /* not found, keep going */
+#endif
+
+  /* if command is NOT clear ...*/
+  if (!(cmpwrd("clear",cmd) || cmpwrd("c",cmd))) {
+    gxfrme (9);  /* ... clear the X request buffer */
+  }
+
   if (*com=='\0' || *com=='\n') goto retrn;
 
   if (cmpwrd("quit",cmd)) {
@@ -172,9 +191,11 @@ size_t sz;
     goto retrn;
 
   } else if (cmpwrd("reset",cmd) || cmpwrd("reinit",cmd)) {
+    /* reset vpage */
     pcm->xsiz = pcm->pxsize;
     pcm->ysiz = pcm->pysize;
     gxvpag (pcm->xsiz, pcm->ysiz, 0.0, pcm->xsiz, 0.0, pcm->ysiz);
+    /* reset gacmn and call gacln */
     gainit();
     gacln (pcm,1);
     gacln (pcm,2);
@@ -238,8 +259,6 @@ size_t sz;
       pcm->dfnum = 0;
       pcm->undef =  -9.99e8;         /* default undef value */
       pcm->pdf1 = NULL;
-      pcm->grflg = 0;
-      pcm->devbck = 0;
       if (pcm->ffile) fclose(pcm->ffile);
       pcm->ffile = NULL;
       if (pcm->sfile) fclose(pcm->sfile);
@@ -250,14 +269,13 @@ size_t sz;
       if (pcm->ncwid != -999) nc_close(pcm->ncwid);
 #endif
       pcm->fwenflg = BYTEORDER;
-      gxhend();
-      gxdbck(pcm->devbck);
-      gxgrey(pcm->grflg);
 #if GRIB2
       g2clear();
 #endif
       gaprnt (1,"All files closed; all defined objects released;\n");
-    }
+    } /* end of actions for 'reinit' */
+
+    /* reset the default file and the dimension environment */
     if (pcm->fnum>0 && pcm->pfi1) {
       pcm->pfid = pcm->pfi1;
       pcm->dfnum = 1;
@@ -290,13 +308,22 @@ size_t sz;
       gacmd ("set t 1",pcm,0);
       gacmd ("set e 1",pcm,0);
     }
+    /* reset graphics settings */
+    if (reinit) {
+      gxdbck(0);             /* device backgroud reset to black only on reinit, not reset */
+    }
+    gxdsignal(3);            /* tell hardware to re-enable anti-aliasing */
+    gxdbsethersh(0);         /* set hershey font on   */
     gxchdf(0);               /* set default font to 0 */
+    gxcolr(1);               /* set color to foreground */
+    gxdbsettransclr(-1);     /* unset any transparent color override */
     gxfrme (1);
     if (reinit)
       gaprnt (1,"All GrADS attributes have been reinitialized\n");
     else gaprnt (1,"Most GrADS attributes have been reset\n");
     goto retrn;
   }
+
   else if (cmpwrd("screen",cmd)) {
     if ((cmd=nxtwrd(cmd)) == NULL) {
       gaprnt (0,"Screen Error: Missing keyword\n");
@@ -389,21 +416,22 @@ size_t sz;
     rc = 0;
     if ((cmd=nxtwrd(cmd)) != NULL) {
       rc=99;
-      if (cmpwrd("norset",cmd))   rc = 1;
-      if (cmpwrd("events",cmd))   rc = 2;
-      if (cmpwrd("graphics",cmd)) rc = 3;
-      if (cmpwrd("hbuff",cmd))    rc = 4;
-      if (cmpwrd("button",cmd))   rc = 5;
-      if (cmpwrd("rband",cmd))    rc = 6;
-      if (cmpwrd("dropmenu",cmd)) rc = 7;
-      if (cmpwrd("sdfwrite",cmd)) rc = 8;
-      if (cmpwrd("mask",cmd))     rc = 9;
-      if (cmpwrd("shp",cmd))      rc = 10;
+      if (cmpwrd("norset",cmd))   rc = 1;  /* clears without resetting user options */
+      if (cmpwrd("events",cmd))   rc = 2;  /* flushes the Xevents buffer */
+      if (cmpwrd("graphics",cmd)) rc = 3;  /* clears the graphics but not the widgets */
+      if (cmpwrd("hbuff",cmd))    rc = 4;  /* clears the buffered display and turns off double buffer mode */
+      if (cmpwrd("button",cmd))   rc = 5;  /* clears a button */
+      if (cmpwrd("rband",cmd))    rc = 6;  /* clears a rubber band */
+      if (cmpwrd("dropmenu",cmd)) rc = 7;  /* clears a dropmenu */
+      if (cmpwrd("sdfwrite",cmd)) rc = 8;  /* clears sdfwrite filename and attributes only */
+      if (cmpwrd("mask",cmd))     rc = 9;  /* clears contour label mask */
+      if (cmpwrd("shp",cmd))      rc = 10; /* clears shapefile output filename and attributs only */
     }
     if (rc==99) {
       gaprnt (0,"Invalid option on clear command\n");
       goto retrn;
     }
+    /* clear the frame and X-related other options */
     if (rc<2) {
       if (exflg) gxfrme (0);
       else gxfrme (1);
@@ -422,13 +450,15 @@ size_t sz;
       }
       gxrs1wd (rc-4, fnum);
     }
+    else if (rc==9) gxmaskclear();
+    /* call gacln (reset gacmn) with different options */
+    if (pcm->aaflg==0) gxdsignal(3); /* tell hardware to re-enable anti-aliasing */
     if (rc==1) gacln(pcm,0);
-    else if (rc==8) gacln(pcm,2);  /* clears sdfwrite file name and attributes */
     else if (rc<5 || rc==99) {
       gacln (pcm,1);
       pcm->dbflg = 0;
     }
-    else if (rc==9) gxmaskclear();
+    else if (rc==8) gacln(pcm,2);  /* clears sdfwrite file name and attributes */
     else if (rc==10) gacln(pcm,3);  /* clears user-provided shapefile attributes */
     goto retrn;
   }
@@ -492,11 +522,13 @@ size_t sz;
     goto retrn;
   }
   else if (cmpwrd("disable",cmd)) {
-    if ((cmd=nxtwrd(com)) == NULL)
-      gxhend();                                     /* without 2nd arg, assume 'disable print' */
+    if ((cmd=nxtwrd(com)) == NULL) {
+      gaprnt(0,"DISABLE error: Missing keyword\n");
+      goto retrn;
+    }
     else {
       if (cmpwrd("print",cmd))
-        gxhend();                                   /* close the metafile output file  */
+        gaprnt(0,"ERROR: The \"disable print\" command is no longer valid. Use \"gxprint\" instead.\n");
       else if (cmpwrd("fwrite",cmd)) {
         if (pcm->ffile) {                           /* don't close a file unless it's open  */
           if (pcm->ffile!=stdout) fclose(pcm->ffile);    /* don't close stdout */
@@ -517,137 +549,199 @@ size_t sz;
     goto retrn;
   }
   else if (cmpwrd("redraw",cmd)) {
-    gardrw(com,pcm);
-    gxfrme(9);
+    gardrw (com,pcm);
+    gxfrme (9);
     goto retrn;
   }
   else if (cmpwrd("draw",cmd)) {
-    gadraw(com,pcm);
-    gxfrme (9);          /* flush any buffers as needed */
+    gadraw (com,pcm);
+    gxsignal (1);        /* tell rendering layer and metabuffer draw is done */
+    gxfrme (9);          /* flush X request buffer */
     goto retrn;
   }
   else if (cmpwrd("print",cmd)) {
-    gxhprt (com);
+    gaprnt(0,"ERROR: The \"print\" command is no longer valid. Use \"gxprint\" instead.\n");
     goto retrn;
   }
-#if GXPNG==1
-  else if (cmpwrd("printim",cmd)) {
+  else if (cmpwrd("gxprint",cmd) || cmpwrd("printim",cmd)) {
+    /* check for output file name */
     if ((ch=nxtwrd(com)) == NULL) {
-      gaprnt (0,"PRINTIM error:  missing output file name\n");
+      gaprnt (0,"GXPRINT error:  missing output file name\n");
       retcod = 1;
       goto retrn;
     }
+    /* check for irregularities in output file name */
     getwrd (cc,ch,256);
     if ((cmd=nxtwrd(cmd)) == NULL) {
-      gaprnt (0,"PRINTIM error:  logic error 64\n");
+      gaprnt (0,"GXPRINT error:  logic error 64\n");
       retcod = 1;
       goto retrn;
     }
+    /* initialize */
     xin = -999;
     yin = -999;
     bwin = -999;
-    gifflg = 9;
-    bgImage[0]='\0';
-    fgImage[0]='\0';
-    tcolor=-1;
+    fmtflg = 0;
+    bgImage[0] = '\0';
+    fgImage[0] = '\0';
+    tcolor = -1;
+    border = -1.0;
+    /* parse the user-provided options */
     while ((cmd=nxtwrd(cmd)) != NULL) {
+      /* set backgroud/foreground colors */
       if      (cmpwrd("black",cmd))  bwin = 0;
       else if (cmpwrd("white",cmd))  bwin = 1;
-      else if (cmpwrd("png",cmd))  gifflg = 0;
-      else if (cmpwrd("gif",cmd))  gifflg = 1;
-      else if (cmpwrd("jpg",cmd))  gifflg = 3;
-      else if (cmpwrd("jpeg",cmd)) gifflg = 3;
+      /* explicit format types -- the union of all possibilities from all rendering engines */
+      else if (cmpwrd("eps",cmd))  fmtflg = 1;
+      else if (cmpwrd("ps" ,cmd))  fmtflg = 2;
+      else if (cmpwrd("pdf",cmd))  fmtflg = 3;
+      else if (cmpwrd("svg",cmd))  fmtflg = 4;
+      /* ... image formats start here ... */
+      else if (cmpwrd("png",cmd))  fmtflg = 5;
+      else if (cmpwrd("gif",cmd))  fmtflg = 6;
+      else if (cmpwrd("jpg",cmd))  fmtflg = 7;
+      else if (cmpwrd("jpeg",cmd)) fmtflg = 7;
+      /* get background image filename */
       else if (cmpwrd("-b",cmd)) {
-        /* get background image filename */
-        if((cmd=nxtwrd(cmd)) != NULL) {
-          if(strlen(cmd) < 256){
+        if ((cmd=nxtwrd(cmd)) != NULL) {
+          if (strlen(cmd) < 256){
             getwrd(bgImage,cmd, 255);
-            snprintf(pout,255,"Background image file: %s \n", bgImage);
-            gaprnt(2,pout);
           }
         } else {
-          gaprnt(1,"PRINTIM warning: Background image file name not provided\n");
+          gaprnt(1,"GXPRINT warning: Background image file name not provided\n");
           if (cmd == NULL) break;
         }
       }
+      /* get foreground image filename */
       else if (cmpwrd("-f",cmd)) {
-        /* get foreground image filename */
         if((cmd=nxtwrd(cmd)) != NULL) {
           if(strlen(cmd) < 256){
             getwrd(fgImage,cmd, 255);
-            snprintf(pout,255,"Foreground image file: %s \n", fgImage);
-            gaprnt(2,pout);
           }
         } else {
-          gaprnt(1,"PRINTIM warning: Foreground image file name not provided\n");
+          gaprnt(1,"GXPRINT warning: Foreground image file name not provided\n");
           if (cmd == NULL) break;
         }
       }
+      /* set transparent color number */
       else if (cmpwrd("-t",cmd)) {
         /* set transparent color number */
         if((cmd=nxtwrd(cmd)) != NULL) {
-          if(sscanf(cmd, "%i", &tcolor) != 1) {
-             gaprnt(1,"PRINTIM warning: Invalid transparent color number\n");
+          if(sscanf(cmd, "%i", &tcolor) != 1) {    /* get a color number  */
+             gaprnt(1,"GXPRINT warning: Invalid transparent color number\n");
           }
         } else {
-          gaprnt(1,"PRINTIM warning: Missing transparent color number\n");
+          gaprnt(1,"GXPRINT warning: Missing transparent color number\n");
           if (cmd == NULL) break;
         }
       }
+      /* set horizontal image size */
       else if (*cmd=='x') {
-        /* set horizontal image size */
         if (intprs(cmd+1,&(xin)) == NULL ) {
-          gaprnt (0,"PRINTIM error:  Invalid x option; ignored\n");
+          gaprnt (0,"GXPRINT error:  Invalid x option; ignored\n");
           xin = -999;
         }
       }
+      /* set vertical image size */
       else if (*cmd=='y') {
-        /* set vertical image size */
         if (intprs(cmd+1,&(yin)) == NULL ) {
-          gaprnt (0,"PRINTIM error: Invalid y option; ignored\n");
+          gaprnt (0,"GXPRINT error: Invalid y option; ignored\n");
           yin = -999;
         }
-      } else {
-        gaprnt (0,"PRINTIM error: Invalid option; ignored\n");
+      }
+      /* set width of border around the edge of the plot */
+      else if (cmpwrd("-e",cmd)) {
+        if((cmd=nxtwrd(cmd)) != NULL) {
+          if (getdbl(cmd,&border) == NULL) {
+             gaprnt(1,"GXPRINT warning: Invalid edge width \n");
+          }
+        } else {
+          gaprnt(1,"GXPRINT warning: Missing edge width \n");
+          if (cmd == NULL) break;
+        }
+      }
+      else {
+        gaprnt (0,"GXPRINT error: Invalid option; ignored\n");
       }
     }
-    if (gifflg == 9) {
+    /* done parsing options */
+
+    /* try to divine the format from the output filename extension */
+    if (fmtflg == 0) {
       len = 0;
       while (*(cc+len)) len++;
-      len = len-4;
-      if (len>0) {
-        /* png */
-        if (*(cc+len)=='.' && *(cc+len+1)=='p' && *(cc+len+2)=='n' && *(cc+len+3)=='g' ) gifflg = 0;
-        if (*(cc+len)=='.' && *(cc+len+1)=='P' && *(cc+len+2)=='N' && *(cc+len+3)=='G' ) gifflg = 0;
-        /* gif */
-        if (*(cc+len)=='.' && *(cc+len+1)=='g' && *(cc+len+2)=='i' && *(cc+len+3)=='f' ) gifflg = 1;
-        if (*(cc+len)=='.' && *(cc+len+1)=='G' && *(cc+len+2)=='I' && *(cc+len+3)=='F' ) gifflg = 1;
-        /* jpg */
-        if (*(cc+len)=='.' && *(cc+len+1)=='j' && *(cc+len+2)=='p' && *(cc+len+3)=='g' ) gifflg = 3;
-        if (*(cc+len)=='.' && *(cc+len+1)=='J' && *(cc+len+2)=='P' && *(cc+len+3)=='G' ) gifflg = 3;
+      pos = len;
+      for (pos=len; pos>=0; pos--) if (*(cc+pos)=='.') break;
+      len = len-pos;
+      if (pos>0) {
+        for (i=0;i<len;i++) ext[i] = *(cc+pos+i);
+        lowcas (ext);
+        if (!strncmp(ext, ".eps",4)) fmtflg = 1;
+        if (!strncmp(ext, ".ps" ,3)) fmtflg = 2;
+        if (!strncmp(ext, ".pdf",4)) fmtflg = 3;
+        if (!strncmp(ext, ".svg",4)) fmtflg = 4;
+        if (!strncmp(ext, ".png",4)) fmtflg = 5;
+        if (!strncmp(ext, ".gif",4)) fmtflg = 6;
+        if (!strncmp(ext, ".jpg",4)) fmtflg = 7;
       }
-      if (gifflg==9) gifflg = 0; /* png is default format */
     }
-    rc = gxhpng (cc,xin,yin,bwin,gifflg,bgImage,fgImage,tcolor);
-    if (rc==1) gaprnt (0,"PRINTIM error: open error\n");
-    if (rc==2) gaprnt (0,"PRINTIM error: output error\n");
-    if (rc==3) gaprnt (0,"PRINTIM error: background image open error\n");
-    if (rc==4) gaprnt (0,"PRINTIM error: foreground image open error\n");
-    if (rc==5) gaprnt (0,"PRINTIM error: background image must be .png\n");
-    if (rc==6) gaprnt (0,"PRINTIM error: foreground image must be .png\n");
-    if (rc==7) gaprnt (0,"PRINTIM error: gdImageCreate failed for background image\n");
-    if (rc==8) gaprnt (0,"PRINTIM error: gdImageCreate failed for foreground image\n");
+    if (fmtflg == 0) {
+      gaprnt (0,"GXPRINT error: Unable to determine output format\n");
+      retcod = 1;
+      goto retrn;
+    }
+
+    /* Image size specs are incompatible with non-image formats */
+    if (fmtflg==1 || fmtflg==2 || fmtflg==3 || fmtflg==4) {
+      if (xin>0 || yin>0) {
+        snprintf(pout,255,"GXPRINT Warning: Image size specifications are incompatible with the %s format and will be ignored\n",
+                 formats[fmtflg-1]);
+        gaprnt (1,pout);
+        xin = -999;
+        yin = -999;
+      }
+    }
+
+    /* fgImage and bgImage options are incompatible with non-image formats */
+    if (fmtflg==1 || fmtflg==2 || fmtflg==3 || fmtflg==4) {
+      if (*bgImage || *fgImage) {
+        snprintf(pout,255,"GXPRINT Warning: Background/Foreground images are incompatible with the %s format and will be ignored\n",
+                 formats[fmtflg-1]);
+        gaprnt (1,pout);
+        bgImage[0]='\0';
+        fgImage[0]='\0';
+      }
+    }
+
+    /* vector formats ps, eps, and pdf get a 5/32" edge by default, all others have no edge */
+    if (border < 1.0) {
+      border = 0.0;
+      if (fmtflg==1 || fmtflg==2 || fmtflg==3) border = 0.15625;
+    }
+
+    /* Create the hardcopy output */
+    rc = gxprint (cc,xin,yin,bwin,fmtflg,bgImage,fgImage,tcolor,border);
+    if (rc==1)  gaprnt (0,"GXPRINT error: something went wrong during rendering of the output file\n");
+    if (rc==2)  gaprnt (0,"GXPRINT error: output error\n");
+    if (rc==3)  gaprnt (0,"GXPRINT error: background image open error\n");
+    if (rc==4)  gaprnt (0,"GXPRINT error: foreground image open error\n");
+    if (rc==5)  gaprnt (0,"GXPRINT error: background image must be .png\n");
+    if (rc==6)  gaprnt (0,"GXPRINT error: foreground image must be .png\n");
+    if (rc==7)  gaprnt (0,"GXPRINT error: failed to import background image\n");
+    if (rc==8)  gaprnt (0,"GXPRINT error: failed to import foreground image\n");
+    if (rc==9)  gaprnt (0,"GXPRINT error: unsupported output format\n");
+    if (rc==10) gaprnt (0,"GXPRINT error: background image must be the same size as output\n");
+    if (rc==11) gaprnt (0,"GXPRINT error: foreground image must be the same size as output\n");
     if (rc) retcod = 1;
-    else retcod = 0;
+    else {
+      retcod = 0;
+      snprintf(pout,255,"Created %s file %s",formats[fmtflg-1], cc); gaprnt(2,pout);
+      if (*bgImage) { snprintf(pout,255," ; bgImage = %s",bgImage); gaprnt(2,pout); }
+      if (*fgImage) { snprintf(pout,255," ; fgImage = %s",fgImage); gaprnt(2,pout); }
+      gaprnt(2,"\n");
+    }
     goto retrn;
   }
-#else
-  else if (cmpwrd("printim",cmd)) {
-    gaprnt (0,"PRINTIM error: command not supported in this build\n");
-    retcod = 1;
-    goto retrn;
-  }
-#endif
   else if (cmpwrd("set",cmd)) {
     retcod = gaset (cmd, com, pcm);
     goto retrn;
@@ -691,6 +785,7 @@ size_t sz;
       goto retrn;
     }
     retcod = gadspl (cmd, pcm);
+    gxsignal (1);        /* tell rendering engine and metafile buffer display is finished */
     gxfrme (9);          /* flush any buffers as needed */
     goto retrn;
   }
@@ -739,6 +834,77 @@ size_t sz;
     retcod = ncwrite(cmd, pcm);
     goto retrn;
   }
+  else if (cmpwrd("pdefwrite",cmd)) {
+    if (pcm->pfid==NULL) {
+      gaprnt (0,"PDEFWRITE error: no file open yet\n"); retcod=1; goto retrn;}
+    if (pcm->pfid->ppflag==0) {
+      gaprnt (0,"PDEFWRITE error: default file does not use PDEF\n"); retcod=1; goto retrn;}
+    if (pcm->pfid->ppflag==7 || pcm->pfid->ppflag==8) {
+      gaprnt (0,"PDEFWRITE error: default file already has an external PDEF file\n"); retcod=1; goto retrn;}
+
+    /* Get the name of the output file and open it */
+    if ((cmd=nxtwrd(cmd)) != NULL) {
+      if (strlen(cmd) < 256) {
+        getwrd(pdefname,cmd, 255);
+      } else {
+        gaprnt (0,"PDEFWRITE error: name of output file is missing \n"); retcod=1; goto retrn;}
+    }
+    if ((pdefid = fopen (pdefname, "w"))==NULL) {
+      gaprnt(0,"PDEFWRITE error: failed to open output file \n"); retcod=1; goto retrn;}
+
+    /* allocate memory for grids to be written out to file */
+    size = pcm->pfid->dnum[0] * pcm->pfid->dnum[1];
+    if ((ivals = (gafloat*)galloc(size*sizeof(gafloat),"ppivals"))==NULL) {retcod=1; goto retrn;}
+    if ((jvals = (gafloat*)galloc(size*sizeof(gafloat),"ppjvals"))==NULL) {retcod=1; goto retrn;}
+    if ((rvals = (gafloat*)galloc(size*sizeof(gafloat),"pprvals"))==NULL) {retcod=1; goto retrn;}
+    ival = ivals;  /* save these initial pointers for the fwrite commands */
+    jval = jvals;
+
+    /* Fill grids of file offsets and weights (dx,dy) calculated for pdef grid interpolation */
+    ioff = pcm->pfid->ppi[0];
+    dx = pcm->pfid->ppf[0];
+    dy = pcm->pfid->ppf[1];
+    for (j=0; j<pcm->pfid->dnum[1]; j++) {
+      for (i=0; i<pcm->pfid->dnum[0]; i++) {
+        if (*ioff == -1) {
+          *ivals = -999;
+          *jvals = -999;
+        } else {
+          rem = *ioff % (pcm->pfid->ppisiz);  /* 0-based x index */
+          *ivals = rem + 1 + (gafloat)*dx ;   /* make x index 1-based and add the interp wgt */
+          *jvals = ((*ioff-rem)/pcm->pfid->ppisiz) + 1 + (gafloat)*dy; /* 1-based y index plus interp wgt */
+        }
+        ioff++; dx++; dy++; ivals++; jvals++;
+      }
+    }
+    rc = fwrite(ival, sizeof(gafloat), size, pdefid); if (rc!=size) {retcod=1; goto retrn;}
+    rc = fwrite(jval, sizeof(gafloat), size, pdefid); if (rc!=size) {retcod=1; goto retrn;}
+    /* Fill the grid of rotation values, then write it out */
+    if (pcm->pfid->ppwrot)
+      for (i=0; i<size; i++) *(rvals+i) = (gafloat)(*(pcm->pfid->ppw+i));
+    else
+      for (i=0; i<size; i++) *(rvals+i) = -999;
+    rc = fwrite(rvals, sizeof(gafloat), size, pdefid); if (rc!=size) {retcod=1; goto retrn;}
+
+    fclose(pdefid);
+    snprintf(pout,255,"pdef %d %d bilin stream binary-",pcm->pfid->ppisiz,pcm->pfid->ppjsiz);
+    gaprnt(2,pout);
+#if BYTEORDER==1
+    snprintf(pout,255,"big");
+#else
+    snprintf(pout,255,"little");
+#endif
+    gaprnt(2,pout);
+    snprintf(pout,255," ^%s\n",pdefname);
+    gaprnt(2,pout);
+
+    if (ival!=NULL) gree(ival,"f194a");
+    if (jval!=NULL) gree(jval,"f194a");
+    if (rvals!=NULL) gree(rvals,"f194a");
+
+    retcod = 0;
+    goto retrn;
+  }
   else {
     if (pcm->impcmd) {
       savpcm = pcm;
@@ -772,13 +938,16 @@ void mygreta(char *path) {
 /*  } */
 }
 
+
+
 /* if flag is 0, clean without resetting user options.
    if flag is 1, clean and reset user options except sdfwrite & shapefile parameters
    if flag is 2, clean and reset only sdfwrite parameters
    if flag is 3, clean and reset only shapefile fields
    if flag is 4, clean and reset only KML and GeoTIFF options
-   The reset/reinit commands calls gacln four times, with flag=1 and flag=2, flag=3, and flag=4.
 
+   The clear command calls gacln with flag=1.
+   The reset/reinit commands calls gacln four times, with flag=1 and flag=2, flag=3, and flag=4.
 */
 
 void gacln (struct gacmn *pcm, gaint flg) {
@@ -803,12 +972,14 @@ struct dbfld *fld,*nextfld;
   pcm->ygr2ab = NULL;
   pcm->xab2gr = NULL;
   pcm->yab2gr = NULL;
+  pcm->aaflg = 1;
 
   /* reset sdfwrite parameters */
   if (flg==2) {
     pcm->ncwid = -999;
     pcm->sdfwtype = 1;
     pcm->sdfwpad = 0;
+    pcm->sdfrecdim = 0;
     pcm->sdfchunk = 0;
     pcm->xchunk = 0;
     pcm->ychunk = 0;
@@ -838,8 +1009,9 @@ struct dbfld *fld,*nextfld;
   /* reset shapefile fields */
   if (flg==3) {
 #if USESHP==1
-    /* reset shapefile type to line */
+    /* reset shapefile type to line and no fill */
     pcm->shptype=2;
+    pcm->fillpoly = -1;
     /* release file name */
     if (pcm->shpfname) {
       gree (pcm->shpfname,"g89");
@@ -887,7 +1059,7 @@ struct dbfld *fld,*nextfld;
   if (flg==1) {
     pcm->cstyle = -9;
     pcm->ccolor = -9;
-    pcm->cthick = 3;
+    pcm->cthick = 4;
     pcm->cmark = -9;
     pcm->cint = 0;
     pcm->cflag = 0;
@@ -930,7 +1102,6 @@ struct dbfld *fld,*nextfld;
     pcm->tlsupp = 0;
     pcm->ptflg = 0;
     pcm->cachesf = 1.0;
-    pcm->fillpoly = -1;
     pcm->marktype = 3;
     pcm->marksize = 0.05;
   }
@@ -1177,7 +1348,7 @@ char shparg[4096];
     gxchln (cmd,len,pcm->strhsz,&swide);
     shite = pcm->strvsz;
 
-    ang = pcm->strrot*M_PI/180;
+    ang = pcm->strrot*M_PI/180.0;
     x = x - justx[pcm->strjst] * swide * cos(ang);
     y = y - justx[pcm->strjst] * swide * sin(ang);
     x = x - justy[pcm->strjst] * shite * cos(ang+1.5708);
@@ -1409,6 +1580,7 @@ char shparg[4096];
               }
 
               /* draw the line, or draw border around the polygon */
+
               gxwide (pcm->linthk);
               gxstyl(pcm->linstl);
               gxcolr (pcm->lincol);
@@ -1416,6 +1588,7 @@ char shparg[4096];
               for (j=1; j<newcnt; j++) {
                 gxplot (*(newxy+j*2),*(newxy+j*2+1),2);
               }
+
               /* release memory holding the x,y coordinates for this part */
               gree(newxy,"f204a");
             }
@@ -1434,7 +1607,9 @@ char shparg[4096];
       SHPDestroyObject (shp); shp=NULL;
     }
     SHPClose (shpid);
-    /* redraw the frame around the plot */
+    /* Calling gafram() here is important because the shapes are likely to overlap the frame
+       and it will need to be redrawn. Also, gafram() will change the color which will
+       trigger the reset of the color mask.  */
     gafram(pcm);
     /* reset the clipping area */
     gxclip (0.0, pcm->xsiz, 0.0, pcm->ysiz);
@@ -1501,8 +1676,7 @@ char shparg[4096];
       if (llinc<0.0001) llinc=0.0001;
 
       /* Do the interpolation and convert to x,y --
-         the gxmpoly routine does this and is located in
-         gxwmap */
+         the gxmpoly routine does this and is located in gxwmap */
 
       newxy = gxmpoly(xy,cnt,llinc,&newcnt);
       gree(xy,"f204");
@@ -1707,6 +1881,10 @@ char cc[256], *ch;
     gaprnt (0,"ENABLE error: Invalid operand \n");
     return (1);
   }
+  else {
+    gaprnt(0,"ERROR: The \"enable print\" command is no longer valid. Use \"gxprint\" instead.\n");
+    return (1);
+  }
   if ((ch=nxtwrd(ch)) == NULL) {
     gaprnt (0,"ENABLE error: Missing file name \n");
     return (1);
@@ -1714,7 +1892,7 @@ char cc[256], *ch;
   cmd = nxtwrd(cmd);
   cmd = nxtwrd(cmd);
   getwrd (cc,cmd,256);
-  rc = gxhbgn(cc);
+  /* if we ever re-use the enable command, this is where the function call will go */
   return (rc);
 }
 
@@ -2169,12 +2347,13 @@ char name[20];
   }
   name[i] = '\0';
   if (*cmd!='=') {
-    gaprnt (0,"DEFINE error:  Name too long; missing '='\n");
+    gaprnt (0,"DEFINE error: Failed to find '=' after parsing the defined variable name \n");
+    gaprnt (0,"              The name may be too long or contain non-alphanumeric characters \n");
     goto retrn;
   }
   cmd++;
   if (*cmd=='\0') {
-    gaprnt (0,"DEFINE error:  expression missing\n");
+    gaprnt (0,"DEFINE error: Missing expression\n");
     goto retrn;
   }
 
@@ -2184,8 +2363,8 @@ char name[20];
 
   pfi = pcm->pfid;
   if (pfi->type==2 || pfi->type==3) {
-    gaprnt (0,"Define error:  Define not yet valid for station data\n");
-    gaprnt (0,"    Default file is a station data file\n");
+    gaprnt (0,"DEFINE error: Define not yet valid for station data\n");
+    gaprnt (0,"              Default file is a station data file\n");
     goto retrn;
   }
 
@@ -2538,8 +2717,10 @@ char name[20];
   *prev = pdf;          /* Chain it up */
   pdf->pforw = NULL;
   getwrd(pdf->abbrv,name,19);
-  gree(pgr1,"f96");
+
   gree(pst,"f97");
+  gree(pgr1,"f96");
+
   /* Restore user dim limits*/
   pcm->dmax[2] = zmax;
   pcm->tmax    = tmax;
@@ -2618,7 +2799,6 @@ struct dt tdef, tdefi;
 char *tfile, *tfile2;
 gaint ncid=0, rc, error, n_atts, n_gatts;
 gaint sdid=0;
-char dimname[256];
 #endif
 #if USEHDF5 == 1
 gaint h5id=-999;
@@ -2650,6 +2830,7 @@ gadouble minvals[4], maxvals[4];
     gaprnt (2,"  q dialog   Launches a dialog box\n");
     gaprnt (2,"  q dims     Returns current dimension environment\n");
     gaprnt (2,"  q ens      Returns a list of ensemble members\n");
+    gaprnt (2,"  q fgvals   Returns values and colors specified for gxout fgrid\n");
     gaprnt (2,"  q file     Returns info on a particular file\n");
     gaprnt (2,"  q files    Lists all open files\n");
     gaprnt (2,"  q fwrite   Returns status of fwrite output file\n");
@@ -2672,10 +2853,20 @@ gadouble minvals[4], maxvals[4];
     gaprnt (2,"  q gr2xy    Converts grid to XY screen coordinates\n");
     gaprnt (2,"  q pp2xy    Converts virtual page XY to real page XY coordinates\n");
     gaprnt (2,"Details about argument syntax for some of these options are in the \n");
-    gaprnt (2,"online documentation: http://www.iges.org/grads/gadoc/gradcomdquery.html\n");
+    gaprnt (2,"online documentation: http://cola.gmu.edu/grads/gadoc/gradcomdquery.html\n");
   }
   else if (cmpwrd(arg,"mem")) {
     glook();
+  }
+  else if (cmpwrd(arg,"bcol")) {
+    snprintf(pout,255,"Background color is %d\n",gxdbkq());
+    gaprnt(2,pout);
+  }
+  else if (cmpwrd(arg,"lcol")) {
+    snprintf(pout,255,"Current line color is %d\n",gxqclr());
+    gaprnt(2,pout);
+    snprintf(pout,255,"pcm->lincol is %d\n",pcm->lincol);
+    gaprnt(2,pout);
   }
   else if (cmpwrd(arg,"undef")) {
     snprintf(pout,255,"Output undef value is set to %12f\n",pcm->undef);
@@ -3220,15 +3411,27 @@ gadouble minvals[4], maxvals[4];
     }
     snprintf(pout,255,"SDFwrite output undef value is set to %12f\n",pcm->undef);
     gaprnt(2,pout);
-    if (pcm->sdfwpad==0) {
-      gaprnt (2,"SDFwrite file will have same number of dimensions as defined variable\n");
-    }
-    if (pcm->sdfwpad==1) {
-      gaprnt (2,"SDFwrite file will have at least 4 dimensions\n");
-    }
-    if (pcm->sdfwpad==2) {
-      gaprnt (2,"SDFwrite file will have 5 dimensions\n");
-    }
+    /* information about dimensions */
+    if (pcm->sdfwpad==0)
+      gaprnt (2,"SDFwrite file will have the same number of dimensions as the defined variable\n");
+    if (pcm->sdfwpad==1)
+      gaprnt (2,"SDFwrite file will have 3 dimensions: lon, lat, and lev\n");
+    if (pcm->sdfwpad==2)
+      gaprnt (2,"SDFwrite file will have 3 dimensions: lon, lat, and time\n");
+    if (pcm->sdfwpad==3)
+      gaprnt (2,"SDFwrite file will have 4 dimensions: lon, lat, lev, and time\n");
+    if (pcm->sdfwpad==4)
+      gaprnt (2,"SDFwrite file will have 5 dimensions: lon, lat, lev, time, and ens\n");
+    /* including the record dimension */
+    if (pcm->sdfrecdim==1)
+      gaprnt (2,"SDFwrite file will have 1 record dimension: time\n");
+    else if (pcm->sdfrecdim==2)
+      gaprnt (2,"SDFwrite file will have 1 record dimension: ens\n");
+    else if (pcm->sdfrecdim==3)
+      gaprnt (2,"SDFwrite file will have 2 record dimensions: time and ens\n");
+    else
+      gaprnt (2,"SDFwrite file will not have a record dimension\n");
+
     if (pcm->attr) {
       attr=pcm->attr;
       gaprnt (2,"SDFwrite attribute metadata:\n");
@@ -3883,6 +4086,15 @@ gadouble minvals[4], maxvals[4];
     }
   }
 
+  else if (cmpwrd(arg,"fgvals")) {
+    snprintf(pout,255,"Number of fgvals = %d\n",pcm->fgcnt);
+    gaprnt(2,pout);
+    for (i=0; i<pcm->fgcnt; i++) {
+      snprintf(pout,255,"%d %d\n",pcm->fgcols[i],pcm->fgvals[i]);
+      gaprnt(2,pout);
+    }
+  }
+
   else if (cmpwrd(arg,"time")) {
     if (pcm->pfi1==NULL) {
       gaprnt (0,"No Files Open\n");
@@ -4143,6 +4355,7 @@ gadouble minvals[4], maxvals[4];
 #endif
     }
 
+
     /* Print netcdf coordinate attributes */
 #if USENETCDF == 1
     if (pfi->ncflg == 1) {
@@ -4226,7 +4439,7 @@ gadouble minvals[4], maxvals[4];
 
 gaint gahelp (char *cmd, struct gacmn *pcm) {
 
-  printf ("\nFor Complete Information See:  http://grads.iges.org/grads\n\n");
+  printf ("\nFor Complete Information See:  http://cola.gmu.edu/grads\n\n");
   printf ("Basic Commands:\n");
   printf (" OPEN <descr>      opens a data file \n");
   printf (" Query             shows current status \n");
@@ -4371,7 +4584,7 @@ static gaint dcolor[10] = {-1, 1, 3, 7, 2, 6, 9, 10, 11, 12 };
   if (!lflg) {            /* not looping */
     pcm->mcolor = 8;
     if (pcm->ccolor==-9) {
-      if (vcnt==2 && pcm->grflg==0)
+      if (vcnt==2)
         pcm->ccolor = dcolor[pcm->pass%10];
       else
         pcm->ccolor = dcolor[(pcm->pass+1)%10];
@@ -4380,7 +4593,7 @@ static gaint dcolor[10] = {-1, 1, 3, 7, 2, 6, 9, 10, 11, 12 };
       pcm->cmark = pcm->pass+2;
       while (pcm->cmark>5) pcm->cmark-=5;
     }
-    if (pcm->ccolor<0 || pcm->grflg) pcm->mcolor = 15;
+    if (pcm->ccolor<0) pcm->mcolor = 15;
     rc = gapars(cmd, pst, pcm);
     if (rc) goto retrn;
     gaplot (pcm);
@@ -4405,7 +4618,7 @@ static gaint dcolor[10] = {-1, 1, 3, 7, 2, 6, 9, 10, 11, 12 };
     pcm->mcolor = 15;
     if (pcm->ccolor==-9) {
       pcm->ccolor = -1;
-      if (vcnt<2 || pcm->grflg) pcm->ccolor = 1;
+      if (vcnt<2) pcm->ccolor = 1;
     }
     if (pcm->cmark==-9) {
       pcm->cmark = pcm->pass+2;
@@ -4556,14 +4769,16 @@ err:
   return (1);
 }
 
+/* release data objects */
+
 void gagrel (struct gacmn *pcm) {
 gaint i;
 
   for (i=0; i<pcm->relnum; i++) {
-    if (pcm->type[i]==1) {
+    if (pcm->type[i]==1)
       gagfre (pcm->result[i].pgr);
-    }
-    else gasfre (pcm->result[i].stn);
+    else
+      gasfre (pcm->result[i].stn);
   }
   pcm->numgrd = 0;
   pcm->relnum = 0;
@@ -4583,13 +4798,14 @@ struct dbfld *fld, *newfld=NULL;
 gadouble (*conv) (gadouble *, gadouble);
 gadouble v1,v2,*vals,tt;
 gadouble val1,val2,xlo,xhi,ylo,yhi;
-gaint kwrd,i,i1,i2,num,id,itt,itt1,itt2,itmp[5];
+gaint kwrd,i,i1,i2,num,id,itt,itt1,itt2,itmp[20];
 gaint enum1,enum2;
 gaint xx,yy,red,green,blue;
 char *ch=NULL,*ch2=NULL,*strng,*pat,*cmd1;
 char ename1[16],ename2[16];
 size_t sz;
-static char *kwds[125] = {"X","Y","Z","T","LON","LAT","LEV","TIME",
+char *tileimg=NULL;
+static char *kwds[129] = {"X","Y","Z","T","LON","LAT","LEV","TIME",
                           "CINT","CSTYLE","CCOLOR","LOOPDIM",
                           "LOOPING","LOOPINCR","DFILE","VRANGE",
                           "CSMOOTH","GRID","CMARK","XAXIS","YAXIS",
@@ -4613,7 +4829,8 @@ static char *kwds[125] = {"X","Y","Z","T","LON","LAT","LEV","TIME",
                           "DATAWARN","DIALOG","WRITEGDS","COSLAT",
                           "E","ENS","SDFWRITE","SDFATTR","GEOTIFF","KML",
                           "UNDEF","CHUNKSIZE","CACHESF","SHPOPTS",
-                          "SHP","SHPATTR","LOG1D","STRMOPTS"};
+                          "SHP","SHPATTR","LOG1D","STRMOPTS","TILE",
+                          "HERSHEY","LWID","ANTIALIAS"};
 
   strng = NULL;
   kwrd=-1;
@@ -4699,15 +4916,80 @@ static char *kwds[125] = {"X","Y","Z","T","LON","LAT","LEV","TIME",
     }
     pcm->bargap = itt;
   }
+  else if (cmpwrd("lwid",cmd)) {
+    kwrd = 127;
+    if ((cmd = nxtwrd (cmd)) == NULL) goto err;
+    if (intprs(cmd,&itt) == NULL ) goto err;
+    if (itt<13 || itt>256) {
+      gaprnt(0,"SET LWID Error: line thickness index number must be between 13 and 256\n");
+      return(1);
+    }
+    if ((cmd = nxtwrd (cmd)) == NULL) goto err;
+    if (getdbl(cmd,&v1) == NULL ) goto err;
+    gxdbsetwid(itt,v1);
+  }
   else if (cmpwrd("font",cmd)) {
     kwrd = 85;
     if ((cmd = nxtwrd (cmd)) == NULL) goto err;
     if (intprs(cmd,&itt) == NULL ) goto err;
-    if (itt<0 || itt>9) {
-      gaprnt(0,"SET FONT Error: font must be 0 to 9\n");
+    if (itt<0 || itt>99) {
+      gaprnt(0,"SET FONT Error: font must be 0 to 99\n");
       return(1);
     }
-    gxchdf(itt);
+    gxchdf(itt);  /* change the default font in gxchpl.c */
+    if ((cmd = nxtwrd (cmd)) != NULL) {
+      /* check for 'file' keyword */
+      if (cmpwrd("file",cmd)) {
+        if ((cmd = nxtwrd (cmd)) != NULL) {
+          /* user has provided a file to define a new font */
+          if (itt<10) {
+            gaprnt(0,"SET FONT Error: Cannot define new font for font numbers less than 10\n");
+            return(1);
+          }
+          else {
+            /* get the length of the user-supplied filename */
+            itt2 = 0;
+            while (*(cmd+itt2)!='\n'&&*(cmd+itt2)!='\0') itt2++; /* spaces are allowed */
+            /* allocate memory for tmp filename */
+            ch = NULL;
+            ch = (char *)malloc(itt2+1);
+            if (ch==NULL) {
+              gaprnt (0,"Memory allocation error for tmp font file name\n"); goto err;
+            }
+            /* copy the user-supplied filename (mixed case) to ch */
+            i2 = cmd - cmd1;
+            for (i1=0; i1<itt2; i1++) *(ch+i1) = *(com+i1+i2);
+            *(ch+itt2)='\0';      /* make sure it is null-terminated */
+            gxdbsetfn (itt, ch);
+            free (ch);
+          }
+        }
+      }
+      else {
+        gaprnt(0,"SET FONT Error: Missing keyword \"file\" in new font definition\n");
+        return(1);
+      }
+    }
+  }
+  else if (cmpwrd("hershey",cmd)) {
+    kwrd = 126;
+    if ((cmd = nxtwrd (cmd)) == NULL) goto err;
+    if (cmpwrd("on",cmd))       gxdbsethersh(0);  /* 0, use hershey fonts */
+    else if (cmpwrd("off",cmd)) gxdbsethersh(1);  /* 1, use emulation */
+    else goto err;
+  }
+  else if (cmpwrd("antialias",cmd)) {
+    kwrd = 126;
+    if ((cmd = nxtwrd (cmd)) == NULL) goto err;
+    if (cmpwrd("off",cmd)) {
+      pcm->aaflg = 0;   /* set flag in gacmn */
+      gxsignal(2);      /* tell hardware and metabuffer to disable anti-aliasing */
+    }
+    else if (cmpwrd("on",cmd)) {
+      pcm->aaflg = 1;   /* set flag in gacmn */
+      gxsignal(3);      /* tell hardware and metabuffer to enable anti-aliasing */
+    }
+    else goto err;
   }
   else if (cmpwrd("clip",cmd)) {
     kwrd = 66;
@@ -4797,25 +5079,39 @@ static char *kwds[125] = {"X","Y","Z","T","LON","LAT","LEV","TIME",
   else if (cmpwrd("rgb",cmd)) {
     kwrd = 44;
     if ((cmd = nxtwrd (cmd)) == NULL) goto err;
-    if (intprs(cmd,&itt) == NULL ) goto err;
+    if (intprs(cmd,&itt) == NULL) goto err;
     if ((cmd = nxtwrd (cmd)) == NULL) goto err;
-    if (intprs(cmd,&red) == NULL ) goto err;
-    if ((cmd = nxtwrd (cmd)) == NULL) goto err;
-    if (intprs(cmd,&green) == NULL ) goto err;
-    if ((cmd = nxtwrd (cmd)) == NULL) goto err;
-    if (intprs(cmd,&blue) == NULL ) goto err;
-    if (itt<16 || itt>255 ||
-        red<0 || red>255 ||
-        green<0 || green>255 ||
-        blue<0 || blue>255) {
-      gaprnt (0,"SET RGB Error:  Invalid color number or rgb value\n");
-      gaprnt (0,"  Color number must be 16-255, rgb value 0-255\n");
-      return(1);
+    if (cmpwrd("tile",cmd)) {
+      if ((cmd = nxtwrd (cmd)) == NULL) goto err;
+      if (intprs(cmd,&green) == NULL) goto err;
+      red = -9; blue = -9;
+    } else {
+      if (intprs(cmd,&red) == NULL) goto err;
+      if ((cmd = nxtwrd (cmd)) == NULL) goto err;
+      if (intprs(cmd,&green) == NULL) goto err;
+      if ((cmd = nxtwrd (cmd)) == NULL) goto err;
+      if (intprs(cmd,&blue) == NULL) goto err;
+      if ((cmd = nxtwrd (cmd)) == NULL)
+        itt2 = 255;
+      else {
+        if (intprs(cmd,&itt2) == NULL)  goto err;
+      }
+      if (itt<16 || itt>2048) {
+        gaprnt (0,"SET RGB Error:  Color number must be between 16 and 2048 \n");
+        return(1);
+      }
+      if (red<0   || red>255   ||
+          green<0 || green>255 ||
+          blue<0  || blue>255) {
+        gaprnt (0,"SET RGB Error:  RGB values must be between 0 and 255 \n");
+        return(1);
+      }
+      if (itt2<-255 || itt2>255) {
+        gaprnt (0,"SET RGB Error:  Alpha value must be between -255 and 255 \n");
+        return(1);
+      }
     }
-    if (!gxacol (itt,red,green,blue) ) {
-      snprintf(pout,255,"Color R:%i G:%i B:%i Unavailable: closest color assigned\n",red,green,blue);
-      gaprnt (2,pout);
-    }
+    gxacol (itt,red,green,blue,itt2);
   }
   else if (cmpwrd("stat",cmd)) {
     kwrd = 102;
@@ -5352,18 +5648,27 @@ static char *kwds[125] = {"X","Y","Z","T","LON","LAT","LEV","TIME",
   else if (cmpwrd("sdfwrite",cmd)) {
     kwrd = 113;
     if ((cmd = nxtwrd (cmd)) == NULL) goto err;
-    /* parse any arguments to 'set sdfwrite' command */
+    /* options for padding the output and setting a record dimension
+       are set to 'off' with each new call to 'set sdfwrite' */
     pcm->sdfwpad = 0;
+    pcm->sdfrecdim = 0;
+    /* parse any arguments to 'set sdfwrite' command */
     while (cmpwrd("-4d",cmd)  || cmpwrd("-5d",cmd) ||
+           cmpwrd("-3dz",cmd) || cmpwrd("-3dt",cmd) ||
            cmpwrd("-flt",cmd) || cmpwrd("-dbl",cmd) ||
            cmpwrd("-nc3",cmd) || cmpwrd("-nc4",cmd) ||
+           cmpwrd("-rt",cmd)  || cmpwrd("-re",cmd) ||
            cmpwrd("-zip",cmd) || cmpwrd("-chunk",cmd)) {
-      if (cmpwrd("-4d",cmd))    pcm->sdfwpad = 1;
-      if (cmpwrd("-5d",cmd))    pcm->sdfwpad = 2;
+      if (cmpwrd("-3dz",cmd))   pcm->sdfwpad = 1;
+      if (cmpwrd("-3dt",cmd))   pcm->sdfwpad = 2;
+      if (cmpwrd("-4d",cmd))    pcm->sdfwpad = 3;
+      if (cmpwrd("-5d",cmd))    pcm->sdfwpad = 4;
       if (cmpwrd("-dbl",cmd))   pcm->sdfprec = 8;
       if (cmpwrd("-flt",cmd))   pcm->sdfprec = 4;
       if (cmpwrd("-nc3",cmd))   pcm->sdfwtype = 1;
       if (cmpwrd("-nc4",cmd))   pcm->sdfwtype = 2;
+      if (cmpwrd("-rt",cmd))    pcm->sdfrecdim+=1;
+      if (cmpwrd("-re",cmd))    pcm->sdfrecdim+=2;
       if (cmpwrd("-zip",cmd))   pcm->sdfzip = 1;
       if (cmpwrd("-chunk",cmd)) pcm->sdfchunk = 1;
 
@@ -5387,15 +5692,16 @@ static char *kwds[125] = {"X","Y","Z","T","LON","LAT","LEV","TIME",
     snprintf(pout,255,"SDFWrite file name = %s\n",ch);
     gaprnt (2,pout);
     gaprnt (2,"SDFWrite will replace an existing file\n");
-    if (pcm->sdfwpad==0) {
-      gaprnt (2,"SDFwrite file will have same number of dimensions as defined variable\n");
-    }
-    if (pcm->sdfwpad==1) {
-      gaprnt (2,"SDFwrite file will have at least 4 dimensions\n");
-    }
-    if (pcm->sdfwpad==2) {
-      gaprnt (2,"SDFwrite file will have 5 dimensions\n");
-    }
+    if (pcm->sdfwpad==0)
+     gaprnt (2,"SDFwrite file will have the same number of dimensions as the defined variable\n");
+    if (pcm->sdfwpad==1)
+      gaprnt (2,"SDFwrite file will have 3 dimensions: lon, lat, and lev\n");
+    if (pcm->sdfwpad==2)
+      gaprnt (2,"SDFwrite file will have 3 dimensions: lon, lat, and time\n");
+    if (pcm->sdfwpad==3)
+      gaprnt (2,"SDFwrite file will have 4 dimensions: lon, lat, lev, and time\n");
+    if (pcm->sdfwpad==4)
+      gaprnt (2,"SDFwrite file will have 5 dimensions: lon, lat, lev, time, and ens\n");
 #if HAVENETCDF4 != 1
     /* reset flags if we dont' have netcdf-4 */
     if (pcm->sdfwtype == 2) {
@@ -5403,18 +5709,38 @@ static char *kwds[125] = {"X","Y","Z","T","LON","LAT","LEV","TIME",
       gaprnt(2,"         sdfwrite output will be netCDF classic format instead\n");
       pcm->sdfwtype = 1;
       if (pcm->sdfchunk==1) {
-        gaprnt(2,"         without chunking ");
+        gaprnt(2,"         without chunking\n");
         pcm->sdfchunk = 0;
       }
       if (pcm->sdfzip==1) {
-        gaprnt(2,"or compression");
+        gaprnt(2,"         without compression\n");
         pcm->sdfzip = 0;
       }
-      gaprnt(2,"\n");
     }
 #endif
+    /* check for two record dimensions */
+    if (pcm->sdfrecdim==3 && pcm->sdfwtype==1) {
+      gaprnt(0,"Only one record dimension is allowed with netCDF classic format. \n");
+      gaprnt(0,"  Use the \"-nc4\" option to enable multiple record dimensions. \n");
+      goto err;
+    }
+    if (pcm->sdfrecdim==1)
+      gaprnt (2,"SDFwrite file will have 1 record dimension: time\n");
+    else if (pcm->sdfrecdim==2)
+      gaprnt (2,"SDFwrite file will have 1 record dimension: ens\n");
+    else if (pcm->sdfrecdim==3)
+      gaprnt (2,"SDFwrite file will have 2 record dimensions: time and ens\n");
+    else
+      gaprnt (2,"SDFwrite file will not have a record dimension\n");
+
     /* If -zip, make sure we have -nc4 and -chunk */
     if (pcm->sdfzip) {
+      if (pcm->sdfwtype==1) {
+        gaprnt(0,"Compression is not available with netCDF classic format. \n");
+        gaprnt(0,"  Use the \"-nc4\" option to enable compression or \n");
+        gaprnt(0,"  reset the compression option with \"clear sdfwrite\". \n");
+        goto err;
+      }
       pcm->sdfwtype = 2;
       pcm->sdfchunk = 1;
     }
@@ -5595,7 +5921,7 @@ static char *kwds[125] = {"X","Y","Z","T","LON","LAT","LEV","TIME",
       itt2 = itt;
       while (*(cmd+itt)!=' '&&*(cmd+itt)!='\n'&&*(cmd+itt)!='\0') itt++;
       sz = itt+2-itt2;
-      ch = (char *)galloc(sz,"setmpdset");
+      ch = (char *)galloc(sz,"setmpds");
       if (ch==NULL) {
         gaprnt (0,"Memory allocation Error\n");
         goto err;
@@ -5634,24 +5960,23 @@ static char *kwds[125] = {"X","Y","Z","T","LON","LAT","LEV","TIME",
   else if (cmpwrd("display",cmd)) {
     kwrd = 57;
     if ((cmd = nxtwrd (cmd)) == NULL) goto err;
-    if (cmpwrd("color",cmd)) pcm->grflg=0;
-    else if (cmpwrd("grey",cmd)) pcm->grflg=1;
-    else if (cmpwrd("greyscale",cmd)) pcm->grflg=1;
+    if      (cmpwrd("color",cmd) || cmpwrd("grey",cmd) || cmpwrd("greyscale",cmd)) itt=2; /* this will be a no-op */
+    else if (cmpwrd("white",cmd)) itt=1;
+    else if (cmpwrd("black",cmd)) itt=0;
     else goto err;
     if ((cmd = nxtwrd (cmd)) != NULL) {
-      if (cmpwrd("white",cmd)) pcm->devbck = 1;
-      else if (cmpwrd("black",cmd)) pcm->devbck = 0;
+      if      (cmpwrd("white",cmd)) itt = 1;
+      else if (cmpwrd("black",cmd)) itt = 0;
       else goto err;
     }
-    gxdbck(pcm->devbck);
-    gxgrey(pcm->grflg);
+    if (itt==0 || itt==1) gxdbck(itt);
   }
   else if (cmpwrd("gxout",cmd)) {
     kwrd = 21;
     if ((cmd = nxtwrd (cmd)) == NULL) goto err;
     pcm->gout0 = 9;
     if      (cmpwrd("contour",cmd))  pcm->gout2a = 1;
-    else if (cmpwrd("shaded",cmd))   pcm->gout2a = 2;
+    else if (cmpwrd("shaded",cmd))   pcm->gout2a = 16;
     else if (cmpwrd("shade1",cmd))   pcm->gout2a = 2;
     else if (cmpwrd("shade2",cmd))   pcm->gout2a = 16;
     else if (cmpwrd("shade2b",cmd))  pcm->gout2a = 17;
@@ -5839,11 +6164,14 @@ static char *kwds[125] = {"X","Y","Z","T","LON","LAT","LEV","TIME",
       if ((cmd = nxtwrd (cmd)) != NULL) {
         if (intprs(cmd,&itt) == NULL ) goto err;
         else pcm->grcolr = itt;
+        if ((cmd = nxtwrd (cmd)) != NULL) {
+          if (intprs(cmd,&itt) == NULL ) goto err;
+          else pcm->grthck = itt;
+        }
       }
     }
     if (pcm->grflag) {
-      snprintf(pout,255,"grid is on, style %i color %i \n",
-         pcm->grstyl, pcm->grcolr);
+      snprintf(pout,255,"grid is on, style %i color %i thickness %d\n",pcm->grstyl,pcm->grcolr,pcm->grthck);
       gaprnt (2,pout);
     } else {
       gaprnt (2,"grid is off\n");
@@ -6169,10 +6497,8 @@ static char *kwds[125] = {"X","Y","Z","T","LON","LAT","LEV","TIME",
         }
       }
     }
-    snprintf(pout,255,"SET LINE values:  color = %i  style = %i",
-      pcm->lincol, pcm->linstl);
-    gaprnt (2,pout);
-    snprintf(pout,255,"  thickness = %i\n",pcm->linthk);
+    snprintf(pout,255,"SET LINE values:  color = %i  style = %i  thickness = %i\n",
+             pcm->lincol, pcm->linstl, pcm->linthk);
     gaprnt (2,pout);
   }
   else if (cmpwrd("map",cmd)) {
@@ -6201,10 +6527,8 @@ static char *kwds[125] = {"X","Y","Z","T","LON","LAT","LEV","TIME",
     if (pcm->mapcol < 0 ) {
       gaprnt (2,"SET MAP values:  auto\n");
     } else {
-      snprintf(pout,255,"SET MAP values:  color = %i  style = %i",
-        pcm->mapcol, pcm->mapstl);
-      gaprnt (2,pout);
-      snprintf(pout,255,"  thickness = %i\n",pcm->mapthk);
+      snprintf(pout,255,"SET MAP values:  color = %i  style = %i  thickness = %i\n",
+               pcm->mapcol, pcm->mapstl, pcm->mapthk);
       gaprnt (2,pout);
     }
   }
@@ -6393,7 +6717,7 @@ static char *kwds[125] = {"X","Y","Z","T","LON","LAT","LEV","TIME",
     if (intprs(cmd,&itt) == NULL ) goto err;
     snprintf(pout,255,"background = %i \n",itt);
     gaprnt (2,pout);
-    gxbckg(itt);
+    gxdbck(itt);
   }
   else if (cmpwrd("cthick",cmd)) {
     kwrd = 49;
@@ -6776,6 +7100,71 @@ static char *kwds[125] = {"X","Y","Z","T","LON","LAT","LEV","TIME",
     else if (cmpwrd("off",cmd) ) pcm->dwrnflg = 0;
     else goto err;
   }
+  else if (cmpwrd("tile",cmd)) {
+    kwrd = 125;
+    for (i=0; i<15; i++) itmp[i] = -999;
+    if ((cmd = nxtwrd (cmd)) == NULL) goto err;
+    if (intprs(cmd,itmp) == NULL ) goto err;  /* tile number */
+    if (*(itmp+0)<0 || *(itmp+0)>=COLORMAX) {
+      snprintf (pout,255,"Tile number must be between 0 and %d\n",COLORMAX-1);
+      gaprnt (0,pout);
+      goto err;
+    }
+    if ((cmd = nxtwrd (cmd)) == NULL) goto err;
+    if (intprs(cmd,itmp+1) == NULL ) goto err;  /* tile type */
+    if (*(itmp+1)<0 || *(itmp+1)>8) {
+      snprintf (pout,255,"Tile type must be between 0 and 8\n");
+      gaprnt (0,pout);
+      goto err;
+    }
+
+    /* check for type 0 */
+    if (*(itmp+1)==0) {
+      if ((cmd = nxtwrd (cmd)) != NULL) {
+        /* user has provided a file to define a new tile -- get the length */
+        itt2 = 0;
+        while (*(cmd+itt2)!='\n'&&*(cmd+itt2)!='\0') itt2++; /* spaces are allowed */
+        /* allocate memory for tile filename */
+        tileimg = (char *)malloc(itt2+1);
+        if (tileimg==NULL) {
+          gaprnt (0,"Memory allocation error for tile image filename\n"); goto err;
+        }
+        /* copy the user-supplied filename (mixed case) to tileimg */
+        i2 = cmd - cmd1;
+        for (i1=0; i1<itt2; i1++) *(tileimg+i1) = *(com+i1+i2);
+        /* Make sure filename ends in ".png"  */
+        i = itt2-4;
+        if (i>0) {
+          if (*(tileimg+i+1)!='p' || *(tileimg+i+2)!='n' || *(tileimg+i+3)!='g' ) {
+            if (*(tileimg+i+1)!='P' || *(tileimg+i+2)!='N' || *(tileimg+i+3)!='G' ) {
+              gaprnt(0,"Custom tile image file must be PNG format\n");
+              free (tileimg);
+              goto err;
+            }
+          }
+        }
+        *(tileimg+itt2)='\0';      /* ensure tile image filename is null-terminated */
+        /* check if file exists*/
+        FILE *tileimgfile=NULL;
+        tileimgfile=fopen(tileimg,"rb");
+        if (tileimgfile==NULL) {
+          gaprnt(0,"Unable to open tile image file\n");
+          free (tileimg);
+          goto err;
+        }
+        else fclose(tileimgfile);
+      }
+    }
+    else {
+      /* get rest of args for on-the-fly tile generation */
+      for (i=2; i<7; i++) {
+        if ((cmd = nxtwrd (cmd)) == NULL) break;
+        if (intprs(cmd,itmp+i) == NULL ) goto err;
+      }
+    }
+    gxdbsetpatt(itmp,tileimg);
+    if (tileimg) free (tileimg);
+  }
   else if (cmpwrd("fill",cmd)) {
     kwrd = 96;
     pat = (char *)galloc(6,"fillpat");
@@ -7021,9 +7410,10 @@ gaint rc;
       snprintf(pout,255,"WARNING: The use of PDEF FILE in %s \n",pfi->dnam);
       gaprnt (1,pout);
       gaprnt (1," may be incorrect. Please make sure you are using it properly.\n");
-      gaprnt (1," Updated documentation is at http://iges.org/grads/gadoc/pdef.html\n");
+      gaprnt (1," Updated documentation is at http://cola.gmu.edu/grads/gadoc/pdef.html\n");
     }
   }
+
   return (0);
 }
 
@@ -7474,9 +7864,11 @@ gaint sdfwdim (struct gafile *pfi, struct gacmn *pcm, gaint dim, gaint varid) {
 struct dt tinit,time;
 gadouble *axis, *axis0;
 gadouble (*conv) (gadouble *, gadouble);
-gaint i, rc;
+gaint i, rc, flag;
 size_t sz;
+size_t start, count;
 
+ /* populate a local array with the coordinate values */
  axis = NULL;
  sz = sizeof(gadouble)*pfi->dnum[dim];
  axis = (gadouble *)galloc(sz,"sdfaxis");
@@ -7487,10 +7879,12 @@ size_t sz;
  axis0 = axis;
  if (dim == 3) {
    /* For T coordinate */
+   flag=0;
+   if (*(pfi->grvals[3]+5)>0) flag=1;   /* change time unit to months instead of minutes */
    gr2t (pfi->grvals[dim],1.0+pfi->dimoff[dim],&tinit);
    for (i=1; i<=pfi->dnum[dim]; i++) {
      gr2t (pfi->grvals[dim],(gadouble)(i+pfi->dimoff[dim]),&time);
-     *(axis+i-1) = timdif(&tinit,&time);
+     *(axis+i-1) = timdif(&tinit,&time,flag);
    }
  }
  else {
@@ -7502,7 +7896,20 @@ size_t sz;
    }
  }
  axis = axis0;
- rc = nc_put_var_double(pcm->ncwid, varid, axis0);
+
+ /* When writing the coordinate values to the file,
+    use nc_put_vara_double if it's a record dimension */
+
+ if ((dim==4 && (pcm->sdfrecdim==2 || pcm->sdfrecdim==3)) ||
+     (dim==3 && (pcm->sdfrecdim==1 || pcm->sdfrecdim==3))) {
+   count = (size_t)pfi->dnum[dim];
+   start = 0;
+   rc = nc_put_vara_double(pcm->ncwid, varid, &start, &count, axis0);
+ }
+ else {
+   rc = nc_put_var_double(pcm->ncwid, varid, axis0);
+ }
+
  if (rc) {
    snprintf(pout,255,"sdfwdim error from nc_put_var_double (dim=%d): \n ",dim);
    gaprnt(0,pout);
@@ -7516,11 +7923,16 @@ size_t sz;
 }
 
 /* Routine to set up a coordinate dimension and variable in a self-describing output file */
-gaint sdfdefdim (gaint fileid, char *dimname, gaint dimsize, gaint *dimid, gaint *varid) {
+gaint sdfdefdim (gaint fileid, char *dimname, gaint dimsize, gaint *dimid, gaint *varid,
+                 gaint recflg, gaint sdfwtype) {
 #if USENETCDF == 1
 gaint rc;
+size_t chunksize;
  /* define the dimension */
- rc = nc_def_dim(fileid, dimname, dimsize, dimid);
+ if (recflg)
+   rc = nc_def_dim(fileid, dimname, NC_UNLIMITED, dimid);
+ else
+   rc = nc_def_dim(fileid, dimname, dimsize, dimid);
  if (rc) {
    snprintf(pout,255,"sdfdefdim error from nc_def_dim (%s): \n ",dimname);
    gaprnt (0,pout);
@@ -7535,6 +7947,23 @@ gaint rc;
    handle_error(rc);
    return (1);
  }
+
+#if HAVENETCDF4==1
+ /* define record dimensions as chunked for netcdf-4 files */
+ if (recflg && sdfwtype==2) {
+   chunksize = (size_t)dimsize;
+   rc = nc_def_var_chunking (fileid, *dimid, NC_CHUNKED, &chunksize);
+   if (rc) {
+     snprintf(pout,255,"sdfdefdim error from nc_def_var_chunking (%s): \n ",dimname);
+     gaprnt(0,pout);
+     handle_error(rc);
+     return (1);
+   }
+ }
+#endif
+
+
+
  return (0);
 #endif
  return(0);
@@ -7552,6 +7981,7 @@ gaint i,rc,nvdims=0,vdims[5],dimids[5];
 size_t start[5],count[5],*chunksize=NULL;
 gaint xdimid,ydimid,zdimid,tdimid,edimid;
 gaint xvarid,yvarid,zvarid,tvarid,evarid,varid;
+gaint padX,padY,padZ,padT,padE,recflg;
 char name[20],tunit[256];
 gafloat flundef,*flbuf=NULL;
 char *filename={"grads.sdfwrite.nc"};
@@ -7600,13 +8030,20 @@ char *filename={"grads.sdfwrite.nc"};
   /* initialize the vdims array */
   vdims[0] = vdims[1] = vdims[2] = vdims[3] = vdims[4] = -999;
 
-  /* Set up the dimensions and the coordinate variables.
-     For now, no record dimension is defined.  */
+  /* Set up the dimensions and the coordinate variables */
+  padX = padY = padZ = padT = padE = 0;
+  if (pcm->sdfwpad) {
+    padX = 1;
+    padY = 1;
+    if (pcm->sdfwpad==1 || pcm->sdfwpad>=3) padZ = 1;
+    if (pcm->sdfwpad>=2) padT = 1;
+    if (pcm->sdfwpad==4) padE = 1;
+  }
 
   /* X is varying or user wants to pad the output with non-varying dims */
-  if (pcm->vdim[0] || pcm->sdfwpad) {
+  if (pfi->dnum[0]>1 || padX) {
     /* define the dimension */
-    if (sdfdefdim (pcm->ncwid, "lon", pfi->dnum[0], &xdimid, &xvarid)) goto err;
+    if (sdfdefdim (pcm->ncwid, "lon", pfi->dnum[0], &xdimid, &xvarid, 0, pcm->sdfwtype)) goto err;
     /* assign default and user-defined attributes */
     if (sdfwatt(pcm, xvarid, "lon", "units", "degrees_east")) goto err;
     if (sdfwatt(pcm, xvarid, "lon", "long_name", "Longitude")) goto err;
@@ -7621,9 +8058,9 @@ char *filename={"grads.sdfwrite.nc"};
   }
 
   /* Y is varying or user wants to pad the output with non-varying dims  */
-  if (pcm->vdim[1] || pcm->sdfwpad) {
+  if (pfi->dnum[1]>1 || padY) {
     /* define the dimension */
-    if (sdfdefdim (pcm->ncwid, "lat", pfi->dnum[1], &ydimid, &yvarid)) goto err;
+    if (sdfdefdim (pcm->ncwid, "lat", pfi->dnum[1], &ydimid, &yvarid, 0, pcm->sdfwtype)) goto err;
     /* assign default and user-defined attributes */
     if (sdfwatt(pcm, yvarid, "lat", "units", "degrees_north")) goto err;
     if (sdfwatt(pcm, yvarid, "lat", "long_name", "Latitude")) goto err;
@@ -7638,9 +8075,9 @@ char *filename={"grads.sdfwrite.nc"};
   }
 
   /* Z is varying or user wants to pad the output with non-varying dims */
-  if (pcm->vdim[2] || pcm->sdfwpad) {
+  if (pfi->dnum[2]>1 || padZ) {
     /* define the dimension */
-    if (sdfdefdim (pcm->ncwid, "lev", pfi->dnum[2], &zdimid, &zvarid)) goto err;
+    if (sdfdefdim (pcm->ncwid, "lev", pfi->dnum[2], &zdimid, &zvarid, 0, pcm->sdfwtype)) goto err;
     /* assign default and user-defined attributes */
     if (sdfwatt(pcm, zvarid, "lev", "units", "millibar")) goto err;
     if (sdfwatt(pcm, zvarid, "lev", "long_name", "Level")) goto err;
@@ -7655,16 +8092,22 @@ char *filename={"grads.sdfwrite.nc"};
   }
 
   /* T is varying or user wants to pad the output with non-varying dims */
-  if (pcm->vdim[3] || pcm->sdfwpad) {
+  if (pfi->dnum[3]>1 || padT) {
     /* define the dimension */
-    if (sdfdefdim (pcm->ncwid, "time", pfi->dnum[3], &tdimid, &tvarid)) goto err;
+    recflg=0;
+    if ((pcm->sdfrecdim==1) || (pcm->sdfrecdim==3)) recflg=1;
+    if (sdfdefdim (pcm->ncwid, "time", pfi->dnum[3], &tdimid, &tvarid, recflg, pcm->sdfwtype)) goto err;
     /* assign default and user-defined attributes */
     if (sdfwatt(pcm, tvarid, "time", "long_name", "Time")) goto err;
     if (sdfwatt(pcm, tvarid, "time", NULL, NULL)) goto err;
     /* write out the time axis units and calendar attributes after the
        user-defined attributes. This guarantees that they will be correct */
     gr2t (pfi->grvals[3],1.0+pfi->dimoff[3],&tinit);
-    snprintf(tunit,255,"minutes since %04d-%02d-%02d %02d:%02d",
+    if ((*(pfi->grvals[3]+6) != 0))
+      snprintf(tunit,255,"minutes since %04d-%02d-%02d %02d:%02d",
+            tinit.yr,tinit.mo,tinit.dy,tinit.hr,tinit.mn);
+    else
+      snprintf(tunit,255,"months since %04d-%02d-%02d %02d:%02d",
             tinit.yr,tinit.mo,tinit.dy,tinit.hr,tinit.mn);
     if (sdfwatt(pcm, tvarid, "time", "units", tunit)) goto err;
     /* if necessary, assign 365_day_calendar attribute */
@@ -7681,9 +8124,11 @@ char *filename={"grads.sdfwrite.nc"};
   }
 
   /* E is varying or user wants to pad the output with non-varying dims */
-  if (pcm->vdim[4] || pcm->sdfwpad==2) {
+  if (pfi->dnum[4]>1 || padE) {
     /* define the dimension */
-    if (sdfdefdim (pcm->ncwid, "ens", pfi->dnum[4], &edimid, &evarid)) goto err;
+    recflg=0;
+    if (pcm->sdfrecdim>=2) recflg=1;
+    if (sdfdefdim (pcm->ncwid, "ens", pfi->dnum[4], &edimid, &evarid, recflg, pcm->sdfwtype)) goto err;
     /* assign default and user-defined attributes */
     if (sdfwatt(pcm, evarid, "ens", "grads_dim", "e")) goto err;
     if (sdfwatt(pcm, evarid, "ens", "long_name", "Ensemble member")) goto err;
@@ -7794,11 +8239,11 @@ char *filename={"grads.sdfwrite.nc"};
   }
 
   /* Write the coordinate variable data */
-  if (pcm->vdim[0] || pcm->sdfwpad) if (sdfwdim (pfi, pcm, 0, xvarid)) goto err;
-  if (pcm->vdim[1] || pcm->sdfwpad) if (sdfwdim (pfi, pcm, 1, yvarid)) goto err;
-  if (pcm->vdim[2] || pcm->sdfwpad) if (sdfwdim (pfi, pcm, 2, zvarid)) goto err;
-  if (pcm->vdim[3] || pcm->sdfwpad) if (sdfwdim (pfi, pcm, 3, tvarid)) goto err;
-  if (pcm->vdim[4] || pcm->sdfwpad==2) if (sdfwdim (pfi, pcm, 4, evarid)) goto err;
+  if (pfi->dnum[0]>1 || padX) if (sdfwdim (pfi, pcm, 0, xvarid)) goto err;
+  if (pfi->dnum[1]>1 || padY) if (sdfwdim (pfi, pcm, 1, yvarid)) goto err;
+  if (pfi->dnum[2]>1 || padZ) if (sdfwdim (pfi, pcm, 2, zvarid)) goto err;
+  if (pfi->dnum[3]>1 || padT) if (sdfwdim (pfi, pcm, 3, tvarid)) goto err;
+  if (pfi->dnum[4]>1 || padE) if (sdfwdim (pfi, pcm, 4, evarid)) goto err;
 
   /* set the start and count array values */
   for (i=0; i<nvdims; i++) {

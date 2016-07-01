@@ -1,6 +1,4 @@
-/*  Copyright (C) 1988-2011 by Brian Doty and the
-    Institute of Global Environment and Society (IGES).
-    See file COPYRIGHT for more information.   */
+/* Copyright (C) 1988-2016 by George Mason University. See file COPYRIGHT for more information. */
 
 /* Authored by B. Doty */
 
@@ -34,23 +32,21 @@ void gree();
    all the routines in the file.    */
 
 static char *datad = "/usr/local/lib/grads";
-static gadouble xsize, ysize;                /* Virtual size       */
-static gadouble rxsize, rysize;              /* Real size          */
+static gadouble xsize, ysize;                /* Virtual page size  */
+static gadouble rxsize, rysize;              /* Real page size     */
 static gaint lwflg;                          /* Reduce lw due vpage*/
 static gadouble clminx,clmaxx,clminy,clmaxy; /* Clipping region    */
 static gaint cflag;                          /* Clipping flag      */
 static gaint mflag;                          /* mask flag          */
 static gadouble dash[8];                     /* Linestyle pattern  */
 static gaint dnum,lstyle;                    /* Current linestyle  */
-static gaint color;                          /* Current color      */
+static gaint lcolor;                         /* Current color      */
 static gaint lwide;                          /* Current linewidth  */
 static gadouble oldx,oldy;                   /* Previous position  */
 static gaint bufmod;                         /* Buffering mode     */
 static gadouble xsave,ysave,alen,slen;       /* Linestyle constants*/
 static gaint jpen,dpnt;
-static gaint bcol;                           /* Background color   */
-static gaint intflg;                         /* Batch flag         */
-static gaint reds[256],grns[256],blus[256];  /* Save defined color info */
+static gaint intflg;                         /* Batch/Interactive flag    */
 static void (*fconv) (gadouble, gadouble, gadouble *, gadouble *);
                                              /* fconv points to proj rnt  */
 static void (*gconv) (gadouble, gadouble, gadouble *, gadouble *);
@@ -62,6 +58,8 @@ static gaint maskflg;                        /* mask flag; -999 no mask yet,
                                                 0 no mask used, 1 mask values set, -888 error  */
 static gaint masksize;                       /* Size of mask array */
 static gaint maskx;                          /* Size of a row in the array */
+static gaint bcol;                           /* background color */
+static gaint savcol;                         /* for color save/restore */
 
 /* For STNDALN, routines included are gxgnam and gxgsym */
 #ifndef STNDALN
@@ -70,45 +68,101 @@ static gaint maskx;                          /* Size of a row in the array */
 /* batch flag = 1, batch mode only (no graphics output) */
 
 void gxstrt (gadouble xmx, gadouble ymx, gaint batch, gaint hbufsz) {
-  gaint ii;
 
   printf ("GX Package Initialization: Size = %g %g \n",xmx,ymx);
   if (batch) printf ("Running in Batch mode\n");
-  intflg = !batch;
+  gxdbinit();                               /* Initialize the graphics data base */
+  intflg = !batch;                          /* Set batch/interactive flag */
   if (intflg) {
-    gxdbgn (xmx, ymx);
-    gxdcol (1);                             /* Initial device color    */
-    gxdwid (1);                             /* Initial line width      */
+    gxdbgn (xmx, ymx);                      /* Initialize graphics output */
+    gxdwid (3);                             /* Initial line width      */
   } else {
-    gxdbat ();
+    gxdbat ();                              /* Tell hardware layer we're in batch mode */
+    gxpinit (xmx, ymx);                     /* Tell printing layer to initialize batch mode surface */
   }
-  rxsize = xmx;  rysize = ymx;
+  gxpbgn (xmx, ymx);                        /* Tell printing layer about page size */
+  rxsize = xmx;                             /* Set local variables with real page size  */
+  rysize = ymx;
   clminx=0; clmaxx=xmx;                     /* Set clipping area       */
   clminy=0; clmaxy=ymx;
-  xsave=0.0; ysave=0.0; lstyle=0; lwide = 1;
+  xsave=0.0; ysave=0.0;
+  lstyle=0; lwide = 3;
   oldx=0.0; oldy=0.0;
   fconv=NULL;                               /* No projection set up    */
   gconv=NULL;                               /* No grid scaling set up  */
   bconv=NULL;                               /* No back transform       */
-  gxscal (0.0,xmx,0.0,ymx,0.0,xmx,0.0,ymx); /* Linear scaling=inches*/
-  gxvpag (xmx,ymx,0.0,xmx,0.0,ymx);         /* Virtual page scaling */
   gxchii();                                 /* Init character plotting */
-  bufmod=0;
-  bcol = 0;                                 /* Background is black     */
-  for (ii=0; ii<=255; ii++) reds[ii]=-999;
+  bufmod=0;                                 /* double buffering is OFF */
   gxhnew(rxsize,rysize,hbufsz);             /* Init hardcopy buffering */
-  color = 1;
+  gxscal (0.0,xmx,0.0,ymx,0.0,xmx,0.0,ymx); /* Linear scaling=inches   */
+  gxvpag (xmx,ymx,0.0,xmx,0.0,ymx);         /* Virtual page scaling    */
   mask = NULL; maskflg = -999;              /* Don't allocate mask until first use */
+  gxcolr(1);                                /* Initial color is 1 (foreground) */
 }
 
 /* Terminate graphics output */
 
-void gxend (void){                     /* Return screen to normal */
-  gxhend();
+void gxend (void) {                         /* Return screen to normal */
   if (mask) free(mask);
-  if (intflg) gxdend();
-  printf ("GX package terminated \n");
+  if (intflg)
+    gxdend();                               /* Close X11 window        */
+  else
+    gxpend ();                              /* Tell printing layer to destroy batch mode surface */
+  printf ("GX Package Terminated \n");
 }
+
+
+/* Send a signal to the rendering engine and the metabuffer.
+   Signal values are:
+     1 == Done with draw/display so finish rendering
+     2 == Disable anti-aliasing
+     3 == Enable anti-aliasing
+     4 == Cairo push
+     5 == Cairo pop and then paint
+*/
+void gxsignal (gaint sig) {
+  if (intflg) gxdsignal(sig);  /* tell the rendering layer about the signal */
+  hout1c(-22,sig);             /* put the signal in the metafile buffer */
+}
+
+
+/* Query the width of a character */
+gadouble gxqchl (char ch, gaint fn, gadouble w) {
+gadouble wid;
+
+  /* cases where we want to use Hershey fonts */
+  if (fn==3) return (-999.9);                  /* symbol font */
+  if (fn>5 && fn<10) return (-999.9);          /* user-defined font file */
+  if (fn<6 && !gxdbqhersh()) return (-999.9);  /* font 0-5 and hershflag=0 in gxmeta.c */
+
+  if (intflg)
+    wid = gxdqchl (ch, fn, w);                 /* get the character width (interactive mode) */
+  else
+    wid = gxpqchl (ch, fn, w);                 /* get the character width (batch mode) */
+  return (wid);
+}
+
+/* Draw a character */
+gadouble gxdrawch (char ch, gaint fn, gadouble x, gadouble y, gadouble w, gadouble h, gadouble rot) {
+gadouble wid;
+
+  /* cases where we want to use Hershey fonts */
+  if (fn==3) return (-999.9);                  /* symbol font */
+  if (fn>5 && fn<10) return (-999.9);          /* user-defined font file */
+  if (fn<6 && !gxdbqhersh()) return (-999.9);  /* font 0-5 and hershflag=0 in gxmeta.c */
+
+  /* from here on we're using Cairo fonts */
+  gxvcon(x,y,&x,&y);                           /* scale the position and size for the virual page */
+  gxvcon2(w,h,&w,&h);
+  if (intflg)
+    wid = gxdch (ch, fn, x, y, w, h, rot);     /* plot a character */
+  else
+    wid = gxpqchl (ch, fn, w);                 /* get the character width (batch mode) */
+  houtch (ch, fn, x, y, w, h, rot);            /* put the character in the metabuffer */
+  gxppvp2(wid,&wid);                             /* rescale the character width back to real page size */
+  return (wid);                                /* return character width */
+}
+
 
 /* Frame action.  Values for action are:
       0 -- new frame (clear display), wait before clearing.
@@ -122,7 +176,6 @@ void gxend (void){                     /* Return screen to normal */
       9 -- clear only the X request buffer */
 
 void gxfrme (gaint action) {
-gaint scol,i;
 
   if (action>7) {
     if (intflg) gxdfrm(action);
@@ -130,100 +183,70 @@ gaint scol,i;
   }
   gxmaskclear();
   if (intflg) {
-    if (action==0) getchar();              /* Wait if requested    */
-    if (action!=2&&bufmod) {
-      gxdsgl ();
+    if (action==0) getchar();        /* Wait if requested    */
+    if (action!=2 && bufmod) {
+      gxdsgl ();                     /* tell hardware to turn off double buffer mode */
       bufmod=0;
     }
-    if (action==2&&(!bufmod)) {
-      gxddbl ();
+    if (action==2 && (!bufmod)) {
+      gxddbl ();                     /* tell hardware to turn on double buffer mode */
       bufmod=1;
     }
-    if (bufmod) gxdswp ();
-    gxdfrm (action);
+    if (bufmod) gxdswp ();           /* swap */
+    gxdfrm (action);                 /* tell hardware layer about frame action */
+    gxdfrm (9);                      /* clear the X request buffer */
   }
-
-  gxhfrm (action);                         /* Reset meta buffer */
-
-  for (i=16; i<=255; i++) {
-    if (reds[i]>-1) hout4i(-5,i,reds[i],grns[i],blus[i]);
-  }
-  if (bcol>0) {
-    scol = color;
+  gxhfrm (action);                   /* reset metabuffer */
+  bcol = gxdbkq();
+  if (bcol>1) {
+    /* If background is not black/white, draw a full page rectangle and populate the metabuffer */
+    savcol = lcolor;
     gxcolr(bcol);
-    color = scol;
-    gxrecf (0.0, rxsize, 0.0, rysize);
-    if (intflg) gxdfrm (9);
-  }
-
-}
-
-/* Perform new frame stuff for redraw.  This primarily involves
-   the background color. */
-
-void gxsfrm (void) {
-  if (bcol>0) {
-    gxdcol(bcol);
-    gxdrec (0.0, rxsize, 0.0, rysize);
-    gxdcol(color);
+    gxrecf(0.0, rxsize, 0.0, rysize);
+    gxcolr(savcol);
   }
 }
 
-/* Set color.  Colors are: 0 - black;  1 - white
-                           2 - red;    3 - green;    4 - blue
-                           5 - cyan;   6 - magenta   7 - yellow
-                           8 - orange; 9 - purple;  10 - lt. green
-                          11 - m.blue 12 - d.yellow 13 - aqua
-                          14 - d.purple 15  - gray
-   Other colors may be available but are defined by the device
-   driver.   */
+
+/* Set color.  Colors are: 0 - black;    1 - white
+                           2 - red;      3 - green     4 - blue
+                           5 - cyan;     6 - magenta   7 - yellow
+                           8 - orange;   9 - purple   10 - lt. green
+                          11 - m.blue   12 - yellow   13 - aqua
+                          14 - d.purple 15 - gray
+   Other colors may be available but are defined by the device driver */
 
 void gxcolr (gaint clr){                 /* Set color     */
   if (clr<0) clr=0;
-  if (clr>255) clr=255;
+  if (clr>=COLORMAX) clr=COLORMAX-1;
   hout1(-3,clr);
   if (intflg) gxdcol (clr);
-  color = clr;
+  lcolor = clr;
 }
 
-/* Set and query background color */
+/* define a new color */
 
-void gxbckg (gaint col) {
-  bcol = col;
-}
-
-gaint gxqbck (void) {
-  return(bcol);
-}
-
-gaint gxacol (gaint clr, gaint red, gaint green, gaint blue ) {
-gaint rtn;
-  rtn=1;
-  hout4i(-5,clr,red,green,blue);
-  if (intflg) rtn = gxdacl (clr, red, green, blue);
-  if (clr>15 && clr<=255) {
-    reds[clr] = red;
-    grns[clr] = green;
-    blus[clr] = blue;
-  }
-  return rtn;
+gaint gxacol (gaint clr, gaint red, gaint green, gaint blue, gaint alpha ) {
+  gaint rc=0;
+  gxdbacol (clr, red, green, blue, alpha);                 /* update the database */
+  hout5i(-5,clr,red,green,blue,alpha);                     /* tell the metabuffer */
+  if (intflg) rc = gxdacol(clr, red, green, blue, alpha);  /* tell hardware */
+  return(rc);
 }
 
 
 /* Set line weight */
 
-void gxwide (gaint wid){                 /* Set width     */
+void gxwide (gaint wid) {                 /* Set width     */
 gaint hwid;
   hwid = wid;
-  if (lwflg) hwid = (wid+1)/2;
   hout2i(-4,hwid,wid);
-  if (intflg) gxdwid (wid);
-  lwide = wid;
+  if (intflg) gxdwid (hwid);
+  lwide = hwid;
 }
 
-
 /* Move to x, y with 'clipping'.  Clipping is implmented
-   corsely, where any move or draw point that is outside the
+   coarsely, where any move or draw point that is outside the
    clip region is not plotted.                          */
 
 void gxmove (gadouble x, gadouble y) {        /* Move to x,y   */
@@ -242,7 +265,7 @@ void gxmove (gadouble x, gadouble y) {        /* Move to x,y   */
 
 /* Draw to x, y with clipping */
 
-void gxdraw (gadouble x, gadouble y){        /* Draw to x,y   */
+void gxdraw (gadouble x, gadouble y) {        /* Draw to x,y   */
 gadouble xnew,ynew;
 gaint pos=0;
   if ( x<clminx || x>clmaxx || y<clminy || y>clmaxy ) {
@@ -368,6 +391,7 @@ void gxstyl (gaint style) {              /* Set line style  */
   slen=dash[0]; jpen=2; dpnt=0;
 }
 
+
 /* Move and draw with linestyles and clipping */
 
 void gxplot (gadouble x, gadouble y, gaint ipen ) {    /* Move or draw  */
@@ -418,6 +442,9 @@ gadouble x1,y1;
 /* Specify software clip region.  */
 
 void gxclip (gadouble xmin, gadouble xmax, gadouble ymin, gadouble ymax) {
+gadouble clxmin,clxmax,clymin,clymax;
+
+  /* for software clipping */
   clminx = xmin;
   clmaxx = xmax;
   clminy = ymin;
@@ -426,6 +453,12 @@ void gxclip (gadouble xmin, gadouble xmax, gadouble ymin, gadouble ymax) {
   if (clmaxx>xsize) clmaxx = xsize;
   if (clminy<0.0) clminy = 0.0;
   if (clmaxy>ysize) clmaxy = ysize;
+
+  /* specify the hardware clip region, and put it in the metabuffer as well */
+  gxvcon(clminx,clminy,&clxmin,&clymin);
+  gxvcon(clmaxx,clmaxy,&clxmax,&clymax);
+  if (intflg) gxdclip(clxmin,clxmax,clymin,clymax);
+  hout4(-23,clxmin,clxmax,clymin,clymax);
 }
 
 /* Constants for linear scaling */
@@ -446,41 +479,62 @@ void gxscal (gadouble xmin, gadouble xmax, gadouble ymin, gadouble ymax,
 
 static gadouble vxm,vxb,vym,vyb;
 
-/* Specify virtual page scaling */
+/* Specify virtual page scaling.
+   Input args are as follows:
+     xmax,ymax == virtual page sizes
+     smin,smax == real page X-coordinates of virtual page
+     tmin,tmax == real page Y-coordinates of virtual page
+*/
 
 void gxvpag (gadouble xmax, gadouble ymax,
              gadouble smin, gadouble smax, gadouble tmin, gadouble tmax){
 gadouble xmin, ymin;
+  /* set virtual page size */
   xmin = 0.0;
   ymin = 0.0;
   xsize = xmax;
   ysize = ymax;
+  /* check if virtual page coordinates extend beyond the real page size */
   if (smin<0.0) smin=0.0;
   if (smax>rxsize) smax = rxsize;
   if (tmin<0.0) tmin=0.0;
   if (tmax>rysize) tmax = rysize;
+  /* set clipping area to virtual page */
   clminx = 0.0;
   clmaxx = xmax;
   clminy = 0.0;
   clmaxy = ymax;
-  if ((smax-smin)/rxsize < 0.6 || (tmax-tmin)/rysize < 0.6) lwflg = 1;
+  /* if virtual page is small, set a flag to reduce line thickness */
+  if ((smax-smin)/rxsize < 0.49 || (tmax-tmin)/rysize < 0.49) lwflg = 1;
   else lwflg = 0;
+  /* set up constants for virtual page scaling */
   vxm=(smax-smin)/(xmax-xmin);
   vxb=smin-(vxm*xmin);
   vym=(tmax-tmin)/(ymax-ymin);
   vyb=tmin-(vym*ymin);
+  /* For non-software clipping ... put coordinates in the metabuffer and tell the hardware */
+  gxclip(clminx,clmaxx,clminy,clmaxy);
 }
 
 /* Do virtual page scaling conversion */
 
-void gxvcon (gadouble s, gadouble t, gadouble *x, gadouble *y) {
+void gxvcon (gadouble s, gadouble t, gadouble *x, gadouble *y) {  /* positions, real->virtual */
   *x = s*vxm+vxb;
   *y = t*vym+vyb;
 }
 
-void gxppvp (gadouble x, gadouble y, gadouble *s, gadouble *t) {
+void gxvcon2 (gadouble s, gadouble t, gadouble *x, gadouble *y) {  /* characters, real->virtual */
+  *x = s*vxm;
+  *y = t*vym;
+}
+
+void gxppvp (gadouble x, gadouble y, gadouble *s, gadouble *t) {   /* positions, virtual->real */
   *s = (x-vxb)/vxm;
   *t = (y-vyb)/vym;
+}
+
+void gxppvp2 (gadouble x, gadouble *s) {  /* character width, virtual->real */
+  *s = (x)/vxm;
 }
 
 
@@ -627,7 +681,9 @@ gadouble x;
   gxvcon (xlo,ylo,&xlo,&ylo);
   gxvcon (xhi,yhi,&xhi,&yhi);
   hout4(-6,xlo,xhi,ylo,yhi);
-  if (intflg) gxdrec (xlo, xhi, ylo, yhi);
+  if (intflg) {
+    gxdrec (xlo, xhi, ylo, yhi);
+  }
 }
 
 /* Define fill pattern for rectangles and polygons. */
@@ -646,18 +702,7 @@ gaint gxqwid (void) {
 /* query color */
 
 gaint gxqclr (void) {
-  return (color);
-}
-
-/* query non-default color rgb values*/
-
-void gxqrgb (gaint clr, gaint *r, gaint *g, gaint *b) {
-  if (clr>15 && clr<=255) {
-    *r = reds[clr];
-    *g = grns[clr];
-    *b = blus[clr];
-  }
-  return;
+  return (lcolor);
 }
 
 /* query style */
@@ -749,12 +794,20 @@ gaint i,ii,cnt;
     gxdraw (x+siz2*0.71,y-siz2*0.71);
     return;
   }
-  if (mtype==7) {                      /* Open diamond */
+  if (mtype==7 || mtype==12) {   /* Open or closed diamond */
     gxmove (x-siz2*0.75,y);
     gxdraw (x,y+siz2*1.1);
     gxdraw (x+siz2*0.75,y);
     gxdraw (x,y-siz2*1.1);
     gxdraw (x-siz2*0.75,y);
+    if (mtype==12) {
+      xy[0] = x-siz2*0.75; xy[1]=y;
+      xy[2] = x; xy[3] = y+siz2*1.1;
+      xy[4] = x+siz2*0.75; xy[5] = y;
+      xy[6] = x; xy[7] = y-siz2*1.1;
+      xy[8] = x-siz2*0.75; xy[9] = y;
+      gxfill(xy,4);
+    }
     return;
   }
   if (mtype==8 || mtype==9) {          /* Triangles */
@@ -805,7 +858,6 @@ gadouble *r, *out, *buff, x, y, xybuff[40];
 gaint i,flag,onum,aflag;
 
   if (num<3) return;
-
   /* Do clipping.    */
 
   aflag = 0;
@@ -865,17 +917,17 @@ gaint i,flag,onum,aflag;
     r+=2;
   }
 
-  /* Output to meta buffer if requested.   */
+  /* Output to metabuffer */
 
-  hout1(-7,onum);
+  hout1(-7,onum);             /* start a polygon fill */
   r = buff;
-  hout2(-10,*r,*(r+1));
+  hout2(-10,*r,*(r+1));       /* move to first point in polygon */
   r+=2;
   for (i=1; i<onum; i++) {
-    hout2(-11,*r,*(r+1));
+    hout2(-11,*r,*(r+1));     /* draw to next point in polygon */
     r+=2;
   }
-  hout0(-8);
+  hout0(-8);                  /* terminate polygon */
 
   /* Output to hardware */
 

@@ -1,7 +1,4 @@
-/*  Copyright (C) 1988-2011 by Brian Doty and the
-    Institute of Global Environment and Society (IGES).
-    See file COPYRIGHT for more information.   */
-
+/* Copyright (C) 1988-2016 by George Mason University. See file COPYRIGHT for more information. */
 
 /* file: gacfg.c
  *
@@ -53,6 +50,15 @@ const char *nc_inq_libvers(void);
 #if USEGADAP==1
 const char *libgadap_version(void);
 #endif
+
+#if USECAIRO==1
+#include <cairo.h>
+#include <fontconfig.h>
+#include <ft2build.h>
+#include FT_FREETYPE_H
+#include <pixman.h>
+#endif
+
 /*
  * gacfg() - Prints several configuration parameters.
  *
@@ -80,9 +86,9 @@ snprintf(cmd,255,"Config: v%s",GRADS_VERSION);
 #if READLINE==1
  strcat(cmd," readline");
 #endif
-#if GXPNG==1
- strcat(cmd," printim");
-#endif
+/* #if GXPNG==1 */
+/*  strcat(cmd," printim"); */
+/* #endif */
 #if GRIB2==1
  strcat(cmd," grib2");
 #endif
@@ -110,6 +116,9 @@ snprintf(cmd,255,"Config: v%s",GRADS_VERSION);
 #if USESHP==1
  strcat(cmd," shapefile");
 #endif
+#if USECAIRO==1
+ strcat(cmd," cairo");
+#endif
  strcat(cmd,"\n");
  gaprnt(verbose,cmd);
 
@@ -119,8 +128,7 @@ snprintf(cmd,255,"Config: v%s",GRADS_VERSION);
  }
 
  gaprnt (verbose, "Grid Analysis and Display System (GrADS) Version " GRADS_VERSION "\n");
- gaprnt (verbose, "Copyright (c) 1988-2011 by Brian Doty and the\n");
- gaprnt (verbose, "Institute for Global Environment and Society (IGES) \n");
+ gaprnt (verbose, "Copyright (C) 1988-2016 by George Mason University. \n");
  gaprnt (verbose, "This program is distributed WITHOUT ANY WARRANTY \n");
  gaprnt (verbose, "See file COPYRIGHT for more information. \n\n");
 
@@ -147,14 +155,15 @@ snprintf(cmd,255,"Config: v%s",GRADS_VERSION);
    gaprnt(verbose,"  o Command line editing DISABLED\n");
 #endif
 
-#if GXPNG==1
-   gaprnt(verbose,"  o printim command for image output ENABLED \n");
-   gaprnt(verbose,"      http://www.zlib.net \n");
-   gaprnt(verbose,"      http://www.libpng.org/pub/png/libpng.html \n");
-   gaprnt(verbose,"      http://www.libgd.org/Main_Page \n");
-#else
-   gaprnt(verbose,"  o printim command DISABLED\n");
-#endif
+/* JMA Leave info about printim commented out for now */
+/* #if GXPNG==1 */
+/*    gaprnt(verbose,"  o printim command for image output ENABLED \n"); */
+/*    gaprnt(verbose,"      http://www.zlib.net \n"); */
+/*    gaprnt(verbose,"      http://www.libpng.org/pub/png/libpng.html \n"); */
+/*    gaprnt(verbose,"      http://www.libgd.org/Main_Page \n"); */
+/* #else  */
+/*    gaprnt(verbose,"  o printim command DISABLED\n"); */
+/* #endif */
 
 #if GRIB2==1
    gaprnt(verbose,"  o GRIB2 interface ENABLED \n");
@@ -184,7 +193,7 @@ snprintf(cmd,255,"Config: v%s",GRADS_VERSION);
 
 #if USEGADAP==1
    gaprnt(verbose,"  o OPeNDAP station data interface ENABLED\n");
-   gaprnt(verbose,"      http://iges.org/grads/gadoc/supplibs.html \n");
+   gaprnt(verbose,"      http://cola.gmu.edu/grads/gadoc/supplibs.html \n");
    snprintf(cmd,255,   "      %s  \n", libgadap_version());
    gaprnt(verbose,cmd);
 #else
@@ -240,7 +249,25 @@ snprintf(cmd,255,"Config: v%s",GRADS_VERSION);
    gaprnt(verbose,"  o Shapefile interface DISABLED\n");
 #endif
 
+#if USECAIRO==1
+   gaprnt(verbose,"  o Cairo graphics interface ENABLED \n");
+   gaprnt(verbose,"      http://cairographics.org \n");
+   gaprnt(verbose,"      http://cgit.freedesktop.org/pixman \n");
+   gaprnt(verbose,"      http://www.freetype.org/index2.html \n");
+   gaprnt(verbose,"      http://www.freedesktop.org/wiki/Software/fontconfig \n");
+   snprintf(cmd,255,"      Cairo %d.%d.%d\n",CAIRO_VERSION_MAJOR,CAIRO_VERSION_MINOR,CAIRO_VERSION_MICRO);
+   gaprnt(verbose,cmd);
+   snprintf(cmd,255,"      Pixman %d.%d.%d\n",PIXMAN_VERSION_MAJOR,PIXMAN_VERSION_MINOR,PIXMAN_VERSION_MICRO);
+   gaprnt(verbose,cmd);
+   snprintf(cmd,255,"      Freetype %d.%d.%d\n",FREETYPE_MAJOR,FREETYPE_MINOR,FREETYPE_PATCH);
+   gaprnt(verbose,cmd);
+   snprintf(cmd,255,"      Fontconfig %d.%d.%d\n",FC_MAJOR,FC_MINOR,FC_REVISION);
+   gaprnt(verbose,cmd);
+#else
+   gaprnt(verbose,"  o Cairo interface DISABLED \n");
+#endif
 
- gaprnt(verbose,"\nFor additional information please consult http://iges.org/grads\n\n");
+
+ gaprnt(verbose,"\nFor additional information please consult http://cola.gmu.edu/grads\n\n");
 
 }

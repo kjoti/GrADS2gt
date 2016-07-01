@@ -36,7 +36,7 @@ quit </span></p>
   mkdir $HOME/supplibs/lib/pkgconfig</span><br>
 <span class="code">mkdir $HOME/supplibs/include<br>
 mkdir $HOME/supplibs/bin</span></p>
-<p>Move through the list of libraries in the table below, building them in order listed. Instructions for configuring and installing in the <span class="code">$HOME/supplibs</span> directory are given for each library. <span class="style1">If you are building on Mac OSX 10.6, set the environment variable CFLAGS to &quot;-arch i386&quot;.</span> </p>
+<p>Move through the list of libraries in the table below, building them in order listed. Instructions for configuring and installing in the <span class="code">$HOME/supplibs</span> directory are given for each library. <span class="style1">If you are building on Mac OSX 10.6, set the environment variable CFLAGS to &quot;-arch i386&quot;. For Mac OSX 10.7, I have used -arch x86_64. </span></p>
 <p>When you are done, unpack the GrADS source code tarball under $HOME. Change into the new GrADS directory you just created, and type<span class="code"> ./configure. </span>When the configuration is done, it will show a summary of which features have been enabled. Then type '<span class="code">make install</span>' and look for your executables in the ./bin directory. </p>
 <p>Good Luck!! </p>
 <table width="100%" border="0" cellpadding="4" cellspacing="4" class="plaintext">
@@ -57,7 +57,7 @@ mkdir $HOME/supplibs/bin</span></p>
       tar xvfz ./tarfiles/readline-5.0.tar.gz <br>
       mkdir readline<br>
       cd readline-5.0<br>
-      ./configure --disable-shared 
+      ./configure  
       --prefix=$HOME/supplibs/src/readline<br>
       make ; 
       make install<br>
@@ -76,7 +76,7 @@ mkdir $HOME/supplibs/bin</span></p>
       tar xvfz ./tarfiles/ncurses-5.7.tar.gz<br>
       mkdir ncurses<br>
       cd ncurses-5.7<br>
-      ./configure --disable-shared 
+      ./configure  
       --prefix=$HOME/supplibs/src/ncurses<br>
       make ;
       make install<br>
@@ -106,22 +106,22 @@ mkdir $HOME/supplibs/bin</span></p>
   </tr>
   <tr>
     <td valign="top" bgcolor="b8c8d7">libpng</td>
-    <td valign="top" bgcolor="b8c8d7">1.2.18</td>
+    <td valign="top" bgcolor="b8c8d7">1.5.12</td>
     <td valign="top" bgcolor="b8c8d7">PNG reference library. <br>
       Links:<br>      
-      <a href="http://www.libpng.org/pub/png/libpng.html" target="_parent">home page</a><br>      <a href="ftp://cola.gmu.edu/grads/Supplibs/2.1/src/libpng-1.2.18.tar.gz">local copy of source code</a><br></td>
+      <a href="http://www.libpng.org/pub/png/libpng.html" target="_parent">home page</a><br>      <a href="ftp://cola.gmu.edu/grads/Supplibs/2.1/src/libpng-1.5.12.tar.gz">local copy of source code</a><br></td>
     <td bgcolor="b8c8d7" class="code"><p>cd $HOME/supplibs/src/<br>
-      tar xvfz tarfiles/libpng-1.2.18.tar.gz<br>
+      tar xvfz tarfiles/libpng-1.5.12.tar.gz<br>
       mkdir libpng<br>
-      cd libpng-1.2.18<br>
-      ./configure --disable-shared 
+      cd libpng-1.5.12<br>
+      ./configure  
       --prefix=$HOME/supplibs/src/libpng<br>
       make ; 
       make install<br>
-      cp $HOME/supplibs/src/libpng/lib/libpng12.a $HOME/supplibs/lib<br>
-      mkdir $HOME/supplibs/include/libpng12<br>
-    cp $HOME/supplibs/src/libpng/include/libpng12/*.h $HOME/supplibs/include/libpng12<br>
-    cp $HOME/supplibs/src/libpng/lib/pkgconfig/libpng12.pc $HOME/supplibs/lib/pkgconfig</p>
+      cp $HOME/supplibs/src/libpng/lib/libpng15.a $HOME/supplibs/lib<br>
+      mkdir $HOME/supplibs/include/libpng15<br>
+    cp $HOME/supplibs/src/libpng/include/libpng15/*.h $HOME/supplibs/include/libpng15<br>
+    cp $HOME/supplibs/src/libpng/lib/pkgconfig/libpng15.pc $HOME/supplibs/lib/pkgconfig</p>
     <p><span class="style1">Note: The pkgconfig file is required for building cairo</span></p></td>
   </tr>
   <tr bgcolor="ccdceb">
@@ -158,7 +158,7 @@ mkdir $HOME/supplibs/bin</span></p>
       tar xvfz tarfiles/gd-2.0.34.tar.gz<br>
       mkdir gd<br>
       cd gd-2.0.34<br>
-      ./configure --disable-shared \<br>
+      ./configure  \<br>
       --with-png=$HOME/supplibs/src/libpng \<br>
       --with-jpeg=$HOME/supplibs/src/jpeg \<br>
       --prefix=$HOME/supplibs/src/gd<br>
@@ -179,7 +179,7 @@ mkdir $HOME/supplibs/bin</span></p>
       tar xvfz tarfiles/jasper-1.900.1.tar.gz<br>
       mkdir jasper<br>
       cd jasper-1.900.1<br>
-      ./configure --disable-shared 
+      ./configure  
       \<br>
       --prefix=$HOME/supplibs/src/jasper \<br>
       --with-jpeg=$HOME/supplibs/src/jpeg<br>
@@ -222,7 +222,7 @@ cd g2clib-1.4.0</p>
       tar xvfz tarfiles/szip-2.1.tar.gz<br>
       mkdir szip<br>
       cd szip-2.1<br>
-      ./configure --disable-shared --prefix=$HOME/supplibs/src/szip<br>
+      ./configure --prefix=$HOME/supplibs/src/szip<br>
       make ; 
       make install<br>
     cp $HOME/supplibs/src/szip/lib/libsz.a $HOME/supplibs/lib</p></td>
@@ -238,7 +238,7 @@ cd g2clib-1.4.0</p>
       tar xvfz ./tarfiles/udunits-1.11.7.tar.gz<br>
       ln -sf udunits-1.11.7 udunits<br>
       cd udunits/src/<br>
-        ./configure --disable-shared --prefix=$HOME/supplibs/src/udunits<br>
+        ./configure --prefix=$HOME/supplibs/src/udunits<br>
         make ;
         make install<br>
         cd ../<br>
@@ -256,7 +256,7 @@ cd g2clib-1.4.0</p>
       tar xvfz tarfiles/HDF4.2r3.tar.gz<br>
       mkdir hdf<br>
       cd HDF4.2r3<br>
-        ./configure --disable-netcdf --disable-shared --disable-fortran \<br>
+        ./configure --disable-netcdf  --disable-fortran \<br>
         --with-zlib=$HOME/supplibs/src/zlib \<br>
         --with-jpeg=$HOME/supplibs/src/jpeg \<br>
         --with-szip=$HOME/supplibs/src/szip \<br>
@@ -270,16 +270,16 @@ cd g2clib-1.4.0</p>
   </tr>
   <tr bgcolor="b8c8d7">
     <td valign="top" bgcolor="b8c8d7">hdf5</td>
-    <td valign="top" bgcolor="b8c8d7">1.8.7</td>
+    <td valign="top" bgcolor="b8c8d7">1.8.11</td>
     <td valign="top">(<span class="style1">GrADS 2.0.a7+</span>) <br>
       Hierarchical Data Format library, version 5. Requires: zlib, szip<br>
 Links:<br><a href="http://www.hdfgroup.org/HDF5/" target="_parent">home page</a><br>
-<a href="ftp://cola.gmu.edu/grads/Supplibs/2.1/src/hdf5-1.8.7.tar.gz">local copy of source code</a></td>
+<a href="ftp://cola.gmu.edu/grads/Supplibs/2.1/src/hdf5-1.8.11.tar.gz">local copy of source code</a></td>
     <td bgcolor="b8c8d7"><p class="code">cd $HOME/supplibs/src/<br>
-      tar xvfz tarfiles/hdf5-1.8.7.tar.gz<br>
+      tar xvfz tarfiles/hdf5-1.8.11.tar.gz<br>
       mkdir hdf5<br>
-      cd hdf5-1.8.7<br>
-      ./configure --disable-shared --disable-fortran \<br>
+      cd hdf5-1.8.11<br>
+      ./configure --disable-fortran \<br>
       --with-zlib=$HOME/supplibs/src/zlib \<br>
       --with-szlib=$HOME/supplibs/src/szip \<br>
       --prefix=$HOME/supplibs/src/hdf5<br>
@@ -303,7 +303,7 @@ Links:<br><a href="http://www.hdfgroup.org/HDF5/" target="_parent">home page</a>
       
       ./configure --without-ssl --without-libidn 
       --enable-static \<br>
-      --disable-shared --disable-ldap --prefix=$HOME/supplibs/src/curl<br>
+      --disable-ldap --prefix=$HOME/supplibs/src/curl<br>
       make ; 
       make install<br>
     cp $HOME/supplibs/src/curl/lib/libcurl.a $HOME/supplibs/lib<br>
@@ -311,28 +311,24 @@ cp $HOME/supplibs/src/curl/lib/pkgconfig/libcurl.pc $HOME/supplibs/lib/pkgconfig
   </tr>
   <tr bgcolor="ccdceb">
     <td valign="top" bgcolor="b8c8d7">netcdf</td>
-    <td valign="top" bgcolor="b8c8d7">4.1.3</td>
+    <td valign="top" bgcolor="b8c8d7">4.2.1.1</td>
     <td valign="top" bgcolor="b8c8d7">(<span class="style1">GrADS 2.0.a8+</span>) <br>
       Network Common Data Form library. <br>
       Requires hdf5, zlib, szip, curl. <br>
       Links:<br>      <a href="http://www.unidata.ucar.edu/software/netcdf/" target="_parent">home page</a><br>
-      <a href="ftp://cola.gmu.edu/grads/Supplibs/2.1/src/netcdf-4.1.3.tar.gz">local copy of source code</a></td>
+      <a href="ftp://cola.gmu.edu/grads/Supplibs/2.1/src/netcdf-4.2.1.1.tar.gz">local copy of source code</a></td>
     <td bgcolor="b8c8d7"><p class="code">cd $HOME/supplibs/src<br>
-      tar xvfz tarfiles/netcdf-4.1.3.tar.gz<br>
+      tar xvfz tarfiles/netcdf-4.2.1.1tar.gz<br>
       mkdir 
       netcdf<br>
-        cd netcdf-4.1.3</p>
+        cd netcdf-4.2.1.1</p>
       <p class="code"><span class="style1">Note: before running configure, set the following environment variables:<br>
-        setenv LIBS &quot;-lsz -lm -lrt -lz&quot;<br>
+        setenv LIBS &quot;-lsz -lm -lrt -lz -ldl -lcurl&quot;<br>
       setenv LDFLAGS -L$HOME/supplibs/lib<br>
       setenv CPPFLAGS -I$HOME/supplibs/include/hdf5</span><br>
         <br>
-        ./configure --disable-f77 --enable-netcdf-4 --enable-dap --disable-shared \<br>
-        --with-hdf5=$HOME/supplibs/src/hdf5 \<br>
-        --with-zlib=$HOME/supplibs/src/zlib \<br>
-        --with-szlib=$HOME/supplibs/src/szip \<br>
-        --with-curl=$HOME/supplibs/src/curl \<br>
-        --prefix=$HOME/supplibs/src/netcdf <br>
+      ./configure --disable-f77 --enable-netcdf-4 \<br>
+--enable-dap         --prefix=$HOME/supplibs/src/netcdf <br>
         make ;
         make install<br>
         cp $HOME/supplibs/src/netcdf/lib/libnetcdf.a $HOME/supplibs/lib<br>
@@ -357,7 +353,7 @@ unsetenv LDFLAGS<br>
       tar xvfz tarfiles/tiff-3.8.2.tar.gz<br>
       mkdir tiff<br>
       cd tiff-3.8.2<br>
-      ./configure --disable-shared 
+      ./configure  
       --prefix=$HOME/supplibs/src/tiff<br>
       make ; 
       make install<br>
@@ -379,7 +375,7 @@ unsetenv LDFLAGS<br>
       mkdir geotiff<br>
       cd libgeotiff-1.2.5<br>
       ./configure --enable-incode-epsg 
-      --enable-static --disable-shared \<br>
+      --enable-static  \<br>
       --with-libtiff=$HOME/supplibs/src/tiff \<br>
       --prefix=$HOME/supplibs/src/geotiff <br>
       make ; 
@@ -418,7 +414,7 @@ unsetenv LDFLAGS<br>
       tar xvfz tarfiles/pkgconfig-0.23.tar.gz<br>
       mkdir pkg-config<br>
       cd pkg-config-0.23<br>
-      ./configure --disable-shared --prefix=$HOME/supplibs/src/pkg-config<br>
+      ./configure --prefix=$HOME/supplibs/src/pkg-config<br>
       make  ; 
       make install<br>
       cp $HOME/supplibs/src/pkg-config/bin/pkg-config $HOME/supplibs/bin/<br>
@@ -440,7 +436,7 @@ unsetenv LDFLAGS<br>
       tar xvfz tarfiles/libxml2-2.6.16.tar.gz<br>
       mkdir libxml2<br>
       cd libxml2-2.6.16<br>
-      ./configure --disable-shared  --prefix=$HOME/supplibs/src/libxml2 \<br>
+      ./configure   --prefix=$HOME/supplibs/src/libxml2 \<br>
       --with-zlib=$HOME/supplibs/src/zlib \<br>
       --without-threads --without-iconv --without-iso8859x <br>
       make ; 
@@ -464,7 +460,7 @@ Links:<br>
       autoreconf. This is only necessary if curl is installed someplace else on your system without the special configure options outlined above for building curl. Alternatively, you can set the following environment vars:<br>
       setenv PKG_CONFIG $HOME/supplibs/bin/pkg-config<br>
 setenv PKG_CONFIG_PATH $HOME/supplibs/lib/pkgconfig</p>
-      <p class="code">./configure --disable-shared \<br>
+      <p class="code">./configure  \<br>
         --with-xml2=$HOME/supplibs/src/libxml2 \<br>
         --with-zlib=$HOME/supplibs/src/zlib \<br>
         --with-curl=$HOME/supplibs/src/curl \<br>
@@ -507,7 +503,7 @@ Links:<br>
       mkdir libXrender<br>
       cd libXrender-0.9.6</p>
       <p class="code style1">N.B. It may be necessary to unset the environment vars PGK_CONFIG and PKG_CONFIG_PATH before configuring libXrender. If so, be sure to reset them before continuing to build the remainder of the libraries.</p>
-      <p class="code">./configure --disable-shared --prefix=$HOME/supplibs/src/libXrender<br>
+      <p class="code">./configure --prefix=$HOME/supplibs/src/libXrender<br>
         make ;
         make install<br>
         cp $HOME/supplibs/src/libXrender/lib/libXrender.a $HOME/supplibs/lib<br>
@@ -515,89 +511,110 @@ Links:<br>
   </tr>
   <tr bgcolor="b8c8d7">
     <td valign="top" bgcolor="ccdceb">pixman</td>
-    <td valign="top" bgcolor="ccdceb">0.21.2</td>
+    <td valign="top" bgcolor="ccdceb">0.28.0</td>
     <td valign="top" bgcolor="ccdceb"><p>(<span class="style1">GrADS 2.1.a0+</span>)<br>
     A pixel manipulation library for <br>
     X and Cairo.<br>
     Links:<br>
     <a href="http://cgit.freedesktop.org/pixman/">home page</a><br>
-    <a href="ftp://cola.gmu.edu/grads/Supplibs/2.1/src/pixman-0.21.2.tar.gz">local copy of source code</a></p>    </td>
+    <a href="ftp://cola.gmu.edu/grads/Supplibs/2.1/src/pixman-0.28.0.tar.gz">local copy of source code</a></p>    </td>
     <td bgcolor="ccdceb"><p class="code">cd $HOME/supplibs/src<br>
-      tar xvfz tarfiles/pixman-0.21.2.tar.gz <br>
+      tar xvfz tarfiles/pixman-0.28.0.tar.gz <br>
       mkdir pixman<br>
-      cd pixman-0.21.2<br>
-      ./configure --disable-shared --prefix=$HOME/supplibs/src/pixman<br> 
+      cd pixman-0.28.0<br>
+      ./configure  --prefix=$HOME/supplibs/src/pixman<br> 
       make ; 
         make install<br>
         cp $HOME/supplibs/src/pixman/lib/libpixman-1.a $HOME/supplibs/lib<br>
-    cp $HOME/supplibs/src/pixman/lib/pkgconfig/pixman-1.pc $HOME/supplibs/lib/pkgconfig</p>    </td>
+    cp $HOME/supplibs/src/pixman/lib/pkgconfig/pixman-1.pc $HOME/supplibs/lib/pkgconfig<br>
+    <br>
+    mkdir $HOME/supplibs/include/pixman-1<br>
+    cp $HOME/supplibs/src/pixman/include/pixman-1/.h 
+    $HOME/supplibs/include/pixman-1/</p>    </td>
   </tr>
   <tr bgcolor="b8c8d7">
-    <td valign="top" bgcolor="b8c8d7">freetype</td>
-    <td valign="top" bgcolor="b8c8d7">2.4.4</td>
+    <td height="386" valign="top" bgcolor="b8c8d7">freetype</td>
+    <td valign="top" bgcolor="b8c8d7">2.4.10</td>
     <td valign="top" bgcolor="b8c8d7">(<span class="style1">GrADS 2.1.a0+</span>)<br>
 A software font engine.
 Required by Cairo. <br>
 Links:<br>
 <a href="http://www.freetype.org/">home page</a><br>
-<a href="ftp://cola.gmu.edu/grads/Supplibs/2.1/src/freetype-2.4.4.tar.gz">local copy of source code</a></td>
+<a href="ftp://cola.gmu.edu/grads/Supplibs/2.1/src/freetype-2.4.10.tar.gz">local copy of source code</a></td>
     <td bgcolor="b8c8d7"><p class="code">cd $HOME/supplibs/src<br>
-      tar xvfz tarfiles/freetype-2.4.3.tar.gz<br>
+      tar xvfz tarfiles/freetype-2.4.10.tar.gz<br>
       mkdir freetype<br>
-      cd freetype-2.4.3<br>
+      cd freetype-2.4.10<br>
         ./configure 
-        --disable-shared 
+         
         \<br>
         --without-fsspec 
         --without-fsref 
-        --without-ats \<br>
+        --without-ats --without-bzip2 \<br>
         --without-quickdraw-toolbox 
         --without-quickdraw-carbon \<br>
         --with-zlib=$HOME/supplibs/src/zlib \<br>
         --prefix=$HOME/supplibs/src/freetype<br>
         make ; 
         make install<br>
+        <br>
         cp $HOME/supplibs/src/freetype/lib/libfreetype.a $HOME/supplibs/lib<br>
-    cp $HOME/supplibs/src/freetype/lib/pkgconfig/freetype2.pc $HOME/supplibs/lib/pkgconfig</p>    </td>
+    cp $HOME/supplibs/src/freetype/lib/pkgconfig/freetype2.pc $HOME/supplibs/lib/pkgconfig<br>
+    <br>
+    mkdir -p $HOME/supplibs/include/freetype2/freetype/config<br>
+    cd $HOME/supplibs/include/freetype2    <br>
+    cp $HOME/supplibs/src/freetype/include/freetype/*.h .<br>
+    cd ./freetype
+<br>
+cp $HOME/supplibs/src/freetype/include/freetype2/freetype/*.h . <br>
+cd ./config <br>
+cp 
+$HOME/supplibs/src/freetype/include/freetype2/freetype/config/*.h . </td>
   </tr>
   <tr bgcolor="b8c8d7">
     <td valign="top" bgcolor="ccdceb">fontconfig</td>
-    <td valign="top" bgcolor="ccdceb">2.8.0</td>
+    <td valign="top" bgcolor="ccdceb">2.9.0</td>
     <td valign="top" bgcolor="ccdceb">(<span class="style1">GrADS 2.1.a0+</span>)<br>
       A library for configuring and customizing font access. 
 Required by Cairo. <br>
 Links:<br>
 <a href="http://www.freedesktop.org/wiki/Software/fontconfig">home page</a><br>
-<a href="ftp://cola.gmu.edu/grads/Supplibs/2.1/src/fontconfig-2.8.0.tar.gz">local copy of source code</a></td>
+<a href="ftp://cola.gmu.edu/grads/Supplibs/2.1/src/fontconfig-2.9.0.tar.gz">local copy of source code</a></td>
     <td bgcolor="ccdceb"><p class="code">cd $HOME/supplibs/src<br>
-      tar xvfz tarfiles/fontconfig-2.8.0.tar.gz<br>
+      tar xvfz tarfiles/fontconfig-2.9.0.tar.gz<br>
       mkdir fontconfig<br>
-      cd fontconfig-2.8.0<br>
-      ./configure --disable-shared --enable-libxml2 \<br>
+      cd fontconfig-2.9.0<br>
+      ./configure --enable-libxml2 \<br>
       --prefix=$HOME/supplibs/src/fontconfig \<br>
     --with-freetype-config=$HOME/supplibs/src/freetype/bin/freetype-config \<br>
     --with-add-fonts=/Library/Fonts,/System/Library/Fonts <span class="style1">(for mac)</span>   
       <br>
     --with-add-fonts=/usr/share/X11/fonts,/usr/share/fonts <span class="style1">(for unix)
     </span>
-    <p class="code style1">N.B. After configuration,  edit config.h to set USE_ICONV = 0<br>
-      I don't know of another way to tell it not to use libiconv.       
-      <p class="code">make ; make install<br> 
+    <p class="code"><span class="code style1">N.B. After configuration,  edit config.h to set USE_ICONV = 0<br>
+      I don't know of another way to tell it not to use libiconv.   </span>    
+        <br>
+    make ; make install<br>
+    <br> 
         cp $HOME/supplibs/src/fontconfig/lib/libfontconfig.a $HOME/supplibs/lib/<br>
-    cp $HOME/supplibs/src/fontconfig/lib/pkgconfig/fontconfig.pc $HOME/supplibs/lib/pkgconfig</td>
+    cp $HOME/supplibs/src/fontconfig/lib/pkgconfig/fontconfig.pc \ $HOME/supplibs/lib/pkgconfig      <br>
+    <br>
+    mkdir $HOME/supplibs/include/fontconfig<br>
+    cp $HOME/supplibs/src/fontconfig/include/fontconfig/*.h 
+    \ $HOME/supplibs/include/fontconfig <br></td>
   </tr>
   <tr bgcolor="b8c8d7">
     <td valign="top" bgcolor="b8c8d7">cairo</td>
-    <td valign="top" bgcolor="b8c8d7">1.10.2</td>
-    <td valign="top" bgcolor="b8c8d7">(<span class="style1">GrADS 2.1.a0+</span>)<br>
+    <td valign="top" bgcolor="b8c8d7">1.12.16</td>
+    <td valign="top" bgcolor="b8c8d7">(<span class="style1">GrADS 2.1.a1+</span>)<br>
 A 2D graphics library with support for multiple output devices. Requires pkgconfig, zlib, xml2, libpng, pixman, fontconfig, freetype, and Xrender.<br>
 Links:<br>
 <a href="http://www.cairographics.org/">home page</a><br>
-<a href="ftp://cola.gmu.edu/grads/Supplibs/2.1/src/cairo-1.10.2.tar.gz">local copy of source code</a></td>
+<a href="ftp://cola.gmu.edu/grads/Supplibs/2.1/src/cairo-1.12.16.tar.gz">local copy of source code</a></td>
     <td bgcolor="b8c8d7"><p class="code">cd $HOME/supplibs/src<br>
-      tar xvf tarfiles/cairo-1.10.2.tar.gz<br>
+      tar xvf tarfiles/cairo-1.12.16.tar.gz<br>
       mkdir cairo<br>
-      cd cairo-1.10.2<br>
+      cd cairo-1.12.16<br>
       ./configure --prefix=$HOME/supplibs/src/cairo \<br>
       --enable-xlib=yes \<br>
       --enable-xml=yes \<br>

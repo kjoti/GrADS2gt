@@ -1,6 +1,4 @@
-/*  Copyright (C) 1988-2011 by Brian Doty and the
-    Institute of Global Environment and Society (IGES).
-    See file COPYRIGHT for more information.   */
+/* Copyright (C) 1988-2016 by George Mason University. See file COPYRIGHT for more information. */
 
 /* Originally authored by B. Doty */
 
@@ -204,7 +202,7 @@ gaint s1,s2;
 
 gadouble t2gr (gadouble *vals, struct dt *dtim) {
 struct dt stim;
-gaint eyear,mins;
+gaint eyear,mins,mons;
 gadouble val,*moincr,*mnincr,rdiff;
 
   /* Get constants associated with this conversion                   */
@@ -222,20 +220,22 @@ gadouble val,*moincr,*mnincr,rdiff;
      then we do our calculations in minutes.  If the increment is
      months or years, we do our calculations in months.              */
 
+
   if (*mnincr>0.1) {
-    mins = timdif(&stim,dtim);
+    mins = timdif(&stim,dtim,0);
     rdiff = (gadouble)mins;
     val = rdiff/(*mnincr);
     val += 1.0;
     return (val);
   } else {
+    mons = timdif(&stim,dtim,1);
     eyear = stim.yr;
     if (stim.yr > dtim->yr) eyear = dtim->yr;
     rdiff = (((dtim->yr - eyear)*12) + dtim->mo) -
             (((stim.yr - eyear)*12) + stim.mo);
     stim.yr = dtim->yr;
     stim.mo = dtim->mo;
-    mins = timdif(&stim,dtim);
+    mins = timdif(&stim,dtim,0);
     if (mins>0) {
       if (dtim->mo==2 && qleap(dtim->yr) ) {
         rdiff = rdiff + (((gadouble)mins)/41760.0);
@@ -318,11 +318,12 @@ gadouble v;
 }
 
 /* Calculate the difference between two times and return the
-   difference in minutes.   The calculation is time2 - time1, so
+   difference in minutes (if flag==0) or months (if flag==1).
+   The calculation is time2 - time1, so
    if time2 is earlier than time1, the result is negative.           */
 
-gaint timdif (struct dt *dtim1, struct dt *dtim2) {
-gaint min1,min2,yr;
+gaint timdif (struct dt *dtim1, struct dt *dtim2, gaint flag) {
+gaint min1,min2,mon1,mon2,yr;
 struct dt *temp;
 gaint swap,mo1,mo2;
 
@@ -334,30 +335,42 @@ gaint swap,mo1,mo2;
     swap = 1;
   }
 
+  /* add up minutes/months for each year between time2 and time1 */
   min1 = 0;
   min2 = 0;
-
+  mon2 = 0;
   yr = dtim1->yr;
   while (yr < dtim2->yr) {
     if (qleap(yr)) min2 += 527040L;
     else min2 += 525600L;
+    mon2 += 12;
     yr++;
   }
 
-  mo1 = dtim1->mo;
-  mo2 = dtim2->mo;
-  if (qleap(dtim1->yr)) {
-    min1 = min1+mnacul[mo1]+(dtim1->dy*1440L)+(dtim1->hr*60L)+dtim1->mn;
-  } else {
-    min1 = min1+mnacum[mo1]+(dtim1->dy*1440L)+(dtim1->hr*60L)+dtim1->mn;
+  if (flag) {
+    /* return months */
+    mon1 = dtim1->mo;
+    mon2 += dtim2->mo;
+    if (swap) return (mon1-mon2);
+    else return (mon2-mon1);
   }
-  if (qleap(dtim2->yr)) {
-    min2 = min2+mnacul[mo2]+(dtim2->dy*1440L)+(dtim2->hr*60L)+dtim2->mn;
-  } else {
-    min2 = min2+mnacum[mo2]+(dtim2->dy*1440L)+(dtim2->hr*60L)+dtim2->mn;
+  else {
+    /* return minutes */
+    mo1 = dtim1->mo;
+    mo2 = dtim2->mo;
+    if (qleap(dtim1->yr)) {
+      min1 = min1+mnacul[mo1]+(dtim1->dy*1440L)+(dtim1->hr*60L)+dtim1->mn;
+    } else {
+      min1 = min1+mnacum[mo1]+(dtim1->dy*1440L)+(dtim1->hr*60L)+dtim1->mn;
+    }
+    if (qleap(dtim2->yr)) {
+      min2 = min2+mnacul[mo2]+(dtim2->dy*1440L)+(dtim2->hr*60L)+dtim2->mn;
+    } else {
+      min2 = min2+mnacum[mo2]+(dtim2->dy*1440L)+(dtim2->hr*60L)+dtim2->mn;
+    }
+    if (swap) return (min1-min2);
+    else return (min2-min1);
   }
-  if (swap) return (min1-min2);
-  else return (min2-min1);
 }
 
 /* Test for leap year.  Rules are:
@@ -1118,7 +1131,9 @@ char *rmask;
   for (i=0;i<size;i++) {
     if (*rmask == 1) {
       cnt++;
-      if (pgr->rmin>*r) pgr->rmin = *r;
+      if (pgr->rmin>*r) {
+        pgr->rmin = *r;
+      }
       if (pgr->rmax<*r) pgr->rmax = *r;
     }
     r++; rmask++;
@@ -1565,19 +1580,68 @@ struct gachsub *pchsub;
 struct gaens *ens;
 struct dt stim;
 gaint len,olen,iv,tdif,i,tused,eused,mo,doy,dys,hrs,mns;
-char *fnout, *in, *out, *work, *in2, *out2;
+char *fnout, *in, *out, *work, *in2, *out2, *newfn;
 size_t sz;
 
   tused = eused = 0;
   olen = 0;
-  while (*(fn+olen)) olen++;
+  while (*(fn+olen)) olen++;              /* get length of original DSET entry */
+  olen+=5;
+  sz = olen;
+  newfn = (char *)galloc(sz+1,"newfn");  /* allocate memory for new DSET with chsubs */
+  if (newfn==NULL) return (NULL);
+
+  in = fn;         /* original dset entry */
+  out = newfn;     /* output string */
+
+  /* Do the string substitution first */
+  while (*in) {
+    pchsub = pch1st;
+    if (*in=='%' && *(in+1)=='c' && *(in+2)=='h') {
+      /* we have a string to substitute */
+      tused=1;
+      while (pchsub) {
+        if (t>=pchsub->t1 && (pchsub->t2 == -99 || t<=pchsub->t2) ) {
+          len = wrdlen(pchsub->ch);           /* get length of substitution string */
+          olen += len;
+          sz = olen;
+          work = (char *)galloc(sz+1,"work");  /* allocate memory for new chsubbed string */
+          if (work==NULL) { gree(newfn,"f240"); return (NULL); }
+
+          out2 = work;
+          in2 = newfn;
+          while (in2!=out) {
+            *out2 = *in2;  /* copy chars from new DSET that occur before this %ch into new work string */
+            in2++; out2++;
+          }
+          gree(newfn,"f241");
+          newfn = work;               /* replace newfn */
+          out = out2;                 /* replace output string */
+          getwrd(out,pchsub->ch,len); /* copy substitution string to output string */
+          out += len;
+          break;
+        }
+        pchsub = pchsub->forw;
+      }
+      in+=3;
+    }
+    else {
+      /* just copy this character from original DSET entry to output string */
+      *out = *in;
+      in++; out++;
+    }
+  }
+  *out = '\0';
+
+  /* Now begin again with new chsubbed dset entry and do all the time template substitutions */
+  in = newfn;
+  olen = 0;
+  while (*(newfn+olen)) olen++;
   olen+=5;
   sz = olen;
   fnout = (char *)galloc(sz+1,"fnout");
-  if (fnout==NULL) return (NULL);
-
-  in = fn;
-  out = fnout;
+  if (fnout==NULL) { gree(newfn,"f240a"); return (NULL); }
+  out = fnout;  /* output string */
 
   while (*in) {
     pchsub = pch1st;
@@ -1619,6 +1683,7 @@ size_t sz;
         *out = *(mons[dtimi->mo-1]);
         *(out+1) = *(mons[dtimi->mo-1]+1);
         *(out+2) = *(mons[dtimi->mo-1]+2);
+
         out+=3;  in+=4;
       } else if (*(in+2)=='d' && *(in+3)=='1') {
         snprintf(out,sz,"%i",dtimi->dy);
@@ -1800,7 +1865,7 @@ size_t sz;
       stim.dy = (gaint)(*(vals+2)+0.1);
       stim.hr = (gaint)(*(vals+3)+0.1);
       stim.mn = (gaint)(*(vals+4)+0.1);
-      tdif = timdif(dtimi,dtim);
+      tdif = timdif(dtimi,dtim,0);
       /* tdif = (tdif+30)/60; */
       tdif = tdif/60;   /* forecast hour not rounded up anymore */
       if (tdif<99) snprintf(out,sz,"%02i",tdif);
@@ -1814,7 +1879,7 @@ size_t sz;
       stim.dy = (gaint)(*(vals+2)+0.1);
       stim.hr = (gaint)(*(vals+3)+0.1);
       stim.mn = (gaint)(*(vals+4)+0.1);
-      tdif = timdif(dtimi,dtim);
+      tdif = timdif(dtimi,dtim,0);
       /* tdif = (tdif+30)/60; */
       tdif = tdif/60;   /* forecast hour not rounded up anymore */
       if (tdif<999) snprintf(out,sz,"%03i",tdif);
@@ -1830,7 +1895,7 @@ size_t sz;
       stim.dy = (gaint)(*(vals+2)+0.1);
       stim.hr = (gaint)(*(vals+3)+0.1);
       stim.mn = (gaint)(*(vals+4)+0.1);
-      tdif = timdif(dtimi,dtim);
+      tdif = timdif(dtimi,dtim,0);
       if (tdif<99) snprintf(out,sz,"%02i",tdif);
       else snprintf(out,sz,"%i",tdif);
       while (*out) out++;
@@ -1844,7 +1909,7 @@ size_t sz;
       stim.dy = (gaint)(*(vals+2)+0.1);
       stim.hr = (gaint)(*(vals+3)+0.1);
       stim.mn = (gaint)(*(vals+4)+0.1);
-      tdif = timdif(dtimi,dtim);
+      tdif = timdif(dtimi,dtim,0);
       hrs = tdif/60;
       mns = tdif - (hrs*60);
       if (hrs<99) snprintf(out,sz,"%02i%02i",hrs,mns);
@@ -1860,7 +1925,7 @@ size_t sz;
       stim.dy = (gaint)(*(vals+2)+0.1);
       stim.hr = (gaint)(*(vals+3)+0.1);
       stim.mn = (gaint)(*(vals+4)+0.1);
-      tdif = timdif(dtimi,dtim);
+      tdif = timdif(dtimi,dtim,0);
       dys = tdif/1440;
       hrs = (tdif - (dys*1440))/60;
       mns = tdif - (dys*1440) - (hrs*60);
@@ -1869,41 +1934,12 @@ size_t sz;
       while (*out) out++;
       in+=5;
     }
-    /* string substitution */
-    else if (*in=='%' && *(in+1)=='c' && *(in+2)=='h') {
-      tused=1;
-      while (pchsub) {
-        if (t>=pchsub->t1 && (pchsub->t2 == -99 || t<=pchsub->t2) ) {
-          len = wrdlen(pchsub->ch);    /* Reallocate output string */
-          olen += len;
-          sz = olen;
-          work = (char *)galloc(sz+1,"work");
-          if (work==NULL) {
-            gree(fnout,"f240");
-            return (NULL);
-          }
-          in2 = fnout;
-          out2 = work;
-          while (in2!=out) {
-            *out2 = *in2;
-            in2++; out2++;
-          }
-          gree(fnout,"f241");
-          fnout = work;
-          out = out2;
-          getwrd(out,pchsub->ch,len);
-          out += len;
-          break;
-        }
-        pchsub = pchsub->forw;
-      }
-      in+=3;
-    }
     /* ensemble name substitution */
     else if  (*in=='%' && *(in+1)=='e') {
       eused=1;
       if (ens == NULL) {
         gree(fnout,"f242");
+        gree(newfn,"f240b");
         return (NULL);
       } else {
         /* advance through array of ensemble structures, till we reach ensemble 'e' */
@@ -1912,6 +1948,7 @@ size_t sz;
         len = strlen(ens->name);
         if (len < 1) {
           gree(fnout,"f243");
+          gree(newfn,"f240c");
           return (NULL);
         }
         olen += len;
@@ -1919,6 +1956,7 @@ size_t sz;
         work = (char *)galloc(sz+1,"work2");     /* Reallocate output string */
         if (work==NULL) {
           gree(fnout,"f244");
+          gree(newfn,"f240d");
           return (NULL);
         }
         in2 = fnout;            /* copy the string we've got so far */
@@ -1953,6 +1991,7 @@ size_t sz;
   else {
     *flag = 0;                       /* no templating */
   }
+  gree(newfn,"f240e");
   return (fnout);
 }
 
@@ -2034,7 +2073,7 @@ gaint i,j;
   anch.dy = 1;
   anch.hr = 0;
   anch.mn = 0;
-  i = timdif(&anch,dtime);
+  i = timdif(&anch,dtime,0);
   i = i/1440;
   j = i/7;
   i = i - j*7;

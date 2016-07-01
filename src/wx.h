@@ -1,8 +1,6 @@
-/*  Copyright (C) 1988-2011 by Brian Doty and the
-    Institute of Global Environment and Society (IGES).
-    See file COPYRIGHT for more information.   */
+/* Copyright (C) 1988-2016 by George Mason University. See file COPYRIGHT for more information. */
 
-/*  Constants for generating wx symbols */
+/* Constants for generating wx symbols */
 
 gaint stype[83] =
     { 11, 8, 8, 2, 8, 1, 8,16, 8, 6, 9, 9, 2, 9, 1,

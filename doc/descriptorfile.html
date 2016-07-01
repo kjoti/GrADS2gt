@@ -126,7 +126,7 @@ body {
     <td colspan="2">The DTYPE entry specifies the type of data being described. 
       There are four options: grib, hdfsds, netcdf, or station. If the data type 
       is none of these, then the DTYPE entry is omitted completely from the descriptor 
-      file and GrADS will assume the data type is gridded binary. <br> <table width="100%" border="0" cellpadding="4" cellspacing="4" class="plaintext">
+      file and GrADS will assume the data type is<a href="aboutgriddeddata.html"> gridded binary</a>. <br> <table width="100%" border="0" cellpadding="4" cellspacing="4" class="plaintext">
         <tr> 
           <td valign="top" bgcolor="b8c8d7">bufr</td>
           <td bgcolor="b8c8d7" class="plaintext">(<font color="#990000">GrADS 
@@ -229,7 +229,7 @@ href="cmd/query.html">query</a> command and it will appear in the directory list
         the title.</td>
   </tr>
   <tr> 
-    <td bgcolor="#CCCCCC"><a name="UNDEF"> <b>UNDEF</b> <i>value</i></a> <em>&lt;undef_attribute_name&gt;</em></td>
+    <td bgcolor="#CCCCCC"><a name="UNDEF"> <b>UNDEF</b> <i>value</i></a> <em>&lt;undef_attribute_name&gt; &lt;secondar_undef_attribute_name&gt;</em></td>
     <td width="74" align="right" valign="top" bgcolor="#CCCCCC"><a href="#TOP" class="item9">back 
       to top</a></td>
   </tr>
@@ -256,7 +256,11 @@ href="cmd/query.html">query</a> command and it will appear in the directory list
         in the netcdf or hdfsds data file. If the name given does not match any 
         attributes, or if no name is given, the file-wide undef value will be 
         used. <br>
-        Example: UNDEF 1e+33 _FillValue</p>    </td>
+        (<font color="#990000">GrADS version 2.1.0</font>) An optional third 
+        argument has been added for data sets of <a href="#DTYPE">DTYPE</a> netcdf 
+        or hdfsds -- it is the name of a secondary attribute that contains another undefined 
+        value.        <br>
+        Example: UNDEF 1e+33 missing_value _FillValue</p>    </td>
   </tr>
   <tr> 
     <td bgcolor="#CCCCCC"><a name="unpack"></a><strong>UNPACK</strong> <em>scale_factor_attribute_name 
@@ -1266,12 +1270,12 @@ href="aboutgriddeddata.html#structure">structure of a gridded binary data file</
           <td valign="top" bgcolor="#b8c8d7"><i>additional_codes<br>
 (DTYPE grib2)<br>
 (optional) </i></td>
-          <td bgcolor="#b8c8d7">(<font color="#990000">GrADS version 2.0.2+</font>) This field specifies any additional GRIB2 codes that are required to uniquely identify the record when the elements in the <span class="italic">levs</span> and <span class="italic">units</span> fields are not sufficient. It is only required for certain Product Definition Templates: the Probability Forecasts (PDT 5 and 9) and the Optical Properties of Aerosol (PDT 48). The <i>additional_codes</i> field always begins with the letter &quot;a&quot; (for &quot;additional&quot;) followed by a set of comma-delimited numbers. The quantity and meaning of the numbers depends on the product. </td>
+          <td bgcolor="#b8c8d7">(<font color="#990000">GrADS version 2.0.2+</font>) This field specifies any additional GRIB2 codes that are required to uniquely identify the record when the elements in the <span class="italic">levs</span> and <span class="italic">units</span> fields are not sufficient. It is only required for certain Product Definition Templates: the Probability Forecasts (PDT 5 and 9),  Percentiles (PDT 6 and 10), and the Optical Properties of Aerosol (PDT 48). The <i>additional_codes</i> field always begins with the letter &quot;a&quot; (for &quot;additional&quot;) followed by a set of comma-delimited numbers. The quantity and meaning of the numbers depends on the product. </td>
         </tr>
         <tr bgcolor="ccdceb">
           <td valign="top" bgcolor="#ccdceb"><i> additional_codes<br>
             (PDT 5 or 9) </i></td>
-          <td bgcolor="#ccdceb"><p>For the Probability Forecasts (PDT 5 or  9), the <i>additional_codes</i> field has 2 or 3 comma-delimted numbers, preceded by the letter &quot;a&quot; :</p>
+          <td bgcolor="#ccdceb"><p>For the Probability forecasts (PDT 5 or  9), the <i>additional_codes</i> field has 2 or 3 comma-delimted numbers, preceded by the letter &quot;a&quot; :</p>
             <ul>
               aPTYPE,LIMIT,LIMIT2
             </ul>
@@ -1336,7 +1340,42 @@ href="aboutgriddeddata.html#structure">structure of a gridded binary data file</
                 </tr>
               </table>
           
-            <p>The external utilities <a href="util/grib2scan">grib2scan</a> (with the -c option) and <a href="http://www.cpc.ncep.noaa.gov/products/wesley/wgrib2/index.html">wgrib2</a> are quite useful in determining what the values for the <i>additional_codes</i><em> </em>field should be for a GRIB2 data file.</p></td>
+            <p>The external utilities <a href="util/grib2scan">grib2scan</a> (with the -v option) and <a href="http://www.cpc.ncep.noaa.gov/products/wesley/wgrib2/index.html">wgrib2</a> are quite useful in determining what the values for the <i>additional_codes</i><em> </em>field should be for a GRIB2 data file.</p></td>
+        </tr>
+        <tr bgcolor="ccdceb">
+          <td valign="top" bgcolor="#ccdceb"><i> additional_codes<br>
+            (PDT 6 or 10) </i></td>
+          <td bgcolor="#ccdceb"><p>(<span class="red">Version 2.1.a3+</span>) For the Percentile forecasts (PDT 6 or  10), the <i>additional_codes</i> field has only one number preceded by the letter &quot;a&quot; :</p>
+            <ul>
+              aPCT
+            LE
+            </ul>
+            where
+            <table width="100%" border="0" cellpadding="0" cellspacing="0" class="plaintext">
+              <tr>
+                <td width="9%" valign="top">PCTLE</td>
+                <td width="2%" align="center" valign="top">=</td>
+                <td width="89%">The percentile value</td>
+              </tr>
+            </table>
+            <p>Examples:</p>
+            <table width="100%" border="0" cellpadding="0" cellspacing="0" class="plaintext">
+              <tr>
+                <td width="11%">t75</td>
+                <td width="10%" align="center">0,103,2</td>
+                <td width="11%" align="center">a75</td>
+                <td width="11%" align="center">0,0,0</td>
+                <td width="57%">75th percentile of of 2-m Temperatures</td>
+              </tr>
+              <tr>
+                <td>t90</td>
+                <td align="center">0,103,2</td>
+                <td align="center">a90</td>
+                <td align="center">0,0,0</td>
+                <td>90th percentile of of 2-m Temperatures</td>
+              </tr>
+            </table>
+            <p>The external utilities <a href="util/grib2scan">grib2scan</a> (with the -v option) and <a href="http://www.cpc.ncep.noaa.gov/products/wesley/wgrib2/index.html">wgrib2</a> are quite useful in determining what the values for the <i>additional_codes</i><em> </em>field should be for a GRIB2 data file.</p></td>
         </tr>
         <tr bgcolor="ccdceb">
           <td valign="top" bgcolor="#ccdceb"><i> additional_codes<br>
@@ -1414,7 +1453,7 @@ where
         and &lt;= 5.65e-7<br>
         *desc2=Atmosphere Emission Mass Flux
         for Dry Dust, 
-        size is &lt; 2e-5        <p>The external utilities <a href="util/grib2scan">grib2scan</a> (with the -c option) and <a href="http://www.cpc.ncep.noaa.gov/products/wesley/wgrib2/index.html">wgrib2</a> are quite useful in determining what the values for the <i>additional_codes</i><em> </em>field should be for a GRIB2 data file. </p></td>
+        size is &lt; 2e-5        <p>The external utilities <a href="util/grib2scan">grib2scan</a> (with the -v option) and <a href="http://www.cpc.ncep.noaa.gov/products/wesley/wgrib2/index.html">wgrib2</a> are quite useful in determining what the values for the <i>additional_codes</i><em> </em>field should be for a GRIB2 data file. </p></td>
         </tr>
         <tr> 
           <td colspan="2" valign="top">The <i>units</i> component of the variable 

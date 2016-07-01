@@ -1,6 +1,4 @@
-/* Copyright (C) 1988-2011 by Brian Doty and the
-   Institute of Global Environment and Society (IGES).
-   See file COPYRIGHT for more information.   */
+/* Copyright (C) 1988-2016 by George Mason University. See file COPYRIGHT for more information. */
 
 /*  Originally authored by B. Doty.
     Some functions provided by others. */
@@ -20,6 +18,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include "grads.h"
+
+#ifdef OPENGRADS
+#include "gaudx.h"
+#endif
 
 /* expose Mike Fiorino's global struct to these routines for warning level setting */
 extern struct gamfcmn mfcmn;
@@ -186,6 +188,11 @@ gaint (*fpntr)(struct gafunc *, struct gastat *)=NULL;
     if (cmpwrd("aminlocy",name)) fpntr = ffaminlocy;
     if (cmpwrd("amaxlocx",name)) fpntr = ffamaxlocx;
     if (cmpwrd("amaxlocy",name)) fpntr = ffamaxlocy;
+
+#ifdef OPENGRADS
+    /* OpenGrADS User Defined Extensions */
+    if (fpntr==NULL) *(void **) &fpntr = (void *) gaudf(name);
+#endif
 
     if (fpntr==NULL) {                       /* Didn't find it....      */
       gaprnt (0,"Syntax Error:  Invalid Operand \n");
@@ -5024,7 +5031,7 @@ gaint ffclgr (struct gafunc *pfc, struct gastat *pst) {
   gadouble *levs, lev, vlo, vhi, uu=0, *gr=NULL;
   gadouble *iv=NULL,*jv=NULL,diff,lld,lhd,llo,lhi,xdiff;
   gaint i,j,cnt,lcnt=0,scnt,flag,clnm,dim,lflg,ucnt;
-  gaint noundef;
+  gaint noundef,rev=0;
   char *gru=NULL;
   size_t sz;
 
@@ -5049,6 +5056,7 @@ gaint ffclgr (struct gafunc *pfc, struct gastat *pst) {
     else if (intprs(pfc->argpnt[1],&i) != NULL) ucnt = i;
     else gaprnt (1,"COLL2GR Warning:  2nd arg Invalid; Ignored\n");
   }
+  /* JMA this option not documented */
   if (pfc->argnum>2) {
     if (cmpwrd("-n0",pfc->argpnt[2])) noundef=0;
     else if (cmpwrd("-n1",pfc->argpnt[2])) noundef=1;
@@ -5108,7 +5116,8 @@ gaint ffclgr (struct gafunc *pfc, struct gastat *pst) {
   }
   else if (lflg==2) {
     /* union of all levels  */
-    diff = fabs(pst->dmin[2]-pst->dmax[2])/1e4;
+    if (pst->dmin[2] < pst->dmax[2]) rev=1;
+    diff = fabs(pst->dmin[2] - pst->dmax[2])/1e4;
     lcnt = 0;
     clct = clct0;
     while (clct) {
@@ -5118,15 +5127,18 @@ gaint ffclgr (struct gafunc *pfc, struct gastat *pst) {
         lev = rpt->lev;
         i = 0;
         flag = 1;
-        /* mf 20021016 -- don't use level if undef */
+        /* don't use this level if the data value is undefined */
         if (noundef && (rpt->umask == 0) ) flag = 0;
-        if (lev>pst->dmin[2] || lev<pst->dmax[2]) flag = 0;
+        /* don't use this level if out of range */
+        if ((lev > pst->dmin[2] || lev < pst->dmax[2]) && rev==0) flag = 0;
+        if ((lev < pst->dmin[2] || lev > pst->dmax[2]) && rev==1) flag = 0;
         while (i<lcnt && flag) {
           if (fabs(*(levs+i)-lev)<diff) {
             flag = 0;
             break;
           }
-          if (*(levs+i)<lev) break;
+          if (*(levs+i) < lev && rev==0) break;
+          if (*(levs+i) > lev && rev==1) break;
           i = i + 1;
         }
         if (flag) {
@@ -5171,6 +5183,7 @@ gaint ffclgr (struct gafunc *pfc, struct gastat *pst) {
       flag = 0;
       while (rpt) {
         if (dequal(rpt->lev,lev,1.0e-8)==0) {
+          /* level in rpt matches level in grid, no need to interpolate */
           flag = 1;
           break;
         }
@@ -5207,7 +5220,7 @@ gaint ffclgr (struct gafunc *pfc, struct gastat *pst) {
       }
       if (flag) {
         *(gr+j*scnt+i) = rpt->val;
-        *(gru+j*scnt+i) = 1;
+        *(gru+j*scnt+i) = rpt->umask;
       }
       else {
         if (dequal(vhi,stn->undef,1.0e-8)==0 || dequal(vlo,stn->undef,1.0e-8)==0) {
@@ -6290,17 +6303,18 @@ char *ch, *uval;
     uval = pgr->umask;
     for (i=0; i<cnt; i++) {
       if (flg==0) {
-        if (*uval!=0) {
-          *val = cnst;
-        }
+        /* change valid data to a constant, missing data unchanged */
+        if (*uval!=0) *val = cnst;
       }
       else if (flg==1) {
+        /* change missing data to a constant, update mask value */
         if (*uval==0) {
           *val = cnst;
           *uval = 1;
         }
       }
       else if (flg==2) {
+        /* change valid and missing data to a constaont, update mask values */
         *val = cnst;
         *uval = 1;
       }
@@ -6313,11 +6327,18 @@ char *ch, *uval;
     rpt = stn->rpt;
     while (rpt!=NULL) {
       if (flg==0) {
+        /* change valid data to a constant, missing data unchanged */
         if (rpt->umask!=0) rpt->val = cnst;
       } else if (flg==1) {
-        if (rpt->umask==0) rpt->val = cnst;
+        /* change missing data to a constant, update mask value */
+        if (rpt->umask==0) {
+          rpt->val = cnst;
+          rpt->umask = 1;
+        }
       } else if (flg==2) {
+        /* change valid and missing data to a constaont, update mask values */
         rpt->val = cnst;
+        rpt->umask = 1;
       }
       rpt=rpt->rpt;
     }

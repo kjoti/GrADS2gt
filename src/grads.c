@@ -1,6 +1,4 @@
-/*  Copyright (C) 1988-2011 by Brian Doty and the
-    Institute of Global Environment and Society (IGES).
-    See file COPYRIGHT for more information.   */
+/* Copyright (C) 1988-2016 by George Mason University. See file COPYRIGHT for more information. */
 
 /* Main program for GrADS (Grid Analysis and Display System).
    This program loops on commands from the user, and calls the
@@ -67,7 +65,11 @@ struct gacmn gcmn;
 static struct gawgds wgds;
 extern struct gamfcmn mfcmn;
 
+#ifdef OPENGRADS
+int Main (int argc, char *argv[])  {
+#else
 int main (int argc, char *argv[])  {
+#endif
 
 void command_line_help(void) ;
 void gxdgeo (char *);
@@ -75,7 +77,7 @@ void gxend (void);
 void gatxti(gaint on, gaint cs);
 char *gatxtl(char *str,gaint level);
 
-char cmd[500];
+char cmd[1024];
 gaint rc,i,j,land,port,cmdflg,hstflg,gflag,xwideflg,killflg,ratioflg;
 gaint metabuff,size=0,g2size=0;
 gaint txtcs=-2;
@@ -190,12 +192,15 @@ if (metabuff==1) printf ("Note: -m option was specified, but no metafile buffer 
 if (ipcflg) printf("\n<IPC>" );  /* delimit splash screen */
 
 printf ("\nGrid Analysis and Display System (GrADS) Version %s\n",gatxtl(GRADS_VERSION,0));
-printf ("Copyright (c) 1988-2011 by Brian Doty and the\n");
-printf ("Institute for Global Environment and Society (IGES)\n");
+printf ("Copyright (C) 1988-2016 by George Mason University\n");
 printf ("GrADS comes with ABSOLUTELY NO WARRANTY\n");
 printf ("See file COPYRIGHT for more information\n\n");
 
 gacfg(0);
+
+#ifdef OPENGRADS
+<gaudi(&gcmn); /* Initialize OpenGrADS User Defined Extensions */
+#endif
 
 
 if (!land && !port && aspratio<-990) {
@@ -241,11 +246,10 @@ gcmn.dfnum = 0;
 gcmn.undef = -9.99e8;         /* default undef value */
 gcmn.fseq = 10;
 gcmn.pdf1 = NULL;
-gcmn.grflg = 0;
-gcmn.devbck = 0;
 gcmn.sdfwname = NULL;
 gcmn.sdfwtype = 1;
 gcmn.sdfwpad = 0;
+gcmn.sdfrecdim = 0;
 gcmn.sdfchunk = 0;
 gcmn.sdfzip = 0;
 gcmn.sdfprec = 8;
@@ -401,6 +405,7 @@ gaint i;
   gcmn.cmark = -9;
   gcmn.grflag = 1;
   gcmn.grstyl = 5;
+  gcmn.grthck = 4;
   gcmn.grcolr = 15;
   gcmn.blkflg = 0;
   gcmn.dignum = 0;
@@ -410,7 +415,6 @@ gaint i;
   gcmn.lincol = 1;
   gcmn.linstl = 1;
   gcmn.linthk = 3;
-
   gcmn.mproj = 2;
   gcmn.mpdraw = 1;
   gcmn.mpflg = 0;
@@ -421,7 +425,11 @@ gaint i;
     gcmn.mpthks[i] = 3;
   }
   gcmn.mpcols[0] = -1;  gcmn.mpcols[1] = -1; gcmn.mpcols[2] = -1;
-  gcmn.mpdset[0] = (char *)galloc(7,"mpdset0");
+  for (i=0; i<8; i++) {
+    if (gcmn.mpdset[i]) gree(gcmn.mpdset[i],"g1");
+    gcmn.mpdset[i] = NULL;
+  }
+  gcmn.mpdset[0] = (char *)galloc(7,"mpdset");
   *(gcmn.mpdset[0]+0) = 'l';
   *(gcmn.mpdset[0]+1) = 'o';
   *(gcmn.mpdset[0]+2) = 'w';
@@ -438,7 +446,7 @@ gaint i;
   gcmn.strhsz = 0.1;
   gcmn.strvsz = 0.12;
   gcmn.anncol = 1;
-  gcmn.annthk = 6;
+  gcmn.annthk = 5;
   gcmn.tlsupp = 0;
   gcmn.xlcol = 1;
   gcmn.ylcol = 1;
@@ -536,7 +544,8 @@ gaint i;
   gcmn.cachesf = 1.0;
   gcmn.dblen = 12;
   gcmn.dbprec = 6;
-
+  gcmn.loopflg = 0;
+  gcmn.aaflg = 1;
 
 }
 

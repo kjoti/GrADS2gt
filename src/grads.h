@@ -1,6 +1,4 @@
-/*  Copyright (C) 1988-2011 by Brian Doty and the
-    Institute of Global Environment and Society (IGES).
-    See file COPYRIGHT for more information.   */
+/* Copyright (C) 1988-2016 by George Mason University. See file COPYRIGHT for more information. */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -103,6 +101,7 @@ struct gacmn {
   gadouble *xabval;
   gadouble *yabval;
   struct gawgds *wgds;         /* Pointer to gds output structure       */
+  gaint aaflg;                 /* Hardware anti-aliasing flag           */
   gaint hbufsz;                /* Metafile buffer size                  */
   gaint g2bufsz;               /* Grib2 cache buffer size               */
   gaint pass;                  /* Number of passes since last clear     */
@@ -153,6 +152,7 @@ struct gacmn {
   gadouble rmin2,rmax2,rint2;  /* Axis limits for 1-D plots             */
   gaint aflag,aflag2;          /* Keep 1D axis limits fixed             */
   gaint grflag,grstyl,grcolr;  /* Grid flag, linestyle, color           */
+  gaint grthck;                /* Grid thickness                        */
   gaint dignum;                /* grid value plot control (gxout=grid)  */
   gadouble digsiz;
   gaint arrflg;                /* Use already set arrow scaling         */
@@ -210,8 +210,6 @@ struct gacmn {
   gadouble strrot;             /* Draw string rotation */
   gadouble strhsz,strvsz;      /* Draw string hor. size, vert. size     */
   gaint anncol,annthk;         /* Draw title color, thickness           */
-  gaint grflg;                 /* Grey Scale flag   */
-  gaint devbck;                /* Device background */
   gaint xlcol,xlthck,ylcol,ylthck,clcol,clthck;  /* color, thickness */
   gaint xlside,ylside,ylpflg;
   gadouble xlsiz,ylsiz,clsiz,xlpos,ylpos,yllow;         /* Axis lable size */
@@ -253,6 +251,7 @@ struct gacmn {
   gaint sdfprec;             /* precision (8==double, 4==float, etc.) */
   gaint sdfchunk;            /* flag to indicate whether or not to chunk */
   gaint sdfzip;              /* flag to indicate whether or not to compress */
+  gaint sdfrecdim;           /* flag to indicate record dimensions */
   gaint ncwid;               /* netcdf write file id  */
   gaint xchunk;              /* size of sdfoutput file chunk in X dimension */
   gaint ychunk;              /* size of sdfoutput file chunk in Y dimension */
@@ -462,6 +461,7 @@ struct gastat {
   char *scattr;                /* scale factor attribute name for unpacking data */
   char *ofattr;                /* offset attribute name for unpacking data */
   char *undefattr;             /* undef attribute name */
+  char *undefattr2;            /* secondary undef attribute name */
   long xyhdr;                  /* Number of bytes to ignore at head of xy grids*/
   gaint calendar;              /* Support for 365-day calendars */
   gaint pa2mb;                 /* convert pressure values in descriptor file from Pa -> mb */
@@ -692,10 +692,12 @@ struct gavar {
   gadouble scale;              /* scale factor for unpacking data      */
   gadouble add;                /* offset value for unpacking data      */
   gadouble undef;              /* undefined value                      */
+  gadouble undef2;             /* secondary undefined value            */
   gaint vecpair;               /* Variable has a vector pair           */
   gaint isu;                   /* Variable is the u-component of a vector pair */
   gaint isdvar;                /* Variable is a valid data variable (for SDF files) */
   gaint nvardims;              /* Number of variable dimensions        */
+  gaint nh5vardims;            /* Number of variable dimensions for hdf5 */
   gaint vardimids[100];        /* Variable dimension IDs.              */
 #if USEHDF5==1
   hid_t h5varflg;              /* hdf5 variable has been opened */
@@ -764,7 +766,13 @@ struct gaindxb {
 #if GRIB2
 /* Structures for GRIB2 data */
 struct gag2indx {
-  gaint version;                /* Version number: 1: gaint offsets  2: off_t offsets */
+  gaint version;                /* Version number:
+                                   1: gaint offsets
+                                   2: off_t offsets
+                                   3: new header elements, including off_t flag */
+  gaint bigflg;                 /* off_t offsets in use */
+  gaint trecs;                  /* Number of records (XY grids) per time step */
+  gaint tsz,esz;                /* Sizes of T and E dimensions */
   gaint g2intnum;               /* Number of index offset values */
   gaint *g2intpnt;              /* Pointer to index g2ints */
   off_t *g2bigpnt;              /* Pointer to record offsets when off_t offsets in use */
@@ -881,7 +889,7 @@ gaint gahistory(char*, char *, struct gacmn *);
 gaint ncwrite (char *, struct gacmn *);
 gaint sdfwatt (struct gacmn*, gaint, char *, char *, char *);
 gaint sdfwdim (struct gafile *, struct gacmn *, gaint, gaint);
-gaint sdfdefdim (gaint, char *, gaint, gaint *, gaint *);
+gaint sdfdefdim (gaint, char *, gaint, gaint *, gaint *, gaint, gaint);
 
 gaint gaddes (char *, struct gafile *, gaint);
 gaint deflin (char *, struct gafile *, gaint, gaint);
@@ -1160,7 +1168,7 @@ void timadd (struct dt *, struct dt *);
 void timsub (struct dt *, struct dt *);
 gadouble t2gr (gadouble *, struct dt *);
 void gr2t (gadouble *, gadouble, struct dt *);
-gaint timdif (struct dt *, struct dt *);
+gaint timdif (struct dt *, struct dt *, gaint);
 gaint qleap (gaint);
 char *adtprs (char *, struct dt *, struct dt *);
 char *rdtprs (char *, struct dt *);

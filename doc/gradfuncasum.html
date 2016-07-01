@@ -2,17 +2,9 @@
 
 <html>
 <title>GrADS Function: asum</title>
-<style type="text/css">
-.red {
-	color: #900;
-}
-body {
-	background-color: #e0f0ff;
-}
-</style>
-<body text="#000000">
+<body  bgcolor="e0f0ff" text="#000000">
 
-<H2><b>asum()</b></H2>
+<H2><b>asum()</b></H2><p>
 <p>
 This function takes a sum over an X-Y region. The syntax is:
 <p>
@@ -20,6 +12,7 @@ This function takes a sum over an X-Y region. The syntax is:
 
 <p>
 where:
+<p>
 <ul>
 <code><i>expr</i>&nbsp;&nbsp;&nbsp;&nbsp;</code>- any valid GrADS expression <br>
 <code><i>xdim1</i>&nbsp;&nbsp;&nbsp;</code>- starting X dimension expression <br>
@@ -41,32 +34,38 @@ is the same as
 
 <p>
 <H3>Usage Notes</H3>
+<p>
 <ol>
 <li>The <code>asum</code> function always does its average to the
 exact boundaries specified, in world coordinates. If the boundaries
-specified via the dimension expressions do not fall on grid box
-boundaries, then the  values in the boundary grid boxes are weighted in the sum according to the length of the partial grid box in world coordinates. <br>
-  <br>
-<li>If grid coordinates are used in the dimensions expressions,
-then they are converted to world coordinates to determine the exact boundary values. This conversion is done using the scaling of the default
-file. Note that the conversion is done using the outside grid
-box boundary, rather than the grid box center. For example: <p><code>asum(expr,x=1,x=72,y=1,y=46)</code>
+specified via the dimension expressions do not fall on grid
+boundaries, then the boundary values are weighted appropriately in the
+sum.
+
 <p>
-  Here the boundary would be determined by using the X grid values ranging from 0.5 to 
-  72.5 and Y grid values ranging from 0.5 to 46.5. These four grid boundary values would be converted to world coordinates using the scaling information from the default file. If
-  we assume that <code>x=1</code> is 0 degrees longitude and
-  <code>x=72</code> is 355 degrees longitude, then the averaging
-  boundary would be -2.5 to 357.5 degrees, which would cover the
-  earth. In the Y dimension, when the boundary is beyond the pole, the
-  <code>asum</code> function recognizes this and weights
-  appropriately. To calculate a sum without any weighting of partial grid boxes at the domain boundaries, use the
-  <code><a href="gradfuncasumg.html">asumg</a></code> function.
-  
-  
-<li>There is no latitude-weighting of grid box values in <code>asum</code>. The <code><a href="gradfuncatot.html">atot</a></code> function (in <span class="red">GrADS version 2.0.2+</span>) will calculate a sum over an area and weight the grid box values according to the difference in the sine of the latitude at the northern and southern boundaries of each grid box. 
+<li>When grid coordinates are used in the dimensions expressions,
+then they are converted to world coordinates for the boundary to be
+determined. This conversion is done using the scaling of the default
+file. Note that the conversion is done using the outside grid
+boundary, rather than the grid center. For example: 
+<p>
+<dd><code>asum(expr,x=1,x=72,y=1,y=46)</code>
+<p>
+Here the boundary would be determined by using the grid values 0.5,
+72.5, 0.5, and 46.5 which would be converted to world coordinates. If
+we assume that <code>x=1</code> is 0 degrees longitude and
+<code>x=72</code> is 355 degrees longitude, then the averaging
+boundary would be -2.5 to 357.5 degrees, which would cover the
+earth. In the Y dimension, when the boundary is beyond the pole, the
+<code>asum</code> function recognizes this and weights
+appropriately. To calculate a sum without any weighting, use the
+<code><a href="gradfuncasumg.html">asumg</a></code> function.
+
+
 </ol>
 <p>
 
+<H3>Examples</H3> 
 
  
 </body>

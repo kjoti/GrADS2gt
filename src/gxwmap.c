@@ -1,6 +1,4 @@
-/*  Copyright (C) 1988-2011 by Brian Doty and the
-    Institute of Global Environment and Society (IGES).
-    See file COPYRIGHT for more information.   */
+/* Copyright (C) 1988-2016 by George Mason University. See file COPYRIGHT for more information. */
 
 /* Authored by B. Doty */
 
@@ -30,6 +28,7 @@
 
 int gagby (char *, int, int);
 void gree();
+gaint dequal(gadouble, gadouble, gadouble);
 void *galloc(size_t,char *);
 
 static gaint imap;
@@ -43,7 +42,7 @@ static gaint adjtyp = 0;  /* Direction adjustment class */
 
 gaint gxwopen (char *, char *);
 gaint gxwread (char *, gaint);
-gaint gxwseek (gaint);
+void gxwseek (gaint);
 void gxwclose (gaint);
 
 struct mapcache {
@@ -163,6 +162,15 @@ char hdr[3],rec[1530];
     }
     type = gagby(hdr,1,1);
     num = gagby(hdr,2,1);
+
+    /* The lowres map has only one type:
+         1 -- coastlines.
+       The mres and hires maps have three types:
+         0 -- coastlines
+         1 -- political boundaries
+         2 -- US state boundaries
+    */
+
 
     /* Read the next record; convert the data points;
        and get the lat/lon bounds for this line segment */
@@ -1298,7 +1306,7 @@ char *cdat;
   return (i);
 }
 
-gaint gxwseek (gaint pos) {
+void gxwseek (gaint pos) {
   mcpos = pos;
 }
 

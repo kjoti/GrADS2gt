@@ -1,3 +1,6 @@
+/* Copyright (C) 1988-2016 by George Mason University. See file COPYRIGHT for more information. */
+
+/*  Code originally by M.Fiorino   */
 
 /*
  * Include ./configure's header file
@@ -49,8 +52,7 @@ int rc;
              name provided does not start with a /, then
              we try the directories in the GASCRP envvar,
              both with the primary name and the .gs extension.
-
-     Code originally by M.Fiorino   */
+*/
 
 FILE *gsonam (struct gscmn *pcmn, struct gsfdef *pfdf) {
 FILE *ifile;

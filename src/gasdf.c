@@ -1,6 +1,4 @@
-/*  Copyright (C) 1988-2011 by Brian Doty and the
-    Institute of Global Environment and Society (IGES).
-    See file COPYRIGHT for more information.   */
+/* Copyright (C) 1988-2016 by George Mason University. See file COPYRIGHT for more information. */
 
 /*
    Reads the metadata from a Self-Describing File
@@ -269,7 +267,7 @@ gadouble time1,time2,lat1,lat2,lev1,lev2,incrfactor,sf;
 gafloat dsec;
 size_t len_time_units,trunc_point,sz ;
 gaint len,noname,notinit,nolength;
-gaint i,j,c,rc,flag,numdvars,e,t;
+gaint i,j,c,rc,flag,fwflg,numdvars,e,t;
 gaint iyr,imo,idy,ihr,imn,isec,ispress,isDatavar ;
 gaint xdimid,ydimid,zdimid,tdimid,edimid ;
 gaint istart,icount,havesf,haveao;
@@ -316,38 +314,61 @@ utUnit timeunit ;
 
   /* Handle undef attribute */
   if (parms.needundef) {
+    fwflg = 0;
+    pfi->undefattrflg = 0;
+
+    /* Check for user-defined undef attribute */
     attr = NULL;
     attr = find_att("ALL", pfi->attr, "missing_value") ;
-    if (!attr) {
-      attr = find_att("ALL", pfi->attr, "_FillValue") ;
-    }
-    if (!attr) {
-      pfi->undef =  -9.99e33;  /* must use default */
-      pfi->undefattrflg = 0;
-    } else {
-      /* set the undef attribute name and trip the flag */
+    if (attr) {
+      /* set the primary undef attribute flag and store the attribute name */
       pfi->undefattrflg = 1;
       len = strlen(attr->name);
-      sz = len+1;
-      if ((pfi->undefattr = (char *)galloc(sz,"undefattr1")) == NULL) goto err1;
+      if ((pfi->undefattr = (char *)galloc(len+1,"undefattr1")) == NULL) goto err1;
       strncpy(pfi->undefattr, attr->name, len);
       *(pfi->undefattr+len) = '\0';
-      /* If undef type is NC_FLOAT or NC_DOUBLE, use it for file-wide, otherwise use default */
-      if (attr->len == 1) {
-        if (attr->nctype == 5) {
-          pfi->undef = *(gafloat*)(attr->value);
-          }
-        else if (attr->nctype == 6) {
-          pfi->undef = *(gadouble*)(attr->value);
-        }
-        else {
-          pfi->undef = -9.99e33;
-        }
-      }
-      else {
-        pfi->undef = -9.99e33;
+
+      /* If there is a single value of type NC_SHORT, NC_INT, NC_FLOAT or NC_DOUBLE, use it for file-wide */
+      if (attr->len==1) {
+        if (attr->nctype == 3) { pfi->undef = *(short*)(attr->value);    fwflg=1; }
+        if (attr->nctype == 4) { pfi->undef = *(gaint*)(attr->value);    fwflg=1; }
+        if (attr->nctype == 5) { pfi->undef = *(gafloat*)(attr->value);  fwflg=1; }
+        if (attr->nctype == 6) { pfi->undef = *(gadouble*)(attr->value); fwflg=1; }
       }
     }
+
+    /* Check for secondary (default) undef attribute */
+    attr = NULL;
+    attr = find_att("ALL", pfi->attr, "_FillValue") ;
+    if (attr) {
+      if (pfi->undefattrflg==1) {
+        /* uptick the undef attribute flag and store the second attribute name */
+        pfi->undefattrflg = 2;
+        len = strlen(attr->name);
+        if ((pfi->undefattr2 = (char *)galloc(len+1,"undefattr2")) == NULL) goto err1;
+        strncpy(pfi->undefattr2, attr->name, len);
+        *(pfi->undefattr2+len) = '\0';
+      }
+      else {
+        /* set the primary undef attribute flag and store the attribute name */
+        pfi->undefattrflg = 1;
+        len = strlen(attr->name);
+        if ((pfi->undefattr = (char *)galloc(len+1,"undefattr1")) == NULL) goto err1;
+        strncpy(pfi->undefattr, attr->name, len);
+        *(pfi->undefattr+len) = '\0';
+      }
+      if (!fwflg) {
+        /* If we haven't got one already, use this value for file-wide undef */
+        if (attr->len==1) {
+          if (attr->nctype == 3) { pfi->undef = *(short*)(attr->value);    fwflg=1; }
+          if (attr->nctype == 4) { pfi->undef = *(gaint*)(attr->value);    fwflg=1; }
+          if (attr->nctype == 5) { pfi->undef = *(gafloat*)(attr->value);  fwflg=1; }
+          if (attr->nctype == 6) { pfi->undef = *(gadouble*)(attr->value); fwflg=1; }
+        }
+      }
+    }
+    /* Set a default file-wide undef if we don't have one already */
+    if (!fwflg) pfi->undef = 9.96921e+36;  /* use default for NC_FLOAT */
   }
 
   /* Look for scale factor or slope attribute */
@@ -399,7 +420,7 @@ utUnit timeunit ;
       if ((rc==Failure) || (Xcoord == NULL)) {
         gaprnt(0, "gadsdf: SDF file has no discernable X coordinate.\n") ;
         gaprnt(0,"  To open this file with GrADS, use a descriptor file with an XDEF entry.\n");
-        gaprnt(0,"  Documentation is at http://iges.org/grads/gadoc/SDFdescriptorfile.html\n");
+        gaprnt(0,"  Documentation is at http://cola.gmu.edu/grads/gadoc/SDFdescriptorfile.html\n");
         return Failure ;
       }
     }
@@ -452,7 +473,7 @@ utUnit timeunit ;
       if ((rc==Failure) || (Ycoord == NULL)) {
         gaprnt(0, "gadsdf: SDF file has no discernable Y coordinate.\n") ;
         gaprnt(0,"  To open this file with GrADS, use a descriptor file with a YDEF entry.\n");
-        gaprnt(0,"  Documentation is at http://iges.org/grads/gadoc/SDFdescriptorfile.html\n");
+        gaprnt(0,"  Documentation is at http://cola.gmu.edu/grads/gadoc/SDFdescriptorfile.html\n");
         return Failure ;
       }
     }
@@ -666,7 +687,7 @@ utUnit timeunit ;
           gaprnt(0,"SDF Error: 365 day calendars are no longer supported by sdfopen.\n");
           gaprnt(0,"  To open this file with GrADS, use a descriptor file with \n");
           gaprnt(0,"  a complete TDEF entry and OPTIONS 365_day_calendar. \n");
-          gaprnt(0,"  Documentation is at http://iges.org/grads/gadoc/SDFdescriptorfile.html\n");
+          gaprnt(0,"  Documentation is at http://cola.gmu.edu/grads/gadoc/SDFdescriptorfile.html\n");
           return Failure;
         }
       }
@@ -934,12 +955,12 @@ utUnit timeunit ;
                 }
               }
               else /* monthly or greater */ {
-                if (tvals[6] < (60.0 * 24.0 * 360.0)) {
+                if (incrfactor < (60.0 * 24.0 * 360.0)) {
                   tvals[5] = ((gaint) ((incrfactor / (60.0 * 24.0)) + 0.5)) / 28;
                   tvals[6] = 0.0 ;
                 }
                 else {
-                  gaprnt(0,"gadsdf: Time increment too large for 'minutes since' time units attribute\n");
+                  gaprnt(0,"gadsdf: Time increment is too large for 'minutes since' time units attribute\n");
                   goto err2;
                 }
               }
@@ -1895,6 +1916,7 @@ gaint findZ(struct gafile *pfi, struct gavar **Zcoordptr, gaint *ispressptr) {
         if (!strncasecmp(attr->value, "hybrid_sigma_pressure", 21)) match=1;
         if (!strncasecmp(attr->value, "mb", 2)) match=1;
         if (!strncasecmp(attr->value, "millibar", 8)) match=1;
+        if (!strncasecmp(attr->value, "hPa", 3)) match=1;
         if (match) {
           *Zcoordptr = lclvar ;
           *ispressptr = 1 ;
@@ -2353,6 +2375,7 @@ char dimname[H4_MAX_NC_NAME+1];
     pvar->isu = 0;
     pvar->isdvar = 0;
     pvar->nvardims = 0;
+    pvar->nh5vardims = 0;
     for (ii=0; ii<16; ii++) pvar->units[ii]=-999;
 
     /* get the variable info */
@@ -3401,11 +3424,22 @@ size_t sz;
         len = 0;
         while (*(ch+len)!=' ' && *(ch+len)!='\n' && *(ch+len)!='\t') len++;
         sz = len+1;
-        if ((pfi->undefattr = (char *)galloc(sz,"undefattr2")) == NULL) goto err8;
+        if ((pfi->undefattr = (char *)galloc(sz,"undefattr5")) == NULL) goto err8;
         for (i=0; i<len; i++) *(pfi->undefattr+i) = *(ch+i);
         *(pfi->undefattr+len) = '\0';
         /* Set the undef attribute flag */
         pfi->undefattrflg = 1;
+        /* Get the secondary undef attribute name, if it's there */
+        if ((ch=nxtwrd(ch))!=NULL) {
+          len = 0;
+          while (*(ch+len)!=' ' && *(ch+len)!='\n' && *(ch+len)!='\t') len++;
+          sz = len+1;
+          if ((pfi->undefattr2 = (char *)galloc(sz,"undefattr6")) == NULL) goto err8;
+          for (i=0; i<len; i++) *(pfi->undefattr2+i) = *(ch+i);
+          *(pfi->undefattr2+len) = '\0';
+          /* uptick the undef attribute flag */
+          pfi->undefattrflg = 2;
+        }
       }
       pfi->ulow = fabs(pfi->undef/EPSILON);
       pfi->uhi  = pfi->undef + pfi->ulow;

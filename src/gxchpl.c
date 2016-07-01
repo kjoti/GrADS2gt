@@ -1,6 +1,4 @@
-/*  Copyright (C) 1988-2011 by Brian Doty and the
-    Institute of Global Environment and Society (IGES).
-    See file COPYRIGHT for more information.   */
+/* Copyright (C) 1988-2016 by George Mason University. See file COPYRIGHT for more information. */
 
 /* Authored by B. Doty */
 
@@ -24,11 +22,19 @@
 #include "gatypes.h"
 #include "gx.h"
 
+/* function prototypes */
+gadouble gxchplc (char, gaint, gadouble, gadouble, gadouble, gadouble, gadouble);
+gadouble gxchqlc (char, gaint, gadouble);
+void gxchplo (char *, int, gadouble, gadouble, gadouble, gadouble, gadouble);
+void houtch (char, gaint, gadouble, gadouble, gadouble, gadouble, gadouble);
+void gree();
+
+/* local variables */
 static char *fch[10];     /* Pointers to font data once it is read in */
 static gaint *foff[10];   /* Pointers to character offsets */
 static gaint *flen[10];   /* Pointers to character lengths */
 static gaint dfont;       /* Default font */
-void gree();
+
 
 /* Initialize */
 
@@ -41,136 +47,142 @@ gaint i;
 /* Change default font */
 
 void gxchdf (gaint df) {
-  if (df<0 || df>9) return;
+  if (df<0 || df>99) return;
   dfont = df;
 }
 
 /* Plot character string */
 
 void gxchpl (char *chrs, int len, gadouble x, gadouble y, gadouble height, gadouble width, gadouble angle) {
-gadouble xc,yc,xscl,yscl,xs,ys,w,d,ang,rx,ry,yoff;
-gaint i,fn,ic,jc,cnt,ipen,supsub;
-char *cdat;
+gadouble h,w,xoff,yoff,wact;
+gaint fn, supsub, nfn;
 
-  xscl = width/21.0;
-  yscl = height/22.0;
   fn = dfont;
-  angle = angle*M_PI/180;
+  angle = angle * M_PI/180.0;    /* convert angle from degrees to radians */
   supsub = 0;
   while (*chrs!='\0' && len>0) {
     while (*chrs=='`') {
-      if (*(chrs+1)>='0' && *(chrs+1)<='9') {
+      if (*(chrs+1)>='0' && *(chrs+1)<='9') {    /* get 1-digit font number */
         fn = (gaint)*(chrs+1) - 48;
         chrs+=2;
         len-=2;
-      } else if (*(chrs+1)=='a') {
+      } else if (*(chrs+1)=='a') {    /* superscript */
         supsub = 1;
         chrs+=2; len-=2;
-      } else if (*(chrs+1)=='b') {
+      } else if (*(chrs+1)=='b') {    /* subscript */
         supsub = 2;
         chrs+=2; len-=2;
-      } else if (*(chrs+1)=='n') {
+      } else if (*(chrs+1)=='n') {    /* normal */
         supsub = 0;
         chrs+=2; len-=2;
+      } else if (*(chrs+1)=='f') {    /* get 2-digit font number */
+        if (len>3) {
+          nfn = 10*((gaint)*(chrs+2) - 48) + ((gaint)*(chrs+3) - 48);
+          if (nfn>=0 && nfn<100) fn = nfn;
+        }
+        chrs+=4;
+        len-=4;
       } else break;
     }
     if (*chrs!='\0' && len>0) {
-      if (angle==0.0) {           /* Fast path for ang=0 */
-        cdat = gxchgc ( (gaint)*(chrs), fn, &cnt);
-        if (cdat==NULL) return;
-        ic = (gaint)(*(cdat+3)) - 82;
-        jc = (gaint)(*(cdat+4)) - 82;
-        if (supsub) {
-          xs = xscl*0.45; ys = yscl*0.45;
-          if (supsub==1) yoff = height*0.35;
-          else yoff = -1.0*height*0.42;
-        } else {
-          xs = xscl; ys = yscl; yoff = 0.0;
-        }
-        w = (gadouble)(jc-ic) * xs * 1.05;
-        xc= x + w/2.0;
-        yc = y + height*0.42 + yoff;
-        cdat += 5;
-        ipen = 3;
-        for (i=1; i<cnt; i++) {
-          ic = (gaint)*cdat;
-          jc = (gaint)*(cdat+1);
-          if (ic==32) ipen = 3;
-          else {
-            ic = ic - 82;
-            jc = jc - 82;
-            rx = xc + ((gadouble)ic)*xs;
-            ry = yc - ((gadouble)jc)*ys;
-            if (ipen==3) gxmove (rx,ry);
-            else gxdraw (rx,ry);
-            ipen = 2;
-          }
-          cdat += 2;
-        }
-        x = x + w;
-        chrs++; len--;
+      if (supsub) {
+        /* adjust size and position for superscripts and subscripts */
+        h = height*0.45; w = width*0.45;
+        if (supsub==1) yoff = height*0.58;
+        else yoff = -0.20*height;
       } else {
-        cdat = gxchgc ( (gaint)*(chrs), fn, &cnt);
-        if (cdat==NULL) return;
-        ic = (gaint)(*(cdat+3)) - 82;
-        jc = (gaint)(*(cdat+4)) - 82;
-        if (supsub) {
-          xs = xscl*0.45; ys = yscl*0.45;
-          if (supsub==1) yoff = height*0.35;
-          else yoff = -1.0*height*0.42;
-        } else {
-          xs = xscl; ys = yscl; yoff = 0.0;
-        }
-        w = (gadouble)(jc-ic) * xs * 1.05;
-        d = hypot(w/2.0,height*0.42+yoff);
-        ang = atan2(height*0.42+yoff,w/2.0)+angle;
-        xc = x + d*cos(ang);
-        yc = y + d*sin(ang);
-        cdat += 5;
-        ipen = 3;
-        for (i=1; i<cnt; i++) {
-          ic = (gaint)*cdat;
-          jc = (gaint)*(cdat+1);
-          if (ic==32) ipen = 3;
-          else {
-            ic = ic - 82;
-            jc = jc - 82;
-            rx = ((gadouble)ic)*xs;
-            ry = -1.0*((gadouble)jc)*ys;
-            if (rx==0.0 && ry==0.0) {
-              d = 0.0; ang = 0.0;
-            } else {
-              d = hypot(rx,ry);
-              ang = atan2(ry,rx)+angle;
-            }
-            rx = xc + d*cos(ang);
-            ry = yc + d*sin(ang);
-            if (ipen==3) gxmove (rx,ry);
-            else gxdraw (rx,ry);
-            ipen = 2;
-          }
-          cdat += 2;
-        }
-        x = x + w*cos(angle);
-        y = y + w*sin(angle);
-        chrs++; len--;
+        h = height; w = width; yoff = 0.0;
       }
+      xoff = yoff*sin(angle);
+      yoff = yoff*cos(angle);
+
+      /* plot the character */
+      wact = gxdrawch (*chrs, fn, x-xoff, y+yoff, w, h, angle);
+      if (wact < -900.0 && fn<6) {
+        /* draw with Hershey font */
+        wact = gxchplc (*chrs, fn, x-xoff, y+yoff, w, h, angle);
+        if (wact < -900.0) return;
+      }
+      x = x + wact*cos(angle);
+      y = y + wact*sin(angle);
+
+      chrs++; len--;
     }
   }
 }
 
-/* Figure out the length of a character string, without
-   plotting it */
+/* Get actual width of a single character in the indicated Hershey font */
 
-gaint gxchln (char *chrs, gaint len, gadouble width, gadouble *w) {
-int fn,ic,jc,supsub;
-gadouble xscl,xs;
+gadouble gxchqlc (char ccc, gaint fn, gadouble width) {
+gadouble xs,w;
+gaint cnt,ic,jc;
 char *cdat;
 
-  *w = 0.0;
-  xscl = width/21.0;
+  xs = width/21.0;
+  cdat = gxchgc ( (gaint)ccc, fn, &cnt);
+  if (cdat==NULL) return (-999.9);
+  ic = (gaint)(*(cdat+3)) - 82;
+  jc = (gaint)(*(cdat+4)) - 82;
+  w = (gadouble)(jc-ic) * xs * 1.05;
+  return (w);
+}
+
+/* plot a single char in the indicated hershey font with the indicated location, size, and angle,
+   and return the distance to advance after plotting */
+
+gadouble gxchplc (char ccc, gaint fn, gadouble x, gadouble y, gadouble width, gadouble height, gadouble angle) {
+gadouble xs,ys,w,d,xc,yc,ang,rx,ry;
+gaint i,ic,jc,cnt,ipen;
+char *cdat;
+
+  xs = width/21.0;
+  ys = height/22.0;
+  cdat = gxchgc ( (gaint)ccc, fn, &cnt);
+  if (cdat==NULL) return (-999.9);
+  ic = (gaint)(*(cdat+3)) - 82;
+  jc = (gaint)(*(cdat+4)) - 82;
+  w = (gadouble)(jc-ic) * xs * 1.05;
+  d = hypot(w/2.0,height*0.42);
+  ang = atan2(height*0.42,w/2.0)+angle;
+  xc = x + d*cos(ang);
+  yc = y + d*sin(ang);
+  cdat += 5;
+  ipen = 3;
+  for (i=1; i<cnt; i++) {
+    ic = (gaint)*cdat;
+    jc = (gaint)*(cdat+1);
+    if (ic==32) ipen = 3;
+    else {
+      ic = ic - 82;
+      jc = jc - 82;
+      rx = ((gadouble)ic)*xs;
+      ry = -1.0*((gadouble)jc)*ys;
+      if (rx==0.0 && ry==0.0) {
+        d = 0.0; ang = 0.0;
+      } else {
+        d = hypot(rx,ry);
+        ang = atan2(ry,rx)+angle;
+      }
+      rx = xc + d*cos(ang);
+      ry = yc + d*sin(ang);
+      if (ipen==3) gxmove (rx,ry);
+      else gxdraw (rx,ry);
+      ipen = 2;
+    }
+    cdat += 2;
+  }
+  return(w);
+}
+
+/* Determine the length of a character string without plotting it. */
+
+gaint gxchln (char *chrs, gaint len, gadouble width, gadouble *wret) {
+gadouble w,wact,cw;
+gaint fn, supsub, nfn;
+
   fn = dfont;
   supsub = 0;
+  cw = 0;
   while (*chrs!='\0' && len>0) {
     while (*chrs=='`') {
       if (*(chrs+1)>='0' && *(chrs+1)<='9') {
@@ -186,18 +198,35 @@ char *cdat;
       } else if (*(chrs+1)=='n') {
         supsub = 0;
         chrs+=2; len-=2;
+      } else if (*(chrs+1)=='f') {
+        if (len>3) {
+          nfn = 10*((gaint)*(chrs+2) - 48) + ((gaint)*(chrs+3) - 48);
+          if (nfn>=0 && nfn<100) fn = nfn;
+        }
+        chrs+=4;
+        len-=4;
       } else break;
     }
-    cdat = gxchgc ((gaint)*(chrs), fn, &ic);
-    if (cdat==NULL) return(1);
-    ic = (gaint)(*(cdat+3)) - 82;
-    jc = (gaint)(*(cdat+4)) - 82;
-    if (supsub) xs = xscl*0.45;
-    else xs = xscl;
-    *w = *w + (gadouble)(jc-ic) * xs * 1.05;
-    chrs++; len--;
+    if (*chrs!='\0' && len>0) {
+      if (supsub) {
+        w = width*0.45;
+      } else {
+        w = width;
+      }
+
+      /* First see if the rendering back end wants to plot this, or punt.
+         If it wants to punt, we get a -999 back, so we use Hershey instead  */
+      wact = gxqchl (*chrs, fn, w);
+      if (wact < -900.0) {
+        wact = gxchqlc (*chrs, fn, w);
+      }
+      cw = cw + wact;
+
+      chrs++; len--;
+    }
   }
-  return 0;
+  *wret = cw;
+  return (cw);
 }
 
 /* Get location and length of particular character info
@@ -307,4 +336,116 @@ char buff[20],*fname,*fdat;
   fch[fn] = fdat;
 
   return(0);
+}
+
+void gxchplo (char *chrs, int len, gadouble x, gadouble y, gadouble height, gadouble width, gadouble angle) {
+gadouble xc,yc,xscl,yscl,xs,ys,w,d,ang,rx,ry,yoff;
+gaint i,fn,ic,jc,cnt,ipen,supsub;
+char *cdat;
+
+  xscl = width/21.0;
+  yscl = height/22.0;
+  fn = dfont;
+  angle = angle * 3.1416/180.0;
+  supsub = 0;
+  while (*chrs!='\0' && len>0) {
+    while (*chrs=='`') {
+      if (*(chrs+1)>='0' && *(chrs+1)<='9') {
+        fn = (gaint)*(chrs+1) - 48;
+        chrs+=2;
+        len-=2;
+      } else if (*(chrs+1)=='a') {
+        supsub = 1;
+        chrs+=2; len-=2;
+      } else if (*(chrs+1)=='b') {
+        supsub = 2;
+        chrs+=2; len-=2;
+      } else if (*(chrs+1)=='n') {
+        supsub = 0;
+        chrs+=2; len-=2;
+      } else break;
+    }
+    if (*chrs!='\0' && len>0) {
+      if (angle==0.0) {           /* Fast path for ang=0 */
+        cdat = gxchgc ( (gaint)*(chrs), fn, &cnt);
+        if (cdat==NULL) return;
+        ic = (gaint)(*(cdat+3)) - 82;
+        jc = (gaint)(*(cdat+4)) - 82;
+        if (supsub) {
+          xs = xscl*0.45; ys = yscl*0.45;
+          if (supsub==1) yoff = height*0.35;
+          else yoff = -1.0*height*0.42;
+        } else {
+          xs = xscl; ys = yscl; yoff = 0.0;
+        }
+        w = (gadouble)(jc-ic) * xs * 1.05;
+        xc= x + w/2.0;
+        yc = y + height*0.42 + yoff;
+        cdat += 5;
+        ipen = 3;
+        for (i=1; i<cnt; i++) {
+          ic = (gaint)*cdat;
+          jc = (gaint)*(cdat+1);
+          if (ic==32) ipen = 3;
+          else {
+            ic = ic - 82;
+            jc = jc - 82;
+            rx = xc + ((gadouble)ic)*xs;
+            ry = yc - ((gadouble)jc)*ys;
+            if (ipen==3) gxmove (rx,ry);
+            else gxdraw (rx,ry);
+            ipen = 2;
+          }
+          cdat += 2;
+        }
+        x = x + w;
+        chrs++; len--;
+      } else {
+        cdat = gxchgc ( (gaint)*(chrs), fn, &cnt);
+        if (cdat==NULL) return;
+        ic = (gaint)(*(cdat+3)) - 82;
+        jc = (gaint)(*(cdat+4)) - 82;
+        if (supsub) {
+          xs = xscl*0.45; ys = yscl*0.45;
+          if (supsub==1) yoff = height*0.35;
+          else yoff = -1.0*height*0.42;
+        } else {
+          xs = xscl; ys = yscl; yoff = 0.0;
+        }
+        w = (gadouble)(jc-ic) * xs * 1.05;
+        d = hypot(w/2.0,height*0.42+yoff);
+        ang = atan2(height*0.42+yoff,w/2.0)+angle;
+        xc = x + d*cos(ang);
+        yc = y + d*sin(ang);
+        cdat += 5;
+        ipen = 3;
+        for (i=1; i<cnt; i++) {
+          ic = (gaint)*cdat;
+          jc = (gaint)*(cdat+1);
+          if (ic==32) ipen = 3;
+          else {
+            ic = ic - 82;
+            jc = jc - 82;
+            rx = ((gadouble)ic)*xs;
+            ry = -1.0*((gadouble)jc)*ys;
+            if (rx==0.0 && ry==0.0) {
+              d = 0.0; ang = 0.0;
+            } else {
+              d = hypot(rx,ry);
+              ang = atan2(ry,rx)+angle;
+            }
+            rx = xc + d*cos(ang);
+            ry = yc + d*sin(ang);
+            if (ipen==3) gxmove (rx,ry);
+            else gxdraw (rx,ry);
+            ipen = 2;
+          }
+          cdat += 2;
+        }
+        x = x + w*cos(angle);
+        y = y + w*sin(angle);
+        chrs++; len--;
+      }
+    }
+  }
 }

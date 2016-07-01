@@ -1,6 +1,4 @@
-/*  Copyright (C) 1988-2011 by Brian Doty and the
-    Institute of Global Environment and Society (IGES).
-    See file COPYRIGHT for more information.   */
+/* Copyright (C) 1988-2016 by George Mason University. See file COPYRIGHT for more information. */
 
 /* Authored by B. Doty */
 
@@ -327,10 +325,9 @@ gaint i;
 
   if (shdcnt==0) return(1);
   if (shdcnt==1) return(shdcls[0]);
-  if (val<shdlvs[1]) return(shdcls[0]);
+  if (val<=shdlvs[1]) return(shdcls[0]);
   for (i=1; i<shdcnt-1; i++) {
-    if (val>=shdlvs[i] && val<shdlvs[i+1])
-                 return(shdcls[i]);
+    if (val>shdlvs[i] && val<=shdlvs[i+1]) return(shdcls[i]);
   }
   return(shdcls[shdcnt-1]);
 }

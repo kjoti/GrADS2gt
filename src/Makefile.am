@@ -9,15 +9,17 @@
 #
 
 # Targets that will built by "make all"
+
 bin_PROGRAMS	       = grads \
-		         gribmap gxeps gxps stnmap wgrib gribscan bufrscan \
+			 xgrads \
+		         gribmap stnmap wgrib gribscan bufrscan \
 			 $(extra_utils)
 
 # Targets that will not always be built
-EXTRA_PROGRAMS	       = gxtran grib2scan
+EXTRA_PROGRAMS	       = grib2scan
 
 # Convenience target
-utils: bufrscan gribscan gribmap gxeps gxps stnmap wgrib $(extra_utils)
+utils: bufrscan gribscan gribmap stnmap wgrib $(extra_utils)
 
 ######################################################################
 #
@@ -32,27 +34,25 @@ supp_lib_dir		= $(SUPPLIBS)/lib
 LDADD			= -L$(supp_lib_dir)
 INCLUDES		= $(readline_inc) $(printim_inc) $(grib2_inc) $(gui_inc) $(nc_inc) \
 			  $(hdf_inc) $(hdf5_inc) $(geotiff_inc) $(shp_inc) $(gadap_inc) \
-                          $(X_CFLAGS) $(XAW_CFLAGS) $(GD_CFLAGS) $(HDF4_CFLAGS)
+                          $(X_CFLAGS) $(XAW_CFLAGS) $(GD_CFLAGS) $(HDF4_CFLAGS) $(cairo_inc)
 
 # Settings used for all GrADS binaries
-common_ldadd            = $(LDADD) $(X_LIBS) $(host_ldadd) -lX11
+common_ldadd            = $(LDADD) $(X_LIBS) $(host_ldadd) -lX11 -lXext
 
 ######################################################################
 #
 # Headers and data
 #
 
-# Headers must be listed here to be included in the distribution.  The
-# "noinst_" prefix prevents "make install" from trying to do anything
-# with them
-hdr_core            = gagmap.h grads.h gs.h gatypes.h \
-		      gvt.h gx.h gxmap.h wx.h
+# Headers must be listed here to be included in the distribution.
+# The "noinst_" prefix prevents "make install" from trying to do anything with them
+hdr_core            = gagmap.h grads.h gs.h gatypes.h gvt.h gx.h gxmap.h wx.h
 hdr_bufr	    = gabufr.h
 hdr_x11		    = gx.h bitmaps.h
 hdr_sdf             = gasdf.h gasdf_std_time.h
 hdr_gui		    = gagui.h
-hdr_png             = mtables.c
-noinst_HEADERS	    = $(hdr_core) $(hdr_x11) $(hdr_sdf) $(hdr_png) $(hdr_gui) $(hdr_bufr)
+hdr_cairo           = gxC.h
+noinst_HEADERS	    = $(hdr_core) $(hdr_x11) $(hdr_sdf) $(hdr_gui) $(hdr_bufr) $(hdr_cairo)
 
 # Get rid of buildinfo.h on "make distclean"
 DISTCLEANFILES	       = buildinfo.h
@@ -81,18 +81,29 @@ endif
 grads_SOURCES          = grads.c gxsubs.c gxmeta.c gxchpl.c gxcntr.c gxstrm.c \
 			 gxwmap.c gxshad.c gxshad2.c gaexpr.c gafunc.c gautil.c gagx.c \
 			 gscrpt.c gamach.c bufrstn.c gabufr.c gabufrtbl.c \
-			 gxX.c gxdxwd.c galloc.c $(src_gui) $(src_gadap) \
-                         gaddes.c gaio.c gacfg.c gauser.c gasdf.c gatxt.c
+			 gxdxwd.c galloc.c $(src_gui) $(src_gadap) \
+                         gaddes.c gaio.c gacfg.c gauser.c gasdf.c gatxt.c gxX.c  gxdb.c \
+                         gxC.c gxprint.c
+
+xgrads_SOURCES         = grads.c gxsubs.c gxmeta.c gxchpl.c gxcntr.c gxstrm.c \
+			 gxwmap.c gxshad.c gxshad2.c gaexpr.c gafunc.c gautil.c gagx.c \
+			 gscrpt.c gamach.c bufrstn.c gabufr.c gabufrtbl.c \
+			 gxdxwd.c galloc.c $(src_gui) $(src_gadap) \
+                         gaddes.c gaio.c gacfg.c gauser.c gasdf.c gatxt.c gxX11.c gxdb.c \
+			 gxprintGD.c gxGD.c
 
 # Sources that will not always be compiled
 # Since gradsc is the only GrADS binary that is not conditionally compiled,
 # any source file that we want to go in the distribution must be listed.
-#EXTRA_grads_SOURCES    = gagmap.c gagui.c gsgui.c gxhpng.c dodstn.c
 EXTRA_grads_SOURCES    = gagmap.c gagui.c gsgui.c dodstn.c
 
 
 # libraries needed
 grads_LDADD	       = $(common_ldadd) $(readline_libs) $(printim_libs) \
+			 $(grib2_libs) $(hdf_libs) $(hdf5_libs) $(nc_libs) \
+			 $(gui_libs) $(geotiff_libs) $(shp_libs) $(dap_libs) $(cairo_libs)
+
+xgrads_LDADD	       = $(common_ldadd) $(readline_libs) $(printim_libs) \
 			 $(grib2_libs) $(hdf_libs) $(hdf5_libs) $(nc_libs) \
 			 $(gui_libs) $(geotiff_libs) $(shp_libs) $(dap_libs)
 
@@ -108,8 +119,10 @@ COMPILE_C = $(COMPILE)
 # If gadap is enabled, use C++ linker instead of C linker
 if USEGADAP
 grads_LINK          = $(CXX) $(AM_CFLAGS) $(CFLAGS) $(AM_LDFLAGS) $(LDFLAGS) -o $@
+xgrads_LINK          = $(CXX) $(AM_CFLAGS) $(CFLAGS) $(AM_LDFLAGS) $(LDFLAGS) -o $@
 else
 grads_LINK          = $(CC) $(AM_CFLAGS) $(CFLAGS) $(AM_LDFLAGS) $(LDFLAGS) -o $@
+xgrads_LINK          = $(CC) $(AM_CFLAGS) $(CFLAGS) $(AM_LDFLAGS) $(LDFLAGS) -o $@
 endif
 
 # Object files that should not be reused by the other GrADS binaries,
@@ -132,9 +145,6 @@ gaddes.sa.o: $(srcdir)/gaddes.c
 gautil.sa.o: $(srcdir)/gautil.c
 	$(COMPILE) -DSTNDALN -o gautil.sa.o -c $(srcdir)/gautil.c
 
-gxmeta.sa.o: $(srcdir)/gxmeta.c
-	$(COMPILE) -DSTNDALN -o gxmeta.sa.o -c $(srcdir)/gxmeta.c
-
 ##############################################################
 #
 # stnmap
@@ -154,20 +164,6 @@ gribmap_LDADD	       = gaddes.sa.o gautil.sa.o gatxt.o $(LDADD) $(readline_libs)
 # wgrib
 #
 wgrib_SOURCES	       = wgrib.c
-
-##############################################################
-#
-# gxps
-#
-gxps_SOURCES	       = gxps.c
-gxeps_SOURCES	       = gxeps.c
-
-##############################################################
-#
-# gxtran
-#
-gxtran_SOURCES	       = gxtran.c gxsubs.c gxchpl.c gxX.c gxdxwd.c galloc.c
-gxtran_LDADD	       = gxmeta.sa.o $(LDADD) $(X_LIBS) $(printim_libs) -lX11
 
 ##############################################################
 #
