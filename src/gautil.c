@@ -1671,7 +1671,7 @@ char *gafndt(char *fn, struct dt *dtim, struct dt *dtimi, gadouble *vals,
              struct gachsub *pch1st, struct gaens *ens1st,
              gaint t, gaint e, gaint *flag) {
   char temp[4096];  /* XXX: sizeof(struct gafile:name) */
-  char *rval;
+  int rval;
 
   rval = gafndt_impl(temp, sizeof temp, fn,
                      dtim, dtimi, vals, pch1st,
