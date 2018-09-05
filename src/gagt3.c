@@ -1055,7 +1055,7 @@ seek_time(struct gafile *pfi, int tidx, int eidx)
         debug1("t=%d: out of range", tidx);
         return -1;
     }
-    if (eidx < 0 || eidx >= pfi->dnum[TINDEX]) {
+    if (eidx < 0 || eidx >= pfi->dnum[EINDEX]) {
         debug1("e=%d: out of range", eidx);
         return -1;
     }
