@@ -1188,12 +1188,21 @@ gaggt3(struct gagrid *pgr, FLOAT *gr, char *mask, const int d[])
     if (pgr->idim == XINDEX && pgr->jdim == YINDEX)
         return gaggt3_xy(pgr, gr, mask, d[ZINDEX] - 1);
 
-    /*
-     * generic case
-     */
     for (i = 0; i < 5; i++)
         pos[i] = d[i] - 1;
 
+    /*
+     * 0-Dim
+     */
+    if (pgr->idim == -1) {
+        *gr = gaggt3_value(pgr, pos);
+        *mask = (*gr  == pfi->undef) ? 0 : 1;
+        return 0;
+    }
+
+    /*
+     * generic case
+     */
     wrapping = pgr->idim == XINDEX && pfi->wrap;
     width = pfi->dnum[0];
     if (wrapping && pos[XINDEX] < 0)
