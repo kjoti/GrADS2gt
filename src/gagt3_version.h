@@ -4,5 +4,5 @@
 #ifndef GAGT3_VERSION_H
 #define GAGT3_VERSION_H
 
-#define GAGT3_PATCHLEVEL 3
+#define GAGT3_PATCHLEVEL 4
 #endif
