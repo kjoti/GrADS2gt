@@ -1,4 +1,4 @@
-/* Copyright (C) 1988-2016 by George Mason University. See file COPYRIGHT for more information. */
+/* Copyright (C) 1988-2017 by George Mason University. See file COPYRIGHT for more information. */
 
 /* Routines to print the graphics with calls to the Cairo library, needs gxC.c */
 
@@ -10,13 +10,16 @@
 #include "gx.h"
 #include "gxC.h"
 
-
 /* local variables */
-static char pout[256];
 static gadouble xsize,ysize;
 static gaint rc=0;
 
-/* keep a local copy of real page size */
+/* Report on configuration */
+void gxpcfg (void) {
+  gxCcfg();
+}
+
+/* Keep a local copy of real page size */
 
 void gxpbgn (gadouble xsz, gadouble ysz) {
   xsize = xsz;
@@ -36,6 +39,7 @@ void gxpend (void) {
   gxCend ();
 }
 
+
 /* Render the hardcopy output.
 
     fnout -- output filename
@@ -45,6 +49,7 @@ void gxpend (void) {
     bgImage, fgImage -- background/foreground image filenames
     tcolor -- transparent color
 */
+
 gaint gxprint (char *fnout, gaint xin, gaint yin, gaint bwin, gaint fmtflg,
                char *bgImage, char *fgImage, gaint tcolor, gadouble border) {
 

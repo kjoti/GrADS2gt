@@ -1,4 +1,4 @@
-/* Copyright (C) 1988-2016 by George Mason University. See file COPYRIGHT for more information. */
+/* Copyright (C) 1988-2017 by George Mason University. See file COPYRIGHT for more information. */
 
 /* Include ./configure's header file */
 #ifdef HAVE_CONFIG_H
@@ -19,13 +19,15 @@
 #include "bitmaps.h"
 
 /* Following function prototype has to go here since it
-   depends on X include information, which shouln't go in gx.h */
+   depends on X include information, which shouldn't go in gx.h */
 
 /*  gxbcol:  Assign best rgb to color number from standard colormap */
 gaint gxbcol (XStandardColormap*, XColor *);
 void set_display_screen (Display *, gaint);
 void Window_Dump(Window,FILE *);
 void Pixmap_Dump(Window, FILE *, gaint, gaint, gaint, gaint);
+void gxdrbb (gaint, gaint, gadouble, gadouble, gadouble, gadouble, gaint);
+void gxrswd (gaint);
 
 /* Interface for X11 Release 3  */
 
@@ -59,7 +61,6 @@ void Pixmap_Dump(Window, FILE *, gaint, gaint, gaint, gaint);
                                                                   */
 
 static gaint batch=0;                       /* Batch mode? */
-static gaint wchose=0;                      /* Controls technique for wide lines 1= s/w 0 X server*/
 static gaint lcolor,lwidth,owidth;          /* Current attributes */
 static gaint devbck;                        /* Device background, query the graphics database to get this */
 static gadouble xscl,yscl;                  /* Window Scaling */
@@ -70,11 +71,9 @@ static gaint cused[276];                    /* Color is assigned */
 static gaint cmach[276];                    /* Color is matched */
 static gaint dblmode;                       /* single or double buffering */
 static gaint width,height,depth;            /* Window dimensions */
-
 static gaint reds[16] =   {  0,255,250,  0, 30,  0,240,230,240,160,160,  0,230,  0,130,170};
 static gaint greens[16] = {  0,255, 60,220, 60,200,  0,220,130,  0,230,160,175,210,  0,170};
 static gaint blues[16]  = {  0,255, 60,  0,255,200,130, 50, 40,200, 50,255, 45,140,220,170};
-
 static gaint greys[16] = {0,255,215,140,80,110,230,170,200,50,155,95,185,125,65,177};
 
 /* Various arrays are kept for structures that describe displayed
@@ -138,11 +137,6 @@ static gaint rstate = 1;              /* Redraw state -- when zero,
 static gaint bsflg;                   /* Backing store enabled or not */
 static gaint excnt;                   /* Count of exposes to skip */
 
-/* Invokes usage of software to generate wide lines (vs Xserver) */
-
-void gxwdln (void) {
-  wchose=1;
-}
 
 /* tell x interface that we are in batch mode */
 
@@ -161,8 +155,8 @@ void gxqdrgb (gaint clr, gaint *r, gaint *g, gaint *b) {
   return;
 }
 
-/* Routine to specify user X stuff (geom string, window name).  Must be
-   called before gxdbgn to have any affect */
+/* Routine to specify user-defined geometry string for X display window.
+   Must be called before gxdbgn to have any affect */
 
 void gxdgeo (char *arg) {
   ugeom = arg;
@@ -745,7 +739,6 @@ gaint gxbcol (XStandardColormap* best, XColor * cell) {
 void gxdwid (gaint wid){                 /* Set width     */
 gauint lw;
   lwidth=wid;
-  if (wchose) return;
   lw = 0;
   if (lwidth>5) lw=2;
   if (lwidth>11) lw=3;
@@ -763,23 +756,9 @@ void gxdmov (gadouble x, gadouble y){        /* Move to x,y   */
 
 void gxddrw (gadouble x, gadouble y){        /* Draw to x,y   */
 gaint i, j;
-gaint w,h;
   i = (gaint)(x*xscl+0.5);
   j = height - (gaint)(y*yscl+0.5);
   XDrawLine (display, drwbl, gc, xxx, yyy, i, j);
-  if (wchose && lwidth>5) {
-    w = xxx - i;
-    if (w<0) w = -1*w;
-    h = yyy-j;
-    if (h<0) h = -1*h;
-    if (w<h) {
-      XDrawLine (display, drwbl, gc, xxx-1, yyy, i-1, j);
-      if (lwidth>11) XDrawLine (display, drwbl, gc, xxx+1, yyy, i+1, j);
-    } else {
-      XDrawLine (display, drwbl, gc, xxx, yyy-1, i, j-1);
-      if (lwidth>11) XDrawLine (display, drwbl, gc, xxx, yyy+1, i, j+1);
-    }
-  }
   xxx = i;
   yyy = j;
   if (QLength(display)&&rstate) gxdeve(0);
@@ -835,7 +814,7 @@ gaint i;
   return;
 }
 
-void dump_back_buffer(filename)
+void gxdbb(filename) /* dump back buffer */
     char *filename ;
 {
     FILE *xwdfile ;
@@ -854,7 +833,7 @@ void dump_back_buffer(filename)
     }
 }
 
-void dump_front_buffer(filename)
+void gxdfb(filename) /* dump front buffer */
     char *filename ;
 {
     FILE *xwdfile ;
@@ -912,6 +891,7 @@ XPoint *pnt;
 
 void gxdxsz (gaint xx, gaint yy) {
   if (batch) return;
+  if (xx==width && yy==height) return;
   XResizeWindow (display, win, xx, yy);
   gxdeve(2);
 }
@@ -1234,8 +1214,7 @@ int i;
       if (btn2[i].num>-1) gxdpbn(i, NULL, 1, 0, -1);
     }
     for (i=0; i<32; i++) {
-      if (rbb2[i].num>-1) gxdrbb(i, rbb2[i].type,
-            rbb2[i].xlo,rbb2[i].ylo,rbb2[i].xhi,rbb2[i].yhi,rbb2[i].mb);
+      if (rbb2[i].num>-1) gxdrbb(i,rbb2[i].type,rbb2[i].xlo,rbb2[i].ylo,rbb2[i].xhi,rbb2[i].yhi,rbb2[i].mb);
     }
     for (i=0; i<200; i++) {
       if (dmu2[i].num>-1) gxdrmu(i, NULL, 1, -1);
@@ -1245,8 +1224,7 @@ int i;
       if (btn[i].num>-1) gxdpbn(i, NULL, 1, 0, -1);
     }
     for (i=0; i<32; i++) {
-      if (rbb[i].num>-1) gxdrbb(i, rbb[i].type,
-            rbb[i].xlo,rbb[i].ylo,rbb[i].xhi,rbb[i].yhi,rbb[i].mb);
+      if (rbb[i].num>-1) gxdrbb(i,rbb[i].type,rbb[i].xlo,rbb[i].ylo,rbb[i].xhi,rbb[i].yhi,rbb[i].mb);
     }
     for (i=0; i<200; i++) {
       if (dmu[i].num>-1) gxdrmu(i, NULL, 1, -1);
@@ -1258,7 +1236,7 @@ int i;
 /* flag = 0 resets foreground, flag = 1 resets both,
    flag = 2 resets background only; for after swapping */
 
-void gxrswd(int flag) {
+void gxrswd(gaint flag) {
 int i;
 
   if (flag!=2) {
@@ -1399,7 +1377,7 @@ int ii,jj=0;
 }
 
 
-/* Click ocurred over a button object. */
+/* Click occurred over a button object. */
 
 void gxevbn(struct gevent *geve, int iobj) {
 struct gbtn *gbn;
@@ -1453,7 +1431,7 @@ int jj,c1,c2,i1,i2,j1,j2;
   XFlush(display);
 }
 
-/* Click ocurred in a rubber-banded region.  */
+/* Click occurred in a rubber-banded region.  */
 
 void gxevrb(struct gevent *geve, int iobj, int i, int j) {
 struct grbb *grb;
@@ -1513,10 +1491,9 @@ int ilo,ihi,jlo,jhi;
 
 /* Set up a rubber-band region.  */
 
-void gxdrbb (gaint num, gaint type,
-                   gadouble xlo, gadouble ylo, gadouble xhi, gadouble yhi, gaint mbc) {
-struct grbb *prb;
-struct gobj *pob;
+void gxdrbb (gaint num, gaint type, gadouble xlo, gadouble ylo, gadouble xhi, gadouble yhi, gaint mbc) {
+  struct grbb *prb;
+  struct gobj *pob;
 
   if (num<0 || num>31) return;
   if (xlo>=xhi) return;
@@ -2776,7 +2753,7 @@ void gxdsfr (int frame) {
    recf and polyf.  Choices include solid, dot, line and open.
    Check and line density can be controlled as well as line angle. */
 
-void gxdptn (int typ, int den, int ang) {
+void gxdptn (gaint typ, gaint den, gaint ang) {
 unsigned char *bitmap_bits;
 int bitmap_width, bitmap_height;
 Pixmap stipple_pixmap;
@@ -3093,13 +3070,9 @@ Pixmap stipple_pixmap;
   }
 }
 
-/*gl 980114 - function to save window info gl*/
-/*
- * int
- * win_data ---  Saves current window information
- */
+/* Gives current window information */
 
-int win_data (struct xinfo *xinf) {
+gaint win_data (struct xinfo *xinf) {
   int absx, absy;
   Window dummy;
   XWindowAttributes result;
@@ -3165,4 +3138,7 @@ void gxdsignal (gaint sig) {
 void gxdXflush (void) {
 }
 void gxdclip (gadouble xlo, gadouble xhi, gadouble ylo, gadouble yhi) {
+}
+void gxdcfg (void) {
+  printf("X%d.%d ",X_PROTOCOL,X_PROTOCOL_REVISION);
 }

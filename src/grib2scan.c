@@ -1,4 +1,4 @@
-/* Copyright (C) 1988-2016 by George Mason University. See file COPYRIGHT for more information*/
+/* Copyright (C) 1988-2017 by George Mason University. See file COPYRIGHT for more information*/
 
 /*  Written by Brian Doty and Jennifer M. Adams  */
 
@@ -391,12 +391,12 @@ gaint sect3 (unsigned char *s3, struct gag2 *pg2) {
 
 /* Look at contents of Section 4 */
 gaint sect4 (unsigned char *s4, struct gag2 *pg2) {
-  struct dt reft,fcst,endt;
+  struct dt reft,fcst,endt,versiont;
   gaint enstotal,sp,sp2,gotfcst;
   gaint ptyp,llsf,llval,ulsf,ulval,i,pctle;
   gadouble ll=0,ul=0;
   gadouble lev1=0,lev2=0;
-  gaint var1,var2,var3,var4,var5,numtr,pos1=0,pos2=0;
+  gaint var1,var2,var3,var4,var5,numtr,pos1=0,pos2=0,pos3=0;
   gaint off,atyp,styp,s1sf,s1sval,s2sf,s2sval,wtyp,w1sf,w1sval,w2sf,w2sval;
   gadouble s1,s2,w1,w2;
 
@@ -410,13 +410,13 @@ gaint sect4 (unsigned char *s4, struct gag2 *pg2) {
   pg2->ftime    = gagby(s4,18+off,4);
   pg2->lev1type = gagby(s4,22+off,1);
   pg2->lev1sf   = gagby(s4,23+off,1);
-  /* check for a negative level value */
+  /* check for a negative level1 value */
   pg2->lev1 = gagbb(s4,(24+off)*8+1,31);
   i = gagbb(s4,(24+off)*8,1);
   if (i) pg2->lev1 = -1.0*pg2->lev1;
   pg2->lev2type = gagby(s4,28+off,1);
   pg2->lev2sf   = gagby(s4,29+off,1);
-  /* check for a negative level value */
+  /* check for a negative level2 value */
   pg2->lev2 = gagbb(s4,(30+off)*8+1,31);
   i = gagbb(s4,(30+off)*8,1);
   if (i) pg2->lev2 = -1.0*pg2->lev2;
@@ -452,6 +452,15 @@ gaint sect4 (unsigned char *s4, struct gag2 *pg2) {
       printf ("  %d ",pg2->ftime);
       CodeTable4p4(pg2->trui);
       printf ("Forecast");
+      if (pg2->pdt == 60) {
+        pos3=37;
+        /* get the model version date */
+        versiont.yr = gagby(s4,pos3+0,2);
+        versiont.mo = gagby(s4,pos3+2,1);
+        versiont.dy = gagby(s4,pos3+3,1);
+        versiont.hr = gagby(s4,pos3+4,1);
+        versiont.mn = gagby(s4,pos3+5,1);
+      }
     }
     else if (pg2->pdt==15) {
       /* for PDT 4.15, get info about the type of spatial and statistical processing used */
@@ -466,6 +475,7 @@ gaint sect4 (unsigned char *s4, struct gag2 *pg2) {
       CodeTable4p15(sp2);
     }
     printf("  Valid Time = %4i-%02i-%02i %02i:%02i  ",fcst.yr,fcst.mo,fcst.dy,fcst.hr,fcst.mn);
+    if (pg2->pdt == 60) printf("  Version = %4i%02i%02i",versiont.yr,versiont.mo,versiont.dy);
   }
   /* fields spanning a time interval */
   else if ((pg2->pdt>=8 && pg2->pdt<=12) || pg2->pdt==61) {
@@ -477,7 +487,14 @@ gaint sect4 (unsigned char *s4, struct gag2 *pg2) {
     else if (pg2->pdt == 10) {pos1=35; pos2=47;}
     else if (pg2->pdt == 11) {pos1=37; pos2=49;}
     else if (pg2->pdt == 12) {pos1=36; pos2=48;}
-    else if (pg2->pdt == 61) {pos1=44; pos2=56;}
+    else if (pg2->pdt == 61) {pos1=44; pos2=56; pos3=37;}
+
+    /* get the model version date */
+    versiont.yr = gagby(s4,pos3+0,2);
+    versiont.mo = gagby(s4,pos3+2,1);
+    versiont.dy = gagby(s4,pos3+3,1);
+    versiont.hr = gagby(s4,pos3+4,1);
+    versiont.mn = gagby(s4,pos3+5,1);
 
     /* get the ending time of the overall averaging period */
     endt.yr = gagby(s4,pos1+0,2);
@@ -505,6 +522,7 @@ gaint sect4 (unsigned char *s4, struct gag2 *pg2) {
         CodeTable4p10(sp);
       printf("  BegTime = %4i-%02i-%02i %02i:%02i",fcst.yr,fcst.mo,fcst.dy,fcst.hr,fcst.mn);
       printf("  EndTime = %4i-%02i-%02i %02i:%02i",endt.yr,endt.mo,endt.dy,endt.hr,endt.mn);
+      printf("  Version = %4i%02i%02i",versiont.yr,versiont.mo,versiont.dy);
       if ((verb) & (numtr>1)) printf("\n   (Record has %d time range specifications for statistical processing)",numtr);
     }
   }

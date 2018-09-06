@@ -1,4 +1,4 @@
-/* Copyright (C) 1988-2016 by George Mason University. See file COPYRIGHT for more information. */
+/* Copyright (C) 1988-2017 by George Mason University. See file COPYRIGHT for more information. */
 
 /* Routines related to hardcopy (metafile) output. */
 
@@ -50,7 +50,9 @@ static struct gxmbuf *mbuflast=NULL;  /* Last struct in chain */
 static struct gxmbuf *mbufanch2=NULL;  /* Buffer Anchor */
 static struct gxmbuf *mbuflast2=NULL;  /* Last struct in chain */
 
-static gaint dbmode;       /* double buffering flag */
+static gaint dbmode;                   /* double buffering flag */
+static struct gxpsubs *psubs=NULL;     /* function pointers for printing */
+static struct gxdsubs *dsubs=NULL;     /* function pointers for display */
 
 #define BWORKSZ 250000
 
@@ -376,6 +378,7 @@ struct gxmbuf *pmbuf, *pmbufl;
   if (!dbmode) mbuferror = 0;        /* Reset error state on clear command */
 }
 
+
 /* Redraw based on contents of current buffers.  Items that persist from plot
    to plot ARE NOT IN THE META BUFFER; these items are set in the hardware attribute
    database and are queried by the backend.
@@ -402,6 +405,9 @@ char ccc,*uch;
     printf ("Logic error 0 in Redraw.  Contact Developer.\n");
     return;
   }
+
+  if (psubs==NULL) psubs = getpsubs();  /* get ptrs to the graphics printing functions */
+  if (dsubs==NULL) dsubs = getdsubs();  /* get ptrs to the graphics display functions */
 
   if (dbflg) pmbuf = mbufanch2;
   else pmbuf = mbufanch;
@@ -434,14 +440,14 @@ char ccc,*uch;
         return;
       }
 
-      /*  -1 indicates start of file.  Should not ocurr. */
+      /*  -1 indicates start of file.  Should not occur. */
 
       else if (cmd==-1) {
         printf ("Logic Error 8 in Redraw.  Notify Developer\n");
         return;
       }
 
-      /* -2 indicates new frame.  Also should not ocurr */
+      /* -2 indicates new frame.  Also should not occur */
 
       else if (cmd==-2) {
         printf ("Logic Error 12 in Redraw.  Notify Developer\n");
@@ -454,9 +460,9 @@ char ccc,*uch;
         iii = (int *)(pmbuf->buff + ppp);
         op1 = (gaint)(*iii);
         if (pflg)
-          gxpcol (op1);          /* for printing */
+          psubs->gxpcol (op1);          /* for printing */
         else
-          gxdcol (op1);          /* for hardware */
+          dsubs->gxdcol (op1);          /* for hardware */
         ppp++;
       }
 
@@ -466,9 +472,9 @@ char ccc,*uch;
         iii = (int *)(pmbuf->buff + ppp);
         op1 = (gaint)(*iii);
         if (pflg)
-          gxpwid (op1);          /* for printing */
+          psubs->gxpwid (op1);          /* for printing */
         else
-          gxdwid (op1);          /* for hardware */
+          dsubs->gxdwid (op1);          /* for hardware */
         ppp += 2;
       }
 
@@ -487,9 +493,9 @@ char ccc,*uch;
         op5 = (gaint)(*iii);
         gxdbacol (op1,op2,op3,op4,op5);   /* update the data base */
         if (pflg)
-          gxpacol (op1);                 /* for printing (no-op for cairo) */
+          psubs->gxpacol (op1);                 /* for printing (no-op for cairo) */
         else
-          gxdacol (op1,op2,op3,op4,op5); /* for hardware (no-op for cairo) */
+          dsubs->gxdacol (op1,op2,op3,op4,op5); /* for hardware (no-op for cairo) */
         ppp += 5;
       }
 
@@ -502,9 +508,9 @@ char ccc,*uch;
         x = (gadouble)(*(buff+2));
         y = (gadouble)(*(buff+3));
         if (pflg)
-          gxprec(r,s,x,y);          /* for printing */
+          psubs->gxprec(r,s,x,y);          /* for printing */
         else
-          gxdrec(r,s,x,y);          /* for hardware */
+          dsubs->gxdrec(r,s,x,y);          /* for hardware */
         ppp += 4;
       }
 
@@ -525,7 +531,7 @@ char ccc,*uch;
         fflag = 1;
         ppp += 1;
         /* tell printing layer about new polygon. */
-        if (pflg) gxpbpoly();
+        if (pflg) psubs->gxpbpoly();
       }
 
       /* -8 is to terminate polygon fill.  It has no args */
@@ -536,9 +542,9 @@ char ccc,*uch;
           return;
         }
         if (pflg)
-          gxpepoly (xybuf,xyc);  /* for printing */
+          psubs->gxpepoly (xybuf,xyc);  /* for printing */
         else
-          gxdfil (xybuf,xyc);    /* for hardware */
+          dsubs->gxdfil (xybuf,xyc);    /* for hardware */
         gree (xybuf,"gxybuf");
         xybuf = NULL;
         fflag = 0;
@@ -556,9 +562,9 @@ char ccc,*uch;
           xyc++;
         }
         if (pflg)
-          gxpmov(x,y);            /* for printing */
+          psubs->gxpmov(x,y);            /* for printing */
         else
-          gxdmov(x,y);            /* for hardware */
+          dsubs->gxdmov(x,y);            /* for hardware */
         ppp += 2;
       }
 
@@ -574,27 +580,31 @@ char ccc,*uch;
           xyc++;
         }
         if (pflg)
-          gxpdrw(x,y);            /* for printing */
+          psubs->gxpdrw(x,y);            /* for printing */
         else
-          gxddrw(x,y);            /* for hardware */
+          dsubs->gxddrw(x,y);            /* for hardware */
         ppp += 2;
       }
 
       /* -12 indicates new fill pattern.  It has three arguments. */
 
       else if (cmd==-12) {
-        /* This is a no-op for cairo; X-based pattern drawing only JMA Check that this works?? */
-/*      gxdptn ((gaint)*(poi+1),(gaint)*(poi+2),(gaint)*(poi+3));  */
-        if (pflg) gxpflush();
+        /* This is a no-op for cairo; X-based pattern drawing */
+        buff = pmbuf->buff + ppp;
+        dsubs->gxdptn ((gaint)*(buff+0),(gaint)*(buff+1),(gaint)*(buff+2));
+        if (pflg)
+          psubs->gxpflush();
         ppp += 3;
       }
 
       /* -20 is a draw widget.  We will redraw it in current state. */
 
       else if (cmd==-20) {
-        /* This is a no-op for cairo; X-based widget drawing only JMA Check that this works?? */
-/*      gxdpbn ((gaint)*(poi+1),NULL,1,0,-1);  */
-        if (pflg) gxpflush();
+        /* This is a no-op for cairo; X-based buttonwidget drawing */
+        buff = pmbuf->buff + ppp;
+        dsubs->gxdpbn ((gaint)*(buff+0),NULL,1,0,-1);
+        if (pflg)
+          psubs->gxpflush();
         ppp += 1;
       }
 
@@ -612,9 +622,9 @@ char ccc,*uch;
         h = (gadouble)(*(buff+3));
         ang = (gadouble)(*(buff+4));
         if (pflg)
-          r = gxpch (ccc,fn,x,y,w,h,ang);     /* print a character */
+          r = psubs->gxpch (ccc,fn,x,y,w,h,ang);     /* print a character */
         else
-          r = gxdch (ccc,fn,x,y,w,h,ang);     /* draw a character */
+          r = dsubs->gxdch (ccc,fn,x,y,w,h,ang);     /* draw a character */
         ppp += 5;
       }
 
@@ -624,9 +634,9 @@ char ccc,*uch;
         ch = (signed char *)(pmbuf->buff + ppp - 1);
         sig = (gaint)(*(ch+2));
         if (pflg)
-          gxpsignal(sig);
+          psubs->gxpsignal(sig);
         else
-          gxdsignal(sig);
+          dsubs->gxdsignal(sig);
         ppp++;
       }
 
@@ -639,9 +649,9 @@ char ccc,*uch;
         x = (gadouble)(*(buff+2));
         y = (gadouble)(*(buff+3));
         if (pflg)
-          gxpclip(r,s,x,y);          /* for printing */
+          psubs->gxpclip(r,s,x,y);          /* for printing */
         else
-          gxdclip(r,s,x,y);          /* for hardware */
+          dsubs->gxdclip(r,s,x,y);          /* for hardware */
         ppp += 4;
       }
 
@@ -656,8 +666,8 @@ char ccc,*uch;
     pmbuf = pmbuf->fpmbuf;
   }
   /* tell hardware and printing layer we are finished */
-  if (pflg) gxpflush();
-  gxdopt(4);
+  if (pflg) psubs->gxpflush();
+  dsubs->gxdopt(4);
 }
 
 

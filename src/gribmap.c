@@ -1,4 +1,4 @@
-/* Copyright (C) 1988-2016 by George Mason University. See file COPYRIGHT for more information. */
+/* Copyright (C) 1988-2017 by George Mason University. See file COPYRIGHT for more information. */
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -245,12 +245,4 @@ void gaprnt (gaint i, char *ch) {
 
 char *gxgsym(char *ch) {
   return (getenv(ch));
-}
-
-gadouble qcachesf(void) {
-  return(1.0);
-}
-
-void set_nc_cache(size_t arg) {
-  return;
 }

@@ -1,4 +1,4 @@
-/* Copyright (C) 1988-2016 by George Mason University. See file COPYRIGHT for more information. */
+/* Copyright (C) 1988-2017 by George Mason University. See file COPYRIGHT for more information. */
 
 /*  This file contains the function prototypes for Cairo/grads interface. */
 
@@ -35,6 +35,7 @@ gxCxycnv    -- Convert position coordinates
 
 #include <cairo.h>
 
+void gxCcfg (void);
 void gxCaa (gaint);
 void gxCbatch (gadouble , gadouble);
 void gxCbfil (void);

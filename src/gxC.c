@@ -1,4 +1,4 @@
-/* Copyright (C) 1988-2016 by George Mason University. See file COPYRIGHT for more information. */
+/* Copyright (C) 1988-2017 by George Mason University. See file COPYRIGHT for more information. */
 
 /* This file contains the primary Cairo-GrADS interface.
    The interactive interface (X windows) is managed by routines in gxX.c and the routines here.
@@ -9,18 +9,17 @@
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
 
+#include <cairo.h>
 #include <cairo-ps.h>
 #include <cairo-svg.h>
 #include <cairo-pdf.h>
-#include <cairo-ft.h>
 #include <cairo-xlib.h>
-#include <fontconfig.h>
+#include <cairo-ft.h>
 #include <ft2build.h>
 #include FT_FREETYPE_H
 
@@ -30,6 +29,7 @@
 
 #define SX 800                              /* default X dimension of the image output */
 
+void gxdXflush(void);                       /* function prototype (only used here and in gxX.c) */
 
 /* local variables */
 static gaint lcolor=-999,lwidth;            /* Current attributes */
@@ -71,6 +71,7 @@ static gaint batch=0;                         /* Batch mode */
 static gadouble clx,cly,clw,clh;              /* current clipping coordinates */
 static gadouble clxsav,clysav,clwsav,clhsav;  /* saved clipping coordinates */
 
+
 /* Initialize X interface, allocate cr */
 /* If in batch mode, we don't get here */
 
@@ -83,6 +84,7 @@ gaint i;
   if (!faceinit) {
     for (i=0; i<100; i++) face[i] = NULL;
     faceinit=1;
+    gxCftinit();         /* make sure FreeType library has been initialized */
   }
 
   drawing = 0;
@@ -158,6 +160,7 @@ gaint i;
   if (!faceinit) {
     for (i=0; i<100; i++) face[i] = NULL;
     faceinit=1;
+    gxCftinit();         /* make sure FreeType library has been initialized */
   }
 
   /* set page sizes  in inches */
@@ -220,8 +223,14 @@ gaint gxChinit (gadouble xsz, gadouble ysz, gaint xin, gaint yin, gaint bwin,
 gaint status;
 gaint dh=0,dw=0;          /* image size in pixels */
 gadouble psx=0,psy=0;     /* page size in points */
-gaint bcol;
+gaint bcol,i;
 gaint bgwidth,bgheight,len;
+
+  if (!faceinit) {
+    for (i=0; i<100; i++) face[i] = NULL;
+    faceinit=1;
+    gxCftinit();         /* make sure FreeType library has been initialized */
+  }
 
   gxCflush (1);
   drawing = 0;
@@ -794,16 +803,18 @@ gaint i;
 */
 
 void gxCaa (gaint flag) {
-  if (flag) {
-    if (aaflg==0) {
-      cairo_set_antialias(cr,CAIRO_ANTIALIAS_DEFAULT);
-      aaflg = 1;
+  if (cr!=NULL) {
+    if (flag) {
+      if (aaflg==0) {
+        cairo_set_antialias(cr,CAIRO_ANTIALIAS_DEFAULT);
+        aaflg = 1;
+      }
     }
-  }
-  else {
-    if (aaflg) {
-      cairo_set_antialias(cr,CAIRO_ANTIALIAS_NONE);
-      aaflg = 0;
+    else {
+      if (aaflg) {
+        cairo_set_antialias(cr,CAIRO_ANTIALIAS_NONE);
+        aaflg = 0;
+      }
     }
   }
 }
@@ -822,10 +833,9 @@ char *astr = "A";
   /* get the scale factor (for width only) based on the size of "A" */
   cairo_set_font_size (cr, fontsize);
   cairo_text_extents (cr, astr, &te);
-  awidth  = fontsize/te.width;
+  awidth = fontsize/te.width;
   usize = w * awidth * xscl;
-  if (brdrflg)
-    usize = usize*(((gadouble)width-brdrwid*2.0)/(gadouble)width);
+  if (brdrflg) usize = usize*(((gadouble)width-brdrwid*2.0)/(gadouble)width);
 
   /* get the text extents of the character */
   str[0] = ch;
@@ -921,14 +931,11 @@ void gxCselfont (gaint fn) {
   else {
     /* font>=10 */
     dflt=0;
-    if (library == NULL) {
-      gxCftinit();                    /* make sure FreeType library has been initialized */
-      if (library == NULL) dflt=1;    /* use default fonts */
-    }
+    if (library == NULL) dflt=1;      /* use default fonts */
     if (dbq.fname == NULL) dflt=1;    /* make sure we have a font filename */
 
     if (!dflt) {
-      if (dbq.fstatus==0) {
+      if (face[fn]==NULL) {
         /* try to open user-provided font file */
         rc = FT_New_Face(library, dbq.fname, 0, &newface);
         if (rc) {
@@ -941,7 +948,6 @@ void gxCselfont (gaint fn) {
         else {
           /* we succeeded, so save the face and update the font status */
           face[fn] = newface;
-          gxdbsetfnstatus(fn, 1);
         }
       }
       else {
@@ -1116,7 +1122,11 @@ void gxCpattrset (gaint pnum) {
 
 /* initialize the FreeType library */
 void gxCftinit (void) {
-  if (FT_Init_FreeType(&library)) library = NULL;
+  gaint rc=1;
+  if (library == NULL) {
+    rc = FT_Init_FreeType(&library);
+    if (rc) library=NULL;
+  }
 }
 
 /* close the FreeType library */
@@ -1131,4 +1141,9 @@ void gxCpush (void) {
 void gxCpop (void) {
   cairo_pop_group_to_source(cr);
   cairo_paint(cr);
+}
+
+/* report on configuration */
+void gxCcfg (void) {
+  printf("cairo-%d.%d.%d ",CAIRO_VERSION_MAJOR,CAIRO_VERSION_MINOR,CAIRO_VERSION_MICRO);
 }

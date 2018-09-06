@@ -1,4 +1,4 @@
-/* Copyright (C) 1988-2016 by George Mason University. See file COPYRIGHT for more information. */
+/* Copyright (C) 1988-2017 by George Mason University. See file COPYRIGHT for more information. */
 
 /* Routines to rasterize the graphics using the GD library. */
 
@@ -336,7 +336,7 @@ gdImagePtr imfg;
 
 gaint gxGDend (char *fnout, char *bgImage, gaint fmtflg, gaint tcolor) {
 FILE *ofile, *bgfile;
-gdImagePtr imbg;
+gdImagePtr imbg=NULL;
 gaint retcod;
 
   retcod = 0;
@@ -380,4 +380,10 @@ gaint retcod;
   gdImageDestroy(im);
   im = NULL;
   return (retcod);
+}
+
+
+/* report on configuration */
+void gxGDcfg (void) {
+  printf("gd-%s ",GD_VERSION_STRING);
 }

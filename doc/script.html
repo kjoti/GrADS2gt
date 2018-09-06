@@ -24,7 +24,7 @@
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <a href="#functions">Functions</a><br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <a href="#intrinsic">Intrinsic Functions</a><br>
 <a href="#commands">Commands that complement the scripting language</a><br>
-<a href="#widgets">Widgets</a> (N.B. The widgets have been temporarily disabled for <span class="red">version 2.1.a1</span>) <br>
+<a href="#widgets">Widgets</a> (N.B. The Cairo graphics display inteface in <span class="red">version 2.1+</span> does not support widgets) <br>
 <a href="library.html">Script Library</a><br>
 <a href="reference_card_scl.pdf">Scripting Language Reference Card</a>
 <font size=-1>
@@ -476,8 +476,8 @@ GrADS command from the script:
 <ul><code>rc <br> result </code></ul>
 
 <p>
-<code>lat, lon, lev,</code> and <code>time </code>are also used
-as predefined variables in GrADS. Although using them within a script
+<code>lat, lon, and lev </code>are also used
+as predefined internal variables in GrADS. Although using them within a script
 is okay, in order to avoid confusion it is not recommended.
 
 <p>
@@ -773,7 +773,7 @@ Repeated calls must be made to read consecutive records. The result is
 a string containing two lines: the first line is the return code, the 
 2nd line is the record read from the file. The record may be a maximum 
 of 80 characters. Use the <code>sublin</code> function to separate the
-result. Return codes are:<br>
+result. Return codes are:
 
 <ul>
 <code>0 - </code>ok <br>
@@ -781,6 +781,7 @@ result. Return codes are:<br>
 <code>2 - </code>end of file <br>
 <code>8 - </code>file open for write <br>
 <code>9 - </code>I/O error<br>
+<br>
 </ul>
 
 Files are opened when the first call to read is made for a 
@@ -796,7 +797,7 @@ This functions writes records to output file <code>filename</code>.
 On the first call to write for a particular file, the file is opened
 in write mode.  This will destroy an existing file!  If you use the
 optional append flag, the file will be opened in append mode, and all
-writes will be appended to the end of the file.  Return codes are:<br>
+writes will be appended to the end of the file.  Return codes are:
 <ul>
 <code>0</code> - ok <br>
 <code>1</code> - open error <br>
@@ -805,14 +806,40 @@ writes will be appended to the end of the file.  Return codes are:<br>
 <p>
 <b><code>close (<i>name</i>)</code></b>
 <br>
-
 This function closes the named file.  This must be done if you wish to
 read from a file you have been writing to.  This can also be used to
-rewind a file.  Return codes are:<br>
+rewind a file.  Return codes are:
 <ul>
 <code>0</code> - ok <br>
-<code>1</code> - file not open</ul><p>
+<code>1</code> - file not open</ul>
+<p><b><code>sys (<i>command</i>)</code></b><br>
+  This function was added in <span class="red">version 2.1.1.b0. </span> It  submits the specified command to the shell and returns the resulting text stream that gets sent to standard output (stdout). The  command is passed to /bin/sh. There is no way to check if the command succeeded; the return code is not captured, and an empty result could mean that the command has no output or that the command failed. Any error notifications or text streams sent to standard error (stderr) will appear in the console window and not the returned text unless you explicitly include a capture of stderr in your command string. </p>
+<p>Consider the following script test_sys.gs: 
+<ul><code>
+  cmd1=&quot;ls ./foo&quot;<br>
+  cmd2=&quot;ls ./foo 2&gt;&amp;1&quot;<br>
+  cmd3='echo Hello, world!'<br>
+  res1=sys(cmd1); say 'cmd1 returned -&gt;'res1'&lt;-'<br>
+  res2=sys(cmd2); say 'cmd2 returned -&gt;'res2'&lt;-'<br>
+  res3=sys(cmd3); say 'cmd3 returned -&gt;'res3'&lt;-'<br>
+  <br>
+</code></ul>
+The session in the GrADS command window when running test_sys.gs looks like this:<br>
+<br>
+<ul>
+<code>
+  ga-> test_sys<br>    
+ls: ./foo: No such file or directory<br>
+cmd1 returned -><-<br>
+cmd2 returned ->ls: ./foo: No such file or directory<br>
+<-<br>
+cmd3 returned ->Hello, world!<br>
+<-<br>
+ga-> <br>
+</code></ul>
+</p>
 </ul>
+
 
 <h2><a name="commands"><u>Commands that complement the scripting language</u></a></h2>
 <p>
@@ -835,6 +862,10 @@ options that are most useful for script applications follows.
 Lists all defined variables
 
 <p>
+<b><code><a href="gradcomdquery.html">q</a> define <i>varname</i></code></b> --
+(Added in <span class="red">version 2.1.1b0</span>) Lists information about a specific defined variable: grid dimensions, coordinate axis definitions, calendar type, and whether it has been modified to be a climatological variable. 
+
+<p>
 <b><code><a href="gradcomdquery.html">q</a> defval <i>ival
 jval</i></code></b> -- Gives defined grid value at <i>ival, jval</i>
 <p>
@@ -844,7 +875,7 @@ can be used in conjunction with <code><a
 href="gradcomdsetdefval.html">set defval</a></code>. For example, the
 code shown below queries the value of sst at gridpoint(i,j), then
 tests to see if the value is less than -1.6, and if it is, sets the
-sst to a bad value.<p>
+sst to a bad value.
 <ul>
 <code>
 'q defval sst 'i' 'j <br>
@@ -1009,7 +1040,7 @@ interface is used to draw widgets (buttons and pull down menus) that
 allow a "point and click" interface between the Grads user and the
 scripting language.
 
- (N.B. The widgets have been temporarily disabled for <span class="red">version 2.1.a1</span>) 
+ (N.B. The Cairo graphics display inteface in <span class="red">version 2.1+</span> does not support widgets.) 
 <p>
 <h3>Buttons</h3>
 <p>

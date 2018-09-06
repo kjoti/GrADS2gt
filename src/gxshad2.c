@@ -1,4 +1,5 @@
-/* Copyright (C) 1988-2016 by George Mason University. See file COPYRIGHT for more information. */
+/*  Copyright (C) 1988-2017 by the Institute of Global Environment and Society (IGES).
+    See file COPYRIGHT for more information.   */
 
 /* Authored by B. Doty  2010,2011 */
 
@@ -153,7 +154,8 @@ gaint k;
     clev1 = *(vs+k);
     if (k<lvs-1) clev2 = *(vs+k+1);
     else {
-      clev2 = rmax + fabs(*(vs+k)-*(vs+k-1));
+      if (clev1 <= rmax) clev2 = rmax + fabs(*(vs+k)-*(vs+k-1));
+      else clev2 = clev1 + fabs(*(vs+k)-*(vs+k-1));
     }
     gxcolr(*(clrs+k));
     blev = clev1; alev = clev2;
@@ -189,7 +191,8 @@ gaint i,k,ig,jg,ijg;
     clev1 = *(vs+k);
     if (k<lvs-1) clev2 = *(vs+k+1);
     else {
-      clev2 = rmax + fabs(*(vs+k)-*(vs+k-1));
+      if (clev1 <= rmax) clev2 = rmax + fabs(*(vs+k)-*(vs+k-1));
+      else clev2 = clev1 + fabs(*(vs+k)-*(vs+k-1));
     }
     gxcolr(*(clrs+k));
 
@@ -1085,7 +1088,6 @@ corner4:  /* Arriving at corner 4 from above */
   if (*(s2flg+ij+1)==13) goto side2i2;
   ii--; jj++;
   printf ("err 3 corner 4 %i %i\n",ii,jj);
-  goto err3;
   goto err3;
 
 done:

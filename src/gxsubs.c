@@ -1,4 +1,4 @@
-/* Copyright (C) 1988-2016 by George Mason University. See file COPYRIGHT for more information. */
+/* Copyright (C) 1988-2017 by George Mason University. See file COPYRIGHT for more information. */
 
 /* Authored by B. Doty */
 
@@ -22,11 +22,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <dlfcn.h>
 #include "gatypes.h"
 #include "gx.h"
 
-void *galloc(size_t,char *);
-void gree();
+char *gaqupb (char *, gaint);
+void gree ();
 
 /* The following variables are local to this file, and are used by
    all the routines in the file.    */
@@ -47,70 +48,304 @@ static gaint bufmod;                         /* Buffering mode     */
 static gadouble xsave,ysave,alen,slen;       /* Linestyle constants*/
 static gaint jpen,dpnt;
 static gaint intflg;                         /* Batch/Interactive flag    */
-static void (*fconv) (gadouble, gadouble, gadouble *, gadouble *);
-                                             /* fconv points to proj rnt  */
-static void (*gconv) (gadouble, gadouble, gadouble *, gadouble *);
-                                             /* gconv points to grid rnt  */
-static void (*bconv) (gadouble, gadouble, gadouble *, gadouble *);
-                                             /* gconv points to grid rnt  */
-static char *mask;                           /* pointer to mask array */
-static gaint maskflg;                        /* mask flag; -999 no mask yet,
-                                                0 no mask used, 1 mask values set, -888 error  */
-static gaint masksize;                       /* Size of mask array */
-static gaint maskx;                          /* Size of a row in the array */
+static void (*fconv) (gadouble, gadouble, gadouble *, gadouble *); /* for proj rnt */
+static void (*gconv) (gadouble, gadouble, gadouble *, gadouble *); /* for grid rnt */
+static void (*bconv) (gadouble, gadouble, gadouble *, gadouble *); /* for back transform rnt */
 static gaint bcol;                           /* background color */
 static gaint savcol;                         /* for color save/restore */
+static char *mask;                           /* pointer to mask array */
+static gaint maskx;                          /* Size of a row in the array */
+static gaint masksize;                       /* Size of mask array */
+static gaint maskflg;                        /* mask flag; -999 no mask yet,
+                                                0 no mask used, 1 mask values set, -888 error  */
+static struct gxpsubs psubs;                 /* Holds function pointers to printing subroutines */
+static struct gxdsubs dsubs;                 /* Holds function pointers to display subroutines */
 
 /* For STNDALN, routines included are gxgnam and gxgsym */
 #ifndef STNDALN
 
 /* Initialize graphics output  */
-/* batch flag = 1, batch mode only (no graphics output) */
+/* If batch flag is 1, batch mode only (no graphics output) */
 
-void gxstrt (gadouble xmx, gadouble ymx, gaint batch, gaint hbufsz) {
+gaint gxstrt (gadouble xmx, gadouble ymx, gaint batch, gaint hbufsz, char *gxdopt, char *gxpopt, char *xgeom) {
+  gaint rc;
 
   printf ("GX Package Initialization: Size = %g %g \n",xmx,ymx);
   if (batch) printf ("Running in Batch mode\n");
-  gxdbinit();                               /* Initialize the graphics data base */
-  intflg = !batch;                          /* Set batch/interactive flag */
-  if (intflg) {
-    gxdbgn (xmx, ymx);                      /* Initialize graphics output */
-    gxdwid (3);                             /* Initial line width      */
-  } else {
-    gxdbat ();                              /* Tell hardware layer we're in batch mode */
-    gxpinit (xmx, ymx);                     /* Tell printing layer to initialize batch mode surface */
+  gxdbinit();                                 /* Initialize the graphics data base */
+  intflg = !batch;                            /* Set batch/interactive flag */
+  rc = gxload(gxdopt,gxpopt);                 /* Load the graphics routines from a shared library */
+  if (rc) {
+    printf("GX Package Terminated \n");
+    return (rc);
   }
-  gxpbgn (xmx, ymx);                        /* Tell printing layer about page size */
-  rxsize = xmx;                             /* Set local variables with real page size  */
+  if (intflg) {
+    if (xgeom[0]!='\0') dsubs.gxdgeo(xgeom);  /* tell display software about geometry override */
+    dsubs.gxdbgn(xmx, ymx);                   /* Initialize graphics output */
+    dsubs.gxdwid(3);                          /* Initial line width */
+  } else {
+    dsubs.gxdbat();                           /* Tell display hardware layer we're in batch mode */
+    psubs.gxpinit(xmx, ymx);                  /* printing layer initializes batch mode surface */
+  }
+  psubs.gxpbgn (xmx, ymx);                    /* Tell printing layer about page size */
+  rxsize = xmx;                               /* Set local variables with real page size  */
   rysize = ymx;
-  clminx=0; clmaxx=xmx;                     /* Set clipping area       */
+  clminx=0; clmaxx=xmx;                       /* Set clipping area       */
   clminy=0; clmaxy=ymx;
   xsave=0.0; ysave=0.0;
   lstyle=0; lwide = 3;
   oldx=0.0; oldy=0.0;
-  fconv=NULL;                               /* No projection set up    */
-  gconv=NULL;                               /* No grid scaling set up  */
-  bconv=NULL;                               /* No back transform       */
-  gxchii();                                 /* Init character plotting */
-  bufmod=0;                                 /* double buffering is OFF */
-  gxhnew(rxsize,rysize,hbufsz);             /* Init hardcopy buffering */
-  gxscal (0.0,xmx,0.0,ymx,0.0,xmx,0.0,ymx); /* Linear scaling=inches   */
-  gxvpag (xmx,ymx,0.0,xmx,0.0,ymx);         /* Virtual page scaling    */
-  mask = NULL; maskflg = -999;              /* Don't allocate mask until first use */
-  gxcolr(1);                                /* Initial color is 1 (foreground) */
+  fconv=NULL;                                 /* No projection set up    */
+  gconv=NULL;                                 /* No grid scaling set up  */
+  bconv=NULL;                                 /* No back transform       */
+  gxchii();                                   /* Init character plotting */
+  bufmod=0;                                   /* double buffering is OFF */
+  gxhnew(rxsize,rysize,hbufsz);               /* Init hardcopy buffering */
+  gxscal (0.0,xmx,0.0,ymx,0.0,xmx,0.0,ymx);   /* Linear scaling=inches   */
+  gxvpag (xmx,ymx,0.0,xmx,0.0,ymx);           /* Virtual page scaling    */
+  mask = NULL; maskflg = -999;                /* Don't allocate mask until first use */
+  gxcolr(1);                                  /* Initial color is 1 (foreground) */
+  return(0);
+}
+
+/* Loads the graphics back end shared libraries and define the required subroutines */
+gaint gxload(char *gxdopt, char *gxpopt) {
+  void *phandle=NULL,*dhandle=NULL;
+  const char *err=NULL,*dname=NULL,*pname=NULL;
+  char *cname=NULL;
+  FILE *cfile;
+
+  /* Printing Hardcopy */
+  pname=(const char *)gaqupb(gxpopt,4);
+  if (pname==NULL) {
+    printf("GX Package Error: Could not find a record for the printing plug-in named \"%s\" \n",gxpopt);
+    /* Tell user where we looked based on $GAUDPT */
+    cname = getenv("GAUDPT");
+    if (cname==NULL) {
+      printf("  * The environment variable GAUDPT has not been set\n");
+    }
+    else {
+      cfile = fopen(cname,"r");
+      if (cfile==NULL) {
+        printf("  * Unable to open the file named by the GAUDPT environment variable: %s\n",cname);
+      }
+      else {
+        printf("  * No entry with \"gxprint %s\" in the file named by the GAUDPT environment variable: %s\n",gxpopt,cname);
+        fclose(cfile);
+      }
+    }
+    /* Tell user where we looked based on $GADDIR/udpt */
+    cname = gxgnam("udpt");
+    cfile = fopen(cname,"r");
+    if (cfile==NULL) {
+      printf("  * Unable to open the default User Defined Plug-in Table: %s\n",cname);
+    }
+    else {
+      printf("  * No entry with \"gxprint %s\" in the default User Defined Plug-in Table: %s\n",gxpopt,cname);
+      fclose(cfile);
+    }
+    printf("  Please read the documentation at http://cola.gmu.edu/grads/gadoc/plugins.html\n");
+    return(1);
+  }
+  dlerror();
+  phandle = dlopen (pname, RTLD_LAZY);
+  if (!phandle) {
+    printf("GX Package Error: dlopen failed to get a handle on gxprint plug-in named \"%s\" \n",gxpopt);
+    if ((err=dlerror())!=NULL) printf("   %s\n",err);
+    return(1);
+  }
+
+  /* Display */
+  dname=(const char *)gaqupb(gxdopt,3);
+  if (dname==NULL) {
+    printf("GX Package Error: Could not find a record for the display plug-in named \"%s\" \n",gxpopt);
+    /* Tell user where we looked based on $GAUDPT */
+    cname = getenv("GAUDPT");
+    if (cname==NULL) {
+      printf("  * The environment variable GAUDPT has not been set\n");
+    }
+    else {
+      cfile = fopen(cname,"r");
+      if (cfile==NULL) {
+        printf("  * Unable to open the file named by the GAUDPT environment variable: %s\n",cname);
+      }
+      else {
+        printf("  * No entry with \"gxdisplay %s\" in the file named by the GAUDPT environment variable: %s\n",gxdopt,cname);
+        fclose(cfile);
+      }
+    }
+    /* Tell user where we looked based on $GADDIR/udpt */
+    cname = gxgnam("udpt");
+    cfile = fopen(cname,"r");
+    if (cfile==NULL) {
+      printf("  * Unable to open the default User Defined Plug-in Table: %s\n",cname);
+    }
+    else {
+      printf("  * No entry with \"gxdisplay %s\" in the default User Defined Plug-in Table: %s\n",gxdopt,cname);
+      fclose(cfile);
+    }
+    printf("  Please read the documentation at http://cola.gmu.edu/grads/gadoc/plugins.html\n");
+    return(1);
+  }
+  dlerror();
+  dhandle = dlopen (dname, RTLD_LAZY);
+  if (!dhandle) {
+    printf("GX Package Error: dlopen failed to get a a handle on gxdisplay plug-in named \"%s\" \n",gxdopt);
+    if ((err=dlerror())!=NULL) printf("   %s\n",err);
+    return(2);
+  }
+
+  /* Get pointers to the printing subroutines */
+  dlerror();
+  psubs.gxpcfg   = dlsym(phandle,"gxpcfg");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(1);}
+  psubs.gxpbgn   = dlsym(phandle,"gxpbgn");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(1);}
+  psubs.gxpinit  = dlsym(phandle,"gxpinit");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(1);}
+  psubs.gxpend   = dlsym(phandle,"gxpend");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(1);}
+  psubs.gxprint  = dlsym(phandle,"gxprint");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(1);}
+  psubs.gxpcol   = dlsym(phandle,"gxpcol");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(1);}
+  psubs.gxpacol  = dlsym(phandle,"gxpacol");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(1);}
+  psubs.gxpwid   = dlsym(phandle,"gxpwid");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(1);}
+  psubs.gxprec   = dlsym(phandle,"gxprec");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(1);}
+  psubs.gxpbpoly = dlsym(phandle,"gxpbpoly");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(1);}
+  psubs.gxpepoly = dlsym(phandle,"gxpepoly");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(1);}
+  psubs.gxpmov   = dlsym(phandle,"gxpmov");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(1);}
+  psubs.gxpdrw   = dlsym(phandle,"gxpdrw");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(1);}
+  psubs.gxpflush = dlsym(phandle,"gxpflush");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(1);}
+  psubs.gxpsignal= dlsym(phandle,"gxpsignal");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(1);}
+  psubs.gxpclip  = dlsym(phandle,"gxpclip");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(1);}
+  psubs.gxpch    = dlsym(phandle,"gxpch");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(1);}
+  psubs.gxpqchl  = dlsym(phandle,"gxpqchl");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(1);}
+
+  /* get pointers to the display (hardware) subroutines, some are needed even in batch mode */
+  dsubs.gxdcfg   = dlsym(dhandle,"gxdcfg");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(1);}
+  dsubs.gxdbb    = dlsym(dhandle,"gxdbb");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(2);}
+  dsubs.gxdfb    = dlsym(dhandle,"gxdfb");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(2);}
+  dsubs.gxdacol  = dlsym(dhandle,"gxdacol");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(2);}
+  dsubs.gxdbat   = dlsym(dhandle,"gxdbat");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(2);}
+  dsubs.gxdbgn   = dlsym(dhandle,"gxdbgn");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(2);}
+  dsubs.gxdbtn   = dlsym(dhandle,"gxdbtn");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(2);}
+  dsubs.gxdch    = dlsym(dhandle,"gxdch");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(2);}
+  dsubs.gxdclip  = dlsym(dhandle,"gxdclip");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(2);}
+  dsubs.gxdcol   = dlsym(dhandle,"gxdcol");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(2);}
+  dsubs.gxddbl   = dlsym(dhandle,"gxddbl");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(2);}
+  dsubs.gxddrw   = dlsym(dhandle,"gxddrw");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(2);}
+  dsubs.gxdend   = dlsym(dhandle,"gxdend");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(2);}
+  dsubs.gxdfil   = dlsym(dhandle,"gxdfil");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(2);}
+  dsubs.gxdfrm   = dlsym(dhandle,"gxdfrm");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(2);}
+  dsubs.gxdgcoord= dlsym(dhandle,"gxdgcoord");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(2);}
+  dsubs.gxdgeo   = dlsym(dhandle,"gxdgeo");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(2);}
+  dsubs.gxdimg   = dlsym(dhandle,"gxdimg");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(2);}
+  dsubs.gxdlg    = dlsym(dhandle,"gxdlg");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(2);}
+  dsubs.gxdmov   = dlsym(dhandle,"gxdmov");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(2);}
+  dsubs.gxdopt   = dlsym(dhandle,"gxdopt");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(2);}
+  dsubs.gxdpbn   = dlsym(dhandle,"gxdpbn");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(2);}
+  dsubs.gxdptn   = dlsym(dhandle,"gxdptn");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(2);}
+  dsubs.gxdptn   = dlsym(dhandle,"gxdptn");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(2);}
+  dsubs.gxdqchl  = dlsym(dhandle,"gxdqchl");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(2);}
+  dsubs.gxdrbb   = dlsym(dhandle,"gxdrbb");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(2);}
+  dsubs.gxdrec   = dlsym(dhandle,"gxdrec");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(2);}
+  dsubs.gxdrmu   = dlsym(dhandle,"gxdrmu");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(2);}
+  dsubs.gxdsfr   = dlsym(dhandle,"gxdsfr");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(2);}
+  dsubs.gxdsgl   = dlsym(dhandle,"gxdsgl");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(2);}
+  dsubs.gxdsignal= dlsym(dhandle,"gxdsignal");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(2);}
+  dsubs.gxdssh   = dlsym(dhandle,"gxdssh");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(2);}
+  dsubs.gxdssv   = dlsym(dhandle,"gxdssv");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(2);}
+  dsubs.gxdswp   = dlsym(dhandle,"gxdswp");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(2);}
+  dsubs.gxdwid   = dlsym(dhandle,"gxdwid");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(2);}
+  dsubs.gxdXflush= dlsym(dhandle,"gxdXflush");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(2);}
+  dsubs.gxdxsz   = dlsym(dhandle,"gxdxsz");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(2);}
+  dsubs.gxrs1wd  = dlsym(dhandle,"gxrs1wd");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(2);}
+  dsubs.gxsetpatt= dlsym(dhandle,"gxsetpatt");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(2);}
+  dsubs.win_data = dlsym(dhandle,"win_data");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(2);}
+  return(0);
+}
+
+/* pass the pointer to the graphcis printing subroutines to gxmeta.c and gauser.c */
+struct gxpsubs* getpsubs() {
+  return &psubs;
+}
+
+/* pass the pointer to the graphcis display subroutines to gxmeta.c and gauser.c */
+struct gxdsubs* getdsubs() {
+  return &dsubs;
+}
+
+/* get configuration information from display and printing plug-ins */
+void gxcfg (char *gxdopt, char *gxpopt) {
+  const char *dname,*pname;
+  dname=(const char *)gaqupb(gxdopt,3);
+  printf(" -+- GX Display \"%s\"  %s  ",gxdopt,dname); dsubs.gxdcfg(); printf("\n");
+  pname=(const char *)gaqupb(gxpopt,4);
+  printf(" -+- GX Print   \"%s\"  %s  ",gxpopt,pname); psubs.gxpcfg(); printf("\n");
 }
 
 /* Terminate graphics output */
-
-void gxend (void) {                         /* Return screen to normal */
+void gxend (void) {
   if (mask) free(mask);
   if (intflg)
-    gxdend();                               /* Close X11 window        */
+    dsubs.gxdend();                              /* Close X11 window */
   else
-    gxpend ();                              /* Tell printing layer to destroy batch mode surface */
+    psubs.gxpend();                              /* Tell printing layer to destroy batch mode surface */
   printf ("GX Package Terminated \n");
 }
-
 
 /* Send a signal to the rendering engine and the metabuffer.
    Signal values are:
@@ -121,8 +356,8 @@ void gxend (void) {                         /* Return screen to normal */
      5 == Cairo pop and then paint
 */
 void gxsignal (gaint sig) {
-  if (intflg) gxdsignal(sig);  /* tell the rendering layer about the signal */
-  hout1c(-22,sig);             /* put the signal in the metafile buffer */
+  if (intflg) dsubs.gxdsignal(sig);  /* tell the rendering layer about the signal */
+  hout1c(-22,sig);                   /* put the signal in the metafile buffer */
 }
 
 
@@ -136,9 +371,9 @@ gadouble wid;
   if (fn<6 && !gxdbqhersh()) return (-999.9);  /* font 0-5 and hershflag=0 in gxmeta.c */
 
   if (intflg)
-    wid = gxdqchl (ch, fn, w);                 /* get the character width (interactive mode) */
+    wid = dsubs.gxdqchl (ch, fn, w);           /* get the character width (interactive mode) */
   else
-    wid = gxpqchl (ch, fn, w);                 /* get the character width (batch mode) */
+    wid = psubs.gxpqchl (ch, fn, w);           /* get the character width (batch mode) */
   return (wid);
 }
 
@@ -154,13 +389,16 @@ gadouble wid;
   /* from here on we're using Cairo fonts */
   gxvcon(x,y,&x,&y);                           /* scale the position and size for the virual page */
   gxvcon2(w,h,&w,&h);
-  if (intflg)
-    wid = gxdch (ch, fn, x, y, w, h, rot);     /* plot a character */
-  else
-    wid = gxpqchl (ch, fn, w);                 /* get the character width (batch mode) */
-  houtch (ch, fn, x, y, w, h, rot);            /* put the character in the metabuffer */
-  gxppvp2(wid,&wid);                             /* rescale the character width back to real page size */
-  return (wid);                                /* return character width */
+  if (w>0 && h>0) {                            /* make sure the width and height are non-zero */
+    if (intflg)
+      wid = dsubs.gxdch (ch, fn, x, y, w, h, rot);   /* plot a character */
+    else
+      wid = psubs.gxpqchl (ch, fn, w);         /* get the character width (batch mode) */
+    houtch (ch, fn, x, y, w, h, rot);          /* put the character in the metabuffer */
+    gxppvp2(wid,&wid);                         /* rescale the character width back to real page size */
+    return (wid);                              /* return character width */
+  }
+  else return(0);
 }
 
 
@@ -178,23 +416,23 @@ gadouble wid;
 void gxfrme (gaint action) {
 
   if (action>7) {
-    if (intflg) gxdfrm(action);
+    if (intflg) dsubs.gxdfrm(action);
     return;
   }
   gxmaskclear();
   if (intflg) {
-    if (action==0) getchar();        /* Wait if requested    */
+    if (action==0) getchar();        /* Wait if requested */
     if (action!=2 && bufmod) {
-      gxdsgl ();                     /* tell hardware to turn off double buffer mode */
+      dsubs.gxdsgl ();               /* tell hardware to turn off double buffer mode */
       bufmod=0;
     }
     if (action==2 && (!bufmod)) {
-      gxddbl ();                     /* tell hardware to turn on double buffer mode */
+      dsubs.gxddbl ();               /* tell hardware to turn on double buffer mode */
       bufmod=1;
     }
-    if (bufmod) gxdswp ();           /* swap */
-    gxdfrm (action);                 /* tell hardware layer about frame action */
-    gxdfrm (9);                      /* clear the X request buffer */
+    if (bufmod) dsubs.gxdswp ();     /* swap */
+    dsubs.gxdfrm (action);           /* tell hardware layer about frame action */
+    dsubs.gxdfrm (9);                /* clear the X request buffer */
   }
   gxhfrm (action);                   /* reset metabuffer */
   bcol = gxdbkq();
@@ -220,7 +458,7 @@ void gxcolr (gaint clr){                 /* Set color     */
   if (clr<0) clr=0;
   if (clr>=COLORMAX) clr=COLORMAX-1;
   hout1(-3,clr);
-  if (intflg) gxdcol (clr);
+  if (intflg) dsubs.gxdcol (clr);
   lcolor = clr;
 }
 
@@ -228,9 +466,9 @@ void gxcolr (gaint clr){                 /* Set color     */
 
 gaint gxacol (gaint clr, gaint red, gaint green, gaint blue, gaint alpha ) {
   gaint rc=0;
-  gxdbacol (clr, red, green, blue, alpha);                 /* update the database */
-  hout5i(-5,clr,red,green,blue,alpha);                     /* tell the metabuffer */
-  if (intflg) rc = gxdacol(clr, red, green, blue, alpha);  /* tell hardware */
+  gxdbacol (clr, red, green, blue, alpha);                       /* update the database */
+  hout5i(-5,clr,red,green,blue,alpha);                           /* tell the metabuffer */
+  if (intflg) rc = dsubs.gxdacol(clr, red, green, blue, alpha);  /* tell hardware */
   return(rc);
 }
 
@@ -241,7 +479,7 @@ void gxwide (gaint wid) {                 /* Set width     */
 gaint hwid;
   hwid = wid;
   hout2i(-4,hwid,wid);
-  if (intflg) gxdwid (hwid);
+  if (intflg) dsubs.gxdwid (hwid);
   lwide = hwid;
 }
 
@@ -260,7 +498,7 @@ void gxmove (gadouble x, gadouble y) {        /* Move to x,y   */
   cflag=0;
   gxvcon(x,y,&x,&y);
   hout2(-10,x,y);
-  if (intflg) gxdmov (x,y);
+  if (intflg) dsubs.gxdmov (x,y);
 }
 
 /* Draw to x, y with clipping */
@@ -273,7 +511,7 @@ gaint pos=0;
       bdterp (oldx,oldy,x,y,&xnew,&ynew);
       gxvcon(xnew,ynew,&xnew,&ynew);
       hout2(-11,xnew,ynew);
-      if (intflg) gxddrw (xnew,ynew);
+      if (intflg) dsubs.gxddrw (xnew,ynew);
       cflag=1;
     }
     oldx = x; oldy = y;
@@ -284,25 +522,25 @@ gaint pos=0;
     cflag=0;
     gxvcon(xnew,ynew,&xnew,&ynew);
     hout2(-10,xnew,ynew);
-    if (intflg) gxdmov (xnew,ynew);
+    if (intflg) dsubs.gxdmov (xnew,ynew);
   }
   oldx = x; oldy = y;
   gxvcon(x,y,&x,&y);
   if (maskflg>0) pos = ((gaint)(y*100.0))*maskx + (gaint)(x*100.0);
   if (maskflg>0 && pos>0 && pos<masksize && *(mask+pos)=='1') {
     hout2(-10,x,y);
-    if (intflg) gxdmov (x,y);
+    if (intflg) dsubs.gxdmov (x,y);
     mflag = 1;
     return;
   }
   if (mflag) {
     hout2(-10,x,y);
-    if (intflg) gxdmov (x,y);
+    if (intflg) dsubs.gxdmov (x,y);
     mflag = 0;
     return;
   }
   hout2(-11,x,y);
-  if (intflg) gxddrw (x, y);
+  if (intflg) dsubs.gxddrw (x, y);
 }
 
 /* Draw lines in small segments, sometimes needed when masking is in use
@@ -457,7 +695,7 @@ gadouble clxmin,clxmax,clymin,clymax;
   /* specify the hardware clip region, and put it in the metabuffer as well */
   gxvcon(clminx,clminy,&clxmin,&clymin);
   gxvcon(clmaxx,clmaxy,&clxmax,&clymax);
-  if (intflg) gxdclip(clxmin,clxmax,clymin,clymax);
+  if (intflg) dsubs.gxdclip(clxmin,clxmax,clymin,clymax);
   hout4(-23,clxmin,clxmax,clymin,clymax);
 }
 
@@ -682,7 +920,7 @@ gadouble x;
   gxvcon (xhi,yhi,&xhi,&yhi);
   hout4(-6,xlo,xhi,ylo,yhi);
   if (intflg) {
-    gxdrec (xlo, xhi, ylo, yhi);
+    dsubs.gxdrec (xlo, xhi, ylo, yhi);
   }
 }
 
@@ -690,7 +928,7 @@ gadouble x;
 
 void gxptrn (gaint typ, gaint den, gaint ang) {
   hout3i(-12,typ,den,ang);
-  if (intflg) gxdptn (typ, den, ang);
+  if (intflg) dsubs.gxdptn (typ, den, ang);
 }
 
 /* query line width */
@@ -931,7 +1169,7 @@ gaint i,flag,onum,aflag;
 
   /* Output to hardware */
 
-  if (intflg) gxdfil (buff, onum);
+  if (intflg) dsubs.gxdfil (buff, onum);
   if (aflag) free(buff);
 }
 
@@ -960,7 +1198,7 @@ void bdterp (gadouble x1, gadouble y1, gadouble x2, gadouble y2,
 
 void gxbutn (gaint bnum, struct gbtn *pbn) {
   hout1(-20,bnum);
-  gxdpbn(bnum, pbn, 0, 0, -1);
+  dsubs.gxdpbn(bnum, pbn, 0, 0, -1);
 }
 
 /* Set mask for a rectangular area */
@@ -1020,7 +1258,7 @@ gaint siz,i,j,pos,ilo,ihi,jlo,jhi,jj;
 /* Given a rectangular area, check to see if it overlaps with any existing
    mask.  This is used to avoid overlaying contour labels. */
 
-int gxmaskrq (gadouble xlo, gadouble xhi, gadouble ylo, gadouble yhi) {
+gaint gxmaskrq (gadouble xlo, gadouble xhi, gadouble ylo, gadouble yhi) {
 gaint i,j,ilo,ihi,jlo,jhi,jj,pos;
 
   if (maskflg == -888) return(0);
@@ -1077,7 +1315,7 @@ char *gxgsym(char *ch) {
 /* Construct full file path name from env symbol or default */
 
 char *gxgnam(char *ch) {
-char *fname, *ddir;
+char *fname=NULL, *ddir;
 gaint len,i,j;
 size_t sz;
 
@@ -1100,7 +1338,7 @@ size_t sz;
 
   /* Allocate memory for the output */
   sz = len+15;
-  fname = (char *)galloc(sz,"fname");
+  fname = (char *)malloc(sz);
   if (fname==NULL) {
     printf ("Memory allocation error in data set open\n");
     return (NULL);

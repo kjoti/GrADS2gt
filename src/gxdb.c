@@ -1,4 +1,4 @@
-/* Copyright (C) 1988-2016 by George Mason University. See file COPYRIGHT for more information. */
+/* Copyright (C) 1988-2017 by George Mason University. See file COPYRIGHT for more information. */
 
 /* Keep track of persistent settings for "device backend" attributes, such as
    settings for custom colors, line widths, fonts, patterns, etc.  This interface
@@ -23,7 +23,6 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <math.h>
 #include "gatypes.h"
 #include "gx.h"
 
@@ -31,8 +30,6 @@
 static gaint pdcred[16] = {  0,255,250,  0, 30,  0,240,230,240,160,160,  0,230,  0,130,170};
 static gaint pdcgre[16] = {  0,255, 60,220, 60,200,  0,220,130,  0,230,160,175,210,  0,170};
 static gaint pdcblu[16] = {  0,255, 60,  0,255,200,130, 50, 40,200, 50,255, 45,140,220,170};
-
-static gaint greys[16]  = {  0,255,215,140, 80,110,230,170,200, 50,155, 95,185,125, 65,177};
 
 static gadouble pdcwid[12] = {0.6, 0.8, 1.0, 1.25, 1.5, 1.75, 2.0, 2.2, 2.4, 2.6, 2.8, 3.0};
 
@@ -54,15 +51,13 @@ static gadouble widths[256];
 static char *fontname[100];
 static char *fn_serif = "serif";
 static char *fn_sans = "sans-serif";
-static char *fn_mono = "monospace";
-static gaint fnstatus[100];
 static gaint fnbold[100];
 static gaint fnitalic[100];
-static gaint hershflag;      /* For fn 1 to 6, use Hershey fonts or not */
-static gaint dbdevbck;       /* Device background color */
-static gaint dboutbck;       /* Ouput (image or hardcopy) background color */
-static gaint dbtransclr;     /* transparent color number (for hardcopy) */
-
+static gaint hershflag;                /* For fn 1 to 6, use Hershey fonts or not */
+static gaint dbdevbck;                 /* Device background color */
+static gaint dboutbck;                 /* Ouput (image or hardcopy) background color */
+static gaint dbtransclr;               /* transparent color number (for hardcopy) */
+static struct gxdsubs *dsubs=NULL;     /* function pointers for display */
 
 
 /* Initialize all the device backend persitent info on startup.
@@ -101,7 +96,6 @@ gaint i;
   /* Initialize font settings */
   for (i=0; i<100; i++) {
     fontname[i] = NULL;
-    fnstatus[i] = 0;
     fnbold[i] = 0;
     fnitalic[i] = 0;
   }
@@ -109,7 +103,7 @@ gaint i;
   /* these will be for emulations of hershey fonts 0-5, but not 3 */
   fontname[0] = fn_sans;   fnbold[0] = 0;  fnitalic[0] = 0;
   fontname[1] = fn_serif;  fnbold[1] = 0;  fnitalic[1] = 0;
-  fontname[2] = fn_mono;   fnbold[2] = 0;  fnitalic[2] = 1;
+  fontname[2] = fn_sans;  fnbold[2] = 0;  fnitalic[2] = 1;
   fontname[4] = fn_sans;   fnbold[4] = 1;  fnitalic[4] = 0;
   fontname[5] = fn_serif;  fnbold[5] = 1;  fnitalic[5] = 0;
 
@@ -133,7 +127,6 @@ char *newname;
     /* this font number has been previously assigned. Reset and free memory */
     free (fontname[fn]);
     fontname[fn] = NULL;
-    fnstatus[fn] = 0;
     fnbold[fn] = 0;
     fnitalic[fn] = 0;
   }
@@ -145,30 +138,19 @@ char *newname;
     for (i=0; i<len; i++) *(newname+i) = *(str+i);
     *(newname+len) = '\0';
     fontname[fn] = newname;
-    fnstatus[fn] = 0;
   }
   /* No 'else' statement here ... we can allow a font name to be NULL */
 }
-
-/* Set the status of a font for a font from 10 to 99.
-   The status is 1 if the font file has been opened.  */
-
-void gxdbsetfnstatus (gaint fn, gaint status) {
-  if (fn>9 && fn<100) fnstatus[fn] = status;
-}
-
 
 /* Query font settings */
 
 void gxdbqfont (gaint fn, struct gxdbquery *pdbq) {
   if (fn<0 || fn>99) {
     pdbq->fname   = fontname[0];
-    pdbq->fstatus = fnstatus[0];
     pdbq->fbold   = fnbold[0];
     pdbq->fitalic = fnitalic[0];
   } else {
     pdbq->fname   = fontname[fn];
-    pdbq->fstatus = fnstatus[fn];
     pdbq->fbold   = fnbold[fn];
     pdbq->fitalic = fnitalic[fn];
   }
@@ -237,8 +219,10 @@ char *newname;
 
   pnum = *itt;
   if (pnum<0 || pnum>=COLORMAX) return;
+
   /* trigger a pattern reset in the hardware layer */
-  gxsetpatt(pnum);
+  if (dsubs==NULL) dsubs = getdsubs();  /* get ptrs to the graphics display functions */
+  dsubs->gxsetpatt(pnum);
 
   if (pnames[pnum]) {
     /* reset tile filename and free memory */

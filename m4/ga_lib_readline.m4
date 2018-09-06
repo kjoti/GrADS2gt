@@ -95,4 +95,5 @@ AC_DEFUN([GA_LIB_READLINE], [
       m4_if([$2], [], [:], [$2])
     fi
   fi
-])dnl
+])
+

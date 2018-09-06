@@ -1,4 +1,4 @@
-/* Copyright (C) 1988-2016 by George Mason University. See file COPYRIGHT for more information. */
+/* Copyright (C) 1988-2017 by George Mason University. See file COPYRIGHT for more information. */
 
 /* Routines to print the graphics with calls to the GD library, needs gxGD.c */
 
@@ -11,22 +11,32 @@
 #include "gx.h"
 
 /* local variables */
-static char pout[256];
 static gadouble xrsize,yrsize;
 static gaint rc=0;
 
+/* Report on configuration */
+void gxpcfg (void) {
+  gxGDcfg();
+}
 
-/* local copy of real page size */
+/* Keep a local copy of real page size.
+   Called from gxstrt() in gxsubs.c */
 void gxpbgn (gadouble xsz, gadouble ysz) {
   xrsize = xsz;
   yrsize = ysz;
 }
 
-/* This is a no-op for the GD build */
-void gxpinit (gadouble xmx, gadouble ymx) {
-}
 
 /* render the image output with the GD library */
+/* Render the hardcopy output. Called from gacmd() in gauser.c
+     fnout -- output filename
+     xin,yin -- image sizes (-999 for non-image formats)
+     bwin -- background color
+     fmtflg -- output format
+     bgImage, fgImage -- background/foreground image filenames
+     tcolor -- transparent color
+     border -- a no-op arg for the GD build
+*/
 gaint gxprint (char *fnout, gaint xin, gaint yin, gaint bwin, gaint fmtflg,
                char *bgImage, char *fgImage, gaint tcolor, gadouble border) {
 
@@ -60,7 +70,7 @@ void gxpwid (gaint wid) {  /* new line thickness */
   gxGDwid (wid);
 }
 void gxprec (gadouble x1, gadouble x2, gadouble y1, gadouble y2) {  /* filled rectangle */
-  gxGDrec (x1,x2,y1,y2);
+  gxGDrec (x1, x2, y1, y2);
 }
 void gxpbpoly (void) {  /* start a polygon fill */
   gxGDbpoly ();
@@ -70,10 +80,10 @@ gaint gxpepoly (gadouble *xybuf, gaint xyc) {  /* terminate a polygon fill */
   return (rc);
 }
 void gxpmov (gadouble xpos, gadouble ypos) {  /* move to */
-  gxGDmov (xpos,ypos);
+  gxGDmov (xpos, ypos);
 }
 void gxpdrw (gadouble xpos, gadouble ypos) {  /* draw to */
-  gxGDdrw (xpos,ypos);
+  gxGDdrw (xpos, ypos);
 }
 void gxpflush (void) { /* finish drawing */
   gxGDflush();
@@ -83,6 +93,10 @@ void gxpsignal (gaint sig) { /* finish drawing */
 }
 
 /* these are no-ops in this build */
+void gxpinit (gadouble xmx, gadouble ymx) {
+}
+void gxpend (void) {
+}
 gadouble gxpch (char ch, gaint fn, gadouble x, gadouble y, gadouble w, gadouble h, gadouble rot) {
   return 0;
 }
@@ -90,6 +104,4 @@ gadouble gxpqchl (char ch, gaint fn, gadouble w) {
   return -999;
 }
 void gxpclip (gadouble x1, gadouble x2, gadouble y1, gadouble y2) {
-}
-void gxpend (void) {
 }

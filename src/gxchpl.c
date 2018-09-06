@@ -1,4 +1,4 @@
-/* Copyright (C) 1988-2016 by George Mason University. See file COPYRIGHT for more information. */
+/* Copyright (C) 1988-2017 by George Mason University. See file COPYRIGHT for more information. */
 
 /* Authored by B. Doty */
 
@@ -27,7 +27,6 @@ gadouble gxchplc (char, gaint, gadouble, gadouble, gadouble, gadouble, gadouble)
 gadouble gxchqlc (char, gaint, gadouble);
 void gxchplo (char *, int, gadouble, gadouble, gadouble, gadouble, gadouble);
 void houtch (char, gaint, gadouble, gadouble, gadouble, gadouble, gadouble);
-void gree();
 
 /* local variables */
 static char *fch[10];     /* Pointers to font data once it is read in */
@@ -49,6 +48,12 @@ gaint i;
 void gxchdf (gaint df) {
   if (df<0 || df>99) return;
   dfont = df;
+}
+
+/* Return default font number */
+
+gaint gxqdf (void) {
+  return dfont;
 }
 
 /* Plot character string */
@@ -216,12 +221,12 @@ gaint fn, supsub, nfn;
 
       /* First see if the rendering back end wants to plot this, or punt.
          If it wants to punt, we get a -999 back, so we use Hershey instead  */
+
       wact = gxqchl (*chrs, fn, w);
       if (wact < -900.0) {
         wact = gxchqlc (*chrs, fn, w);
       }
       cw = cw + wact;
-
       chrs++; len--;
     }
   }
@@ -267,12 +272,12 @@ char buff[20],*fname,*fdat;
       printf ("Error opening stroke character data set \n");
       if (fname!=NULL) {
         printf ("  Data set names = %s ; %s\n",fname,buff);
-        gree (fname,"f295");
+        free (fname);
       }
       return(1);
     }
   }
-  gree(fname,"f296");
+  free(fname);
 
   fseek(ifile,0L,2);
   tlen = ftell(ifile);

@@ -1,4 +1,4 @@
-/* Copyright (C) 1988-2016 by George Mason University. See file COPYRIGHT for more information. */
+/* Copyright (C) 1988-2017 by George Mason University. See file COPYRIGHT for more information. */
 
 /* Simplified X interface for Cairo -- no widgets, buttons, X-based pattern fill, etc. */
 
@@ -63,10 +63,8 @@ static gadouble xscl,yscl;                  /* Window Scaling */
 static gadouble xsize, ysize;               /* User specified size */
 static gaint dblmode;                       /* single or double buffering */
 static gaint width,height,depth;            /* Window dimensions */
-static struct gevent *evbase;   /* Anchor for GrADS event queue */
-
-/* Cairo related */
-static cairo_surface_t *surface=NULL,*surface2=NULL;
+static struct gevent *evbase;               /* Anchor for GrADS event queue */
+static cairo_surface_t *surface=NULL,*surface2=NULL; /* Cairo surfaces */
 
 /* All stuff passed to Xlib routines as args are put here in
    static areas since we are not invoking Xlib routines from main*/
@@ -104,8 +102,8 @@ void gxdbat (void) {
   batch = 1;
 }
 
-/* Routine to specify user X stuff (geom string, window name).  Must be
-   called before gxdbgn to have any affect */
+/* Routine to specify user-defined geometry string for X display window.
+   Must be called before gxdbgn to have any affect */
 
 void gxdgeo (char *arg) {
   ugeom = arg;
@@ -480,23 +478,27 @@ void gxdrdw (void) {                        /* Redraw when user resizes window *
   rstate = 1;
 }
 
-/* no widgets -- all routines are no-ops */
+/* no widgets -- all routines are no-ops (with warning messages) */
 
 
 /* button widget */
 void gxdpbn (gaint bnum, struct gbtn *pbn, gaint redraw, gaint btnrel, gaint nstat) {
+  printf("Warning: The Cairo graphics display interface does not support buttons\n");
 }
 
 /* drop menu */
 void gxdrmu (gaint mnum, struct gdmu *pmu, gaint redraw, gaint nstat) {
+  printf("Warning: The Cairo graphics display interface does not support drop menus\n");
 }
 
 /* rubber-band region */
 void gxdrbb (gaint num, gaint type, gadouble xlo, gadouble ylo, gadouble xhi, gadouble yhi, gaint mbc) {
+  printf("Warning: The Cairo graphics display interface does not support rubber band widgets\n");
 }
 
 /* Dialog box */
 char *gxdlg (struct gdlg *qry) {
+  printf("Warning: The Cairo graphics display interface does not support dialog boxes\n");
   return (NULL);
 }
 
@@ -506,10 +508,13 @@ void gxrs1wd (int wdtyp, int wdnum) {
 
 /* Screen save and show operations, also no-ops */
 void gxdssv (int frame) {
+  printf("Warning: The Cairo graphics display interface does not support the screen command\n");
 }
 void gxdssh (int cnt) {
+  printf("Warning: The Cairo graphics display interface does not support the screen command\n");
 }
 void gxdsfr (int frame) {
+  printf("Warning: The Cairo graphics display interface does not support the screen command\n");
 }
 
 /* Routine to install stipple pixmaps, a no-op */
@@ -517,17 +522,15 @@ void gxdsfr (int frame) {
 void gxdptn (int typ, int den, int ang) {
 }
 
-void dump_back_buffer(char *filename) {
+void gxdbb(char *filename) {
 }
 
-void dump_front_buffer(char *filename)  {
+void gxdfb(char *filename)  {
 }
 
-/* Invokes usage of software to generate wide lines (vs Xserver) */
-void gxwdln (void) {
-}
+/* Gives current window information */
 
-int win_data (struct xinfo *xinf) {
+gaint win_data (struct xinfo *xinf) {
   int absx, absy;
   Window dummy;
   XWindowAttributes result;
@@ -559,7 +562,7 @@ void gxdgcoord (gadouble x, gadouble y, gaint *i, gaint *j) {
 }
 
 void gxdimg(gaint *im, gaint imin, gaint jmin, gaint isiz, gaint jsiz) {
-  /* gxout imap is a no-op in the cairo build */
+  printf("Warning: The Cairo graphics display interface does not support 'gxout imap'\n");
 }
 
 /* Get the x bearing (width) used to plot a character */
@@ -571,7 +574,6 @@ gadouble gxdqchl (char ch, gaint fn, gadouble w) {
 /* Plot a character */
 gadouble gxdch (char ch, gaint fn, gadouble x, gadouble y, gadouble w, gadouble h, gadouble rot) {
 gadouble xadv;
-
 
   xadv = gxCch(ch,fn,x,y,w,h,rot);   /* draw character with Cairo, width of character returned */
   if (QLength(display)&&rstate) gxdeve(0);
@@ -605,4 +607,9 @@ void gxdsignal (gaint sig) {
 
 void gxdclip (gadouble xlo, gadouble xhi, gadouble ylo, gadouble yhi) {
   gxCclip (xlo,xhi,ylo,yhi);
+}
+
+void gxdcfg (void) {
+  printf("X%d.%d ",X_PROTOCOL,X_PROTOCOL_REVISION);
+  gxCcfg();
 }

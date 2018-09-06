@@ -1,4 +1,4 @@
-/* Copyright (C) 1988-2016 by George Mason University. See file COPYRIGHT for more information. */
+/* Copyright (C) 1988-2017 by George Mason University. See file COPYRIGHT for more information. */
 
 /* Originally authored by B. Doty */
 
@@ -7,35 +7,20 @@
 #include <math.h>
 #include <limits.h>
 #include <string.h>
+#include <ctype.h>
 /*
  * Include ./configure's header file
  */
 #ifdef HAVE_CONFIG_H
 
 #include "config.h"
-#if READLINE == 1
-#include <sys/types.h>
-#include <sys/file.h>
-#include <sys/stat.h>
-#include <sys/errno.h>
-#include "readline/readline.h"
-#include "readline/history.h"
-#endif
 
-/* If autoconfed, only include malloc.h when it's presen */
+/* If autoconfed, only include malloc.h when it's present */
 #ifdef HAVE_MALLOC_H
 #include <malloc.h>
 #endif
 
 #else /* undef HAVE_CONFIG_H */
-#if READLINE == 1
-#include <sys/types.h>
-#include <sys/file.h>
-#include <sys/stat.h>
-#include <sys/errno.h>
-#include "readline/readline.h"
-#include "readline/history.h"
-#endif
 
 #include <malloc.h>
 
@@ -46,7 +31,7 @@
 
 struct gamfcmn mfcmn;
 
-static char pout[256];   /* Build Error msgs here */
+static char pout[1256];   /* Build Error msgs here */
 
 char *gatxtl(char *str, gaint color);
 
@@ -74,27 +59,6 @@ gaint past,cnt;
   }
 }
 
-/* Retrieves the next command from the user.  Leading blanks
-   are stripped.  The number of characters entered before the
-   CR is returned.                                                    */
-
-#if READLINE == 1
-gaint nxrdln (char *cmd, char *prompt) {
-char *ch, *ch2;
-
-  ch=readline(gatxtl(prompt,-1));
-  if ( ch== NULL) {
-    return(-1);
-  } else {
-    ch2 = ch;
-    while (*ch == ' ') ch++;   /* Skip leading blanks */
-    strcpy(cmd, ch);
-    if (*ch) add_history(ch);   /* Skip blank lines */
-  }
-  return(strlen(cmd)+1);
-
-}
-#endif
 
 /* Date/Time manipulation routines.  Note that these routines
    are not particularly efficient, thus Date/Time conversions
@@ -433,7 +397,7 @@ char monam[5];
     if (*ch == ':' || tolower(*ch) == 'z') {
       if (val>23) {
         gaprnt (0,"Syntax Error:  Invalid Date/Time value.\n");
-        snprintf(pout,255,"  Hour = %i -- greater than 23\n",val);
+        snprintf(pout,1255,"  Hour = %i -- greater than 23\n",val);
         gaprnt (0,pout);
         return (NULL);
       }
@@ -444,7 +408,7 @@ char monam[5];
           ch = intprs (ch,&val);
           if (val>59) {
             gaprnt (0,"Syntax Error:  Invalid Date/Time value.\n");
-            snprintf(pout,255,"  Minute = %i -- greater than 59\n",val);
+            snprintf(pout,1255,"  Minute = %i -- greater than 59\n",val);
             gaprnt (0,pout);
             return (NULL);
           }
@@ -521,7 +485,7 @@ char monam[5];
   if (dtim->mo==2 && qleap(dtim->yr)) i = 29;
   if (dtim->dy > i) {
     gaprnt (0,"Syntax Error:  Invalid Date/Time value.\n");
-    snprintf(pout,255,"  Day = %i -- greater than %i \n",dtim->dy,i);
+    snprintf(pout,1255,"  Day = %i -- greater than %i \n",dtim->dy,i);
     gaprnt (0,pout);
     return (NULL);
   }
@@ -564,7 +528,7 @@ char id[3];
     else if (cmpwrd("mn",id)) dtim->mn = val;
     else {
       gaprnt (0,"Syntax Error:  Invalid Date/Time offset.\n");
-      snprintf(pout,255,"  Expecting yr/mo/dy/hr/mn, found %s\n",id);
+      snprintf(pout,1255,"  Expecting yr/mo/dy/hr/mn, found %s\n",id);
       gaprnt (0,pout);
       return (NULL);
     }
@@ -840,7 +804,7 @@ char name[15],ename[20];
   name[i] = '\0';
   if (i>4) {
     gaprnt (0,"Syntax Error:  Invalid dimension expression \n");
-    snprintf(pout,255,"  Expecting x/y/z/t/offt/e/lon/lat/lev/time/ens, found %s\n",name);
+    snprintf(pout,1255,"  Expecting x/y/z/t/offt/e/lon/lat/lev/time/ens, found %s\n",name);
     gaprnt (0,pout);
     return (NULL);
   }
@@ -851,7 +815,7 @@ char name[15],ename[20];
   else if (*ch == '-') op = 2;
   else {
     gaprnt (0,"Syntax Error:  Invalid dimension expression\n");
-    snprintf(pout,255,"  Expecting +/-/= operator, found %c\n",*ch);
+    snprintf(pout,1255,"  Expecting +/-/= operator, found %c\n",*ch);
     gaprnt (0,pout);
     return (NULL);
   }
@@ -908,7 +872,7 @@ char name[15],ename[20];
   else if (type==0 && cmpwrd("r",name)) *dim = 10;
   else {
     gaprnt (0,"Syntax Error:  Invalid dimension expression\n");
-    snprintf(pout,255,"  Expecting x/y/z/t/offt/e/lat/lon/lev/time/ens, found %s\n",name);
+    snprintf(pout,1255,"  Expecting x/y/z/t/offt/e/lat/lon/lev/time/ens, found %s\n",name);
     gaprnt (0,pout);
     return (NULL);
   }
@@ -931,7 +895,7 @@ char name[15],ename[20];
       if (*dim==pst->idim || *dim==pst->jdim) {
         gaprnt (0,"Syntax Error:  Invalid dimension expression\n");
         gaprnt (0,"  Cannot use an offset value with a varying dimension\n");
-        snprintf(pout,255,"  Varying dimension = %i \n",*dim);
+        snprintf(pout,1255,"  Varying dimension = %i \n",*dim);
         gaprnt (0,pout);
         return (NULL);
       }
@@ -971,7 +935,7 @@ char name[15],ename[20];
       if (*dim==pst->idim || *dim==pst->jdim) {
         gaprnt (0,"Syntax Error:  Invalid dimension expression\n");
         gaprnt (0,"  Cannot use an offset value with a varying dimension\n");
-        snprintf(pout,255,"  Varying dimension = %i \n",*dim);
+        snprintf(pout,1255,"  Varying dimension = %i \n",*dim);
         gaprnt (0,pout);
         return (NULL);
       }
@@ -1003,7 +967,7 @@ char name[15],ename[20];
       }
       if (enum1<0) {
         gaprnt (0,"Syntax Error:  Invalid dimension expression\n");
-        snprintf(pout,255,"  Ensemble name \"%s\" not found\n",ename);
+        snprintf(pout,1255,"  Ensemble name \"%s\" not found\n",ename);
         gaprnt (0,pout);
         return (NULL);
       }
@@ -2307,7 +2271,7 @@ size_t sz;
  sz = sizeof(gadouble)*num;
  vvv = (gadouble *)galloc(sz,"cpscal");
  if (vvv==NULL) {
-   snprintf(pout,255,"cpscal memory allocation error; dim=%d lin=%d num=%d\n",dim,lin,num);
+   snprintf(pout,1255,"cpscal memory allocation error; dim=%d lin=%d num=%d\n",dim,lin,num);
    gaprnt(0,pout);
    return (NULL);
  }
@@ -2423,3 +2387,33 @@ off_t ftello(FILE *stream) {
   return (off_t)ftell(stream);
 }
 #endif
+
+
+#if READLINE==1
+#include <sys/types.h>
+#include <sys/file.h>
+#include <sys/stat.h>
+#include <sys/errno.h>
+#include <readline/readline.h>
+#include <readline/history.h>
+
+/* Retrieves the next command from the user.  Leading blanks
+   are stripped.  The number of characters entered before the
+   CR is returned.                                                    */
+
+gaint nxrdln (char *cmd, char *prompt) {
+char *ch, *ch2;
+
+  ch=readline(gatxtl(prompt,-1));
+  if ( ch== NULL) {
+    return(-1);
+  } else {
+    ch2 = ch;
+    while (*ch == ' ') ch++;   /* Skip leading blanks */
+    strcpy(cmd, ch);
+    if (*ch) add_history(ch);   /* Skip blank lines */
+  }
+  return(strlen(cmd)+1);
+}
+
+#endif  /* matches #if READLINE==1 */

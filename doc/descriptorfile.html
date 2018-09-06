@@ -35,6 +35,7 @@ body {
   <a href="#unpack">UNPACK</a> <br>
   <a href="#FILEHEADER">FILEHEADER</a><br>
   <a href="#XYHEADER">XYHEADER</a><br>
+  <a href="#XYTRAILER">XYTRAILER</a><br>
   <a href="#THEADER">THEADER</a><br>
   <a href="#THEADER">HEADERBYTES</a><br>
   <a href="#TRAILERBYTES">TRAILERBYTES</a><br>
@@ -324,17 +325,30 @@ href="cmd/query.html">query</a> command and it will appear in the directory list
 	 each time block of binary data. This entry is only valid for GrADS gridded data sets. See the section on <a href="aboutgriddeddata.html#structure">structure of a gridded binary data file</a> for more information.</td>
   </tr>
   <tr> 
-    <td bgcolor="#CCCCCC"> <a name="XYHEADER"> <b>XYHEADER</b> <i>length</i></a>    </td>
+  <td bgcolor="#CCCCCC"> <a name="XYHEADER"> <b>XYHEADER</b> <i>length</i></a>    </td>
     <td width="74" align="right" valign="top" bgcolor="#CCCCCC"><a href="#TOP" class="item9">back 
       to top</a></td>
   </tr>
   <tr> 
     <td colspan="2">This optional entry tells GrADS that the data file has a header 
-      record of length bytes preceding each horizontal grid (XY block) of binary 
+      record of <em>length</em> bytes preceding each horizontal grid (XY block) of binary 
       data. This entry is only valid for GrADS gridded 
       data sets. See the section on <a
 href="aboutgriddeddata.html#structure">structure of a gridded binary data file</a> 
       for more information.</td>
+  </tr>
+      <tr>
+    <td bgcolor="#CCCCCC"> <a name="XYTRAILER"> <b>XYTRAILER</b> <i>length</i></a>    </td>
+    <td width="74" align="right" valign="top" bgcolor="#CCCCCC"><a href="#TOP" class="item9">back 
+      to top</a></td>
+  </tr>
+  <tr> 
+    <td colspan="2">(<span class="red">GrADS version 2.1.1.b0+</span>) This optional entry tells GrADS that the data file has a trailer 
+      record of <em>length</em> bytes following each horizontal grid (XY block) of binary 
+      data. This entry is only valid for GrADS gridded 
+      data sets. See the section on <a
+href="aboutgriddeddata.html#structure">structure of a gridded binary data file</a> 
+      for more information. </td>
   </tr>
   <tr> 
     <td bgcolor="#CCCCCC"><strong><a name="XVAR"></a>XVAR</strong> <em>x,y</em></td>

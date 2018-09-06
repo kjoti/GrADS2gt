@@ -1,4 +1,4 @@
-/* Copyright (C) 1988-2016 by George Mason University. See file COPYRIGHT for more information. */
+/* Copyright (C) 1988-2017 by George Mason University. See file COPYRIGHT for more information. */
 
 #define RSIZ 3600  /* increased from 600 in version 1.9 */
 
@@ -180,3 +180,4 @@ gaint gsstmt (struct gsrecd *, struct gscmn *);
 gaint gsfallw (struct gscmn *);
 gaint gsfpath (struct gscmn *);
 gaint gsfmath (struct gscmn *, gaint);
+gaint gsfsys (struct gscmn *);

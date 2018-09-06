@@ -1,4 +1,4 @@
-/* Copyright (C) 1988-2016 by George Mason University. See file COPYRIGHT for more information. */
+/* Copyright (C) 1988-2017 by George Mason University. See file COPYRIGHT for more information. */
 
 /* Authored by B. Doty */
 
@@ -89,11 +89,11 @@ char hdr[3],rec[1530];
       imap = gxwopen(mopt->mpdset,"rb");
       if (imap==0) {
         printf ("Open Error on Map Data Set: %s\n",fname);
-        gree(fname,"f297");
+        free(fname);
         return;
       }
     }
-    gree(fname,"f298");
+    free(fname);
   }
 
   /* Read and process each record */

@@ -1,4 +1,4 @@
-/* Copyright (C) 1988-2016 by George Mason University. See file COPYRIGHT for more information. */
+/* Copyright (C) 1988-2017 by George Mason University. See file COPYRIGHT for more information. */
 
 /*  Originally authored by B. Doty.
     Some functions provided by others. */
@@ -16,6 +16,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <dlfcn.h>
 #include <string.h>
 #include "grads.h"
 
@@ -23,15 +24,13 @@
 #include "gaudx.h"
 #endif
 
-/* expose Mike Fiorino's global struct to these routines for warning level setting */
-extern struct gamfcmn mfcmn;
 
-static struct gaufb *ufba;  /* Anchor for user function defs */
-char *gxgnam(char *);       /* This is also in gx.h */
+extern struct gamfcmn mfcmn;     /* for global warning level settings */
+static struct gaupb *upba=NULL;  /* Anchor for user defined plug-in */
+static char pout[1256];          /* Build error msgs here */
 
 /* Function routine names.  Add a new function by putting the
    prototype here and adding to the if tests below.  */
-
 gaint ffsqrt   (struct gafunc *, struct gastat *);
 gaint ffsin    (struct gafunc *, struct gastat *);
 gaint ffcos    (struct gafunc *, struct gastat *);
@@ -42,6 +41,7 @@ gaint ffexp    (struct gafunc *, struct gastat *);
 gaint fflog    (struct gafunc *, struct gastat *);
 gaint fflog10  (struct gafunc *, struct gastat *);
 gaint ffabs    (struct gafunc *, struct gastat *);
+gaint ffif     (struct gafunc *, struct gastat *);
 gaint ffpow    (struct gafunc *, struct gastat *);
 gaint ffmag    (struct gafunc *, struct gastat *);
 gaint ffatan   (struct gafunc *, struct gastat *);
@@ -102,108 +102,116 @@ gaint ave      (struct gafunc *, struct gastat *, gaint);
 gaint scorr    (struct gafunc *, struct gastat *, gaint);
 gaint tvrh2q   (gadouble, gadouble, gadouble, gadouble *, gadouble *);
 gaint fndarg   (char *, gaint *);
-void cosadj  (struct gagrid *);
-char doaave (struct gagrid *, gadouble, gadouble, gadouble, gadouble, gaint, gadouble *);
-gaint mnmx (struct gafunc *, struct gastat *, int);
+void cosadj    (struct gagrid *);
+char doaave    (struct gagrid *, gadouble, gadouble, gadouble, gadouble, gaint, gadouble *);
+gaint mnmx     (struct gafunc *, struct gastat *, int);
 
-static char pout[256];   /* Build error msgs here */
 
+/* the pointer to the anchor of user-defined plug-ins is set from grads.c */
+void setupba (struct gaupb *upb) {
+  upba = upb;
+}
+
+
+/* Handles function calls from gaexpr.c  */
 char *rtnprs (char *ch, char *name, struct gastat *pst) {
 struct gafunc *pfc;
 struct gastat *pst2;
-struct gaufb *ufb;
+struct gaupb *upb=NULL;
 char *pos;
 gaint pdeep,rc;
 size_t sz;
-gaint (*fpntr)(struct gafunc *, struct gastat *)=NULL;
+gaint (*fpntr)(struct gafunc *, struct gastat *);
 
-  /* Find this function name and get the function pointer. */
+  /* Find the function name and get the function pointer. */
+  fpntr=NULL;
 
-  ufb = ufba;
-  while (ufb) {
-    if (cmpwrd(ufb->name,name)) break;
-    ufb = ufb->ufb;
-  }
-
-  if (ufb==NULL) {
-    fpntr = NULL;
-    if (cmpwrd("sqrt",name)) fpntr = ffsqrt;
-    if (cmpwrd("sin",name)) fpntr = ffsin;
-    if (cmpwrd("cos",name)) fpntr = ffcos;
-    if (cmpwrd("tan",name)) fpntr = fftan;
-    if (cmpwrd("asin",name)) fpntr = ffasin;
-    if (cmpwrd("acos",name)) fpntr = ffacos;
-    if (cmpwrd("exp",name)) fpntr = ffexp;
-    if (cmpwrd("log",name)) fpntr = fflog;
-    if (cmpwrd("log10",name)) fpntr = fflog10;
-    if (cmpwrd("abs",name)) fpntr = ffabs;
-    if (cmpwrd("pow",name)) fpntr = ffpow;
-    if (cmpwrd("ave",name)) fpntr = ffave;
-    if (cmpwrd("mag",name)) fpntr = ffmag;
-    if (cmpwrd("atan2",name)) fpntr = ffatan;
-    if (cmpwrd("hdivg",name)) fpntr = ffhdiv;
-    if (cmpwrd("hcurl",name)) fpntr = ffhcrl;
-    if (cmpwrd("vint",name)) fpntr = ffvint;
-    if (cmpwrd("tloop",name)) fpntr = fftlp;
-    if (cmpwrd("eloop",name)) fpntr = ffelp;
-    if (cmpwrd("aave",name)) fpntr = ffaav;
-    if (cmpwrd("scorr",name)) fpntr = ffscor;
-    if (cmpwrd("tcorr",name)) fpntr = fftcor;
-    if (cmpwrd("tmave",name)) fpntr = fftmav;
-    if (cmpwrd("maskout",name)) fpntr = ffmask;
-    if (cmpwrd("gr2stn",name)) fpntr = ffg2s;
-    if (cmpwrd("tvrh2q",name)) fpntr = fftv2q;
-    if (cmpwrd("tvrh2t",name)) fpntr = fftv2t;
-    if (cmpwrd("gint",name)) fpntr = ffgint;
-    if (cmpwrd("oacres",name)) fpntr = ffoacr;
-    if (cmpwrd("oabin",name)) fpntr = ffoabn;
-    if (cmpwrd("smth9",name)) fpntr = ffsmth;
-    if (cmpwrd("stnave",name)) fpntr = ffsave;
-    if (cmpwrd("stnmin",name)) fpntr = ffsmin;
-    if (cmpwrd("stnmax",name)) fpntr = ffsmax;
-    if (cmpwrd("skip",name)) fpntr = ffskip;
-    if (cmpwrd("const",name)) fpntr = ffcnst;
-    if (cmpwrd("cdiff",name)) fpntr = ffcdif;
-    if (cmpwrd("mean",name)) fpntr = ffmn;
-    if (cmpwrd("amean",name)) fpntr = ffamn;
-    if (cmpwrd("sum",name)) fpntr = ffsum;
-    if (cmpwrd("sumg",name)) fpntr = ffsumg;
-    if (cmpwrd("asum",name)) fpntr = ffasum;
-    if (cmpwrd("asumg",name)) fpntr = ffasumg;
-    if (cmpwrd("atot",name)) fpntr = ffatot;
-    if (cmpwrd("grarea",name)) fpntr = ffgrarea;
-    if (cmpwrd("coll2gr",name)) fpntr = ffclgr;
-    if (cmpwrd("min",name)) fpntr = ffmin;
-    if (cmpwrd("max",name)) fpntr = ffmax;
-    if (cmpwrd("minloc",name)) fpntr = ffminl;
-    if (cmpwrd("maxloc",name)) fpntr = ffmaxl;
-    if (cmpwrd("fndlvl",name)) fpntr = ffflvl;
-    if (cmpwrd("sregr",name)) fpntr = ffsreg;
-    if (cmpwrd("tregr",name)) fpntr = fftreg;
-    if (cmpwrd("s2g1d",name)) fpntr = ffs2g1d;
-    if (cmpwrd("lterp",name)) fpntr = fflterp;
-    if (cmpwrd("amin",name)) fpntr = ffamin;
-    if (cmpwrd("amax",name)) fpntr = ffamax;
-    if (cmpwrd("aminlocx",name)) fpntr = ffaminlocx;
-    if (cmpwrd("aminlocy",name)) fpntr = ffaminlocy;
-    if (cmpwrd("amaxlocx",name)) fpntr = ffamaxlocx;
-    if (cmpwrd("amaxlocy",name)) fpntr = ffamaxlocy;
+  /* start with the list of built-in functions */
+  if (cmpwrd("sqrt",name)) fpntr = ffsqrt;
+  if (cmpwrd("sin",name)) fpntr = ffsin;
+  if (cmpwrd("cos",name)) fpntr = ffcos;
+  if (cmpwrd("tan",name)) fpntr = fftan;
+  if (cmpwrd("asin",name)) fpntr = ffasin;
+  if (cmpwrd("acos",name)) fpntr = ffacos;
+  if (cmpwrd("exp",name)) fpntr = ffexp;
+  if (cmpwrd("log",name)) fpntr = fflog;
+  if (cmpwrd("log10",name)) fpntr = fflog10;
+  if (cmpwrd("abs",name)) fpntr = ffabs;
+  if (cmpwrd("if",name)) fpntr = ffif;
+  if (cmpwrd("pow",name)) fpntr = ffpow;
+  if (cmpwrd("ave",name)) fpntr = ffave;
+  if (cmpwrd("mag",name)) fpntr = ffmag;
+  if (cmpwrd("atan2",name)) fpntr = ffatan;
+  if (cmpwrd("hdivg",name)) fpntr = ffhdiv;
+  if (cmpwrd("hcurl",name)) fpntr = ffhcrl;
+  if (cmpwrd("vint",name)) fpntr = ffvint;
+  if (cmpwrd("tloop",name)) fpntr = fftlp;
+  if (cmpwrd("eloop",name)) fpntr = ffelp;
+  if (cmpwrd("aave",name)) fpntr = ffaav;
+  if (cmpwrd("scorr",name)) fpntr = ffscor;
+  if (cmpwrd("tcorr",name)) fpntr = fftcor;
+  if (cmpwrd("tmave",name)) fpntr = fftmav;
+  if (cmpwrd("maskout",name)) fpntr = ffmask;
+  if (cmpwrd("gr2stn",name)) fpntr = ffg2s;
+  if (cmpwrd("tvrh2q",name)) fpntr = fftv2q;
+  if (cmpwrd("tvrh2t",name)) fpntr = fftv2t;
+  if (cmpwrd("gint",name)) fpntr = ffgint;
+  if (cmpwrd("oacres",name)) fpntr = ffoacr;
+  if (cmpwrd("oabin",name)) fpntr = ffoabn;
+  if (cmpwrd("smth9",name)) fpntr = ffsmth;
+  if (cmpwrd("stnave",name)) fpntr = ffsave;
+  if (cmpwrd("stnmin",name)) fpntr = ffsmin;
+  if (cmpwrd("stnmax",name)) fpntr = ffsmax;
+  if (cmpwrd("skip",name)) fpntr = ffskip;
+  if (cmpwrd("const",name)) fpntr = ffcnst;
+  if (cmpwrd("cdiff",name)) fpntr = ffcdif;
+  if (cmpwrd("mean",name)) fpntr = ffmn;
+  if (cmpwrd("amean",name)) fpntr = ffamn;
+  if (cmpwrd("sum",name)) fpntr = ffsum;
+  if (cmpwrd("sumg",name)) fpntr = ffsumg;
+  if (cmpwrd("asum",name)) fpntr = ffasum;
+  if (cmpwrd("asumg",name)) fpntr = ffasumg;
+  if (cmpwrd("atot",name)) fpntr = ffatot;
+  if (cmpwrd("grarea",name)) fpntr = ffgrarea;
+  if (cmpwrd("coll2gr",name)) fpntr = ffclgr;
+  if (cmpwrd("min",name)) fpntr = ffmin;
+  if (cmpwrd("max",name)) fpntr = ffmax;
+  if (cmpwrd("minloc",name)) fpntr = ffminl;
+  if (cmpwrd("maxloc",name)) fpntr = ffmaxl;
+  if (cmpwrd("fndlvl",name)) fpntr = ffflvl;
+  if (cmpwrd("sregr",name)) fpntr = ffsreg;
+  if (cmpwrd("tregr",name)) fpntr = fftreg;
+  if (cmpwrd("s2g1d",name)) fpntr = ffs2g1d;
+  if (cmpwrd("lterp",name)) fpntr = fflterp;
+  if (cmpwrd("amin",name)) fpntr = ffamin;
+  if (cmpwrd("amax",name)) fpntr = ffamax;
+  if (cmpwrd("aminlocx",name)) fpntr = ffaminlocx;
+  if (cmpwrd("aminlocy",name)) fpntr = ffaminlocy;
+  if (cmpwrd("amaxlocx",name)) fpntr = ffamaxlocx;
+  if (cmpwrd("amaxlocy",name)) fpntr = ffamaxlocy;
 
 #ifdef OPENGRADS
-    /* OpenGrADS User Defined Extensions */
-    if (fpntr==NULL) *(void **) &fpntr = (void *) gaudf(name);
+  /* OpenGrADS User Defined Extensions */
+  if (fpntr==NULL) *(void **) &fpntr = (void *) gaudf(name);
 #endif
 
-    if (fpntr==NULL) {                       /* Didn't find it....      */
-      gaprnt (0,"Syntax Error:  Invalid Operand \n");
-      snprintf(pout,255,"  '%s' not a variable or function name\n",name);
-      gaprnt (0,pout);
-      return (NULL);
+  /* check the list of plug-ins functions/defops */
+  if (fpntr==NULL) {
+    upb = upba;
+    while (upb) {
+      if (cmpwrd(upb->name,name) && upb->type<=2) break;
+      upb = upb->upb;
     }
   }
 
-  /* Allocate storage for gastat and gafunc structures                */
+  if (upb==NULL && fpntr==NULL) {           /* Didn't find it....      */
+    gaprnt (0,"Syntax Error:  Invalid Operand \n");
+    snprintf(pout,1255,"  '%s' not a variable or function name\n",name);
+    gaprnt (0,pout);
+    return (NULL);
+  }
 
+  /* Allocate storage for gastat and gafunc structures                */
   sz = sizeof(struct gafunc);
   pfc = (struct gafunc *)galloc(sz,"funccall");
   sz = sizeof(struct gastat);
@@ -212,7 +220,6 @@ gaint (*fpntr)(struct gafunc *, struct gastat *)=NULL;
   *pst2 = *pst;                            /* Provide copy of gastat  */
 
   /* Parse the argument list                                          */
-
   pfc->argnum = 0;                         /* Initial arg count       */
   if (*ch=='(') {                          /* If no leading paren..   */
     ch++;                                  /* Past the '('            */
@@ -246,15 +253,16 @@ gaint (*fpntr)(struct gafunc *, struct gastat *)=NULL;
 
   /* Everything is all set.  Call the function routine.               */
 
-  rc = (*fpntr)(pfc, pst2);           /* Call the function       */
+  if (upb) rc = ffudpi(pfc,pst2,upb);      /* Call the plug-in        */
+  else rc = (*fpntr)(pfc, pst2);           /* Call the function       */
 
   if (rc==-1) {
-    snprintf(pout,255,"Error in %s : Arg was stn data type\n",name);
+    snprintf(pout,1255,"Error in %s : Arg was stn data type\n",name);
     gaprnt (0,pout);
   }
 
   if (rc) {                                /* If an error occurred... */
-    snprintf(pout,255,"Operation Error:  Error from %s function\n",name);
+    snprintf(pout,1255,"Operation Error:  Error from %s function\n",name);
     gaprnt (0,pout);
     goto err;
   }
@@ -328,7 +336,7 @@ char *valu;
     }
   }
   if (ecnt>0) {
-    snprintf(pout,255,"Warning from SQRT:  Data has %i values < zero \n",ecnt);
+    snprintf(pout,1255,"Warning from SQRT:  Data has %i values < zero \n",ecnt);
     gaprnt (1,pout);
     gaprnt (1,"                    These were set to the undefined value \n");
   }
@@ -665,7 +673,7 @@ char *valu;
     }
   }
   if (ecnt>0) {
-    snprintf(pout,255,"Warning from LOG:  Data has %i values <= zero \n",ecnt);
+    snprintf(pout,1255,"Warning from LOG:  Data has %i values <= zero \n",ecnt);
     gaprnt (1,pout);
     gaprnt (1,"                   These were set to the undefined value \n");
   }
@@ -719,13 +727,126 @@ char *valu;
     }
   }
   if (ecnt>0) {
-    snprintf(pout,255,"Warning from LOG10:  Data has %i values <= zero \n",ecnt);
+    snprintf(pout,1255,"Warning from LOG10:  Data has %i values <= zero \n",ecnt);
     gaprnt (1,pout);
     gaprnt (1,"                     These were set to the undefined value \n");
   }
 
   return (0);
 }
+
+/* Implement the IF function.  Three expressions for the operation.
+   The first arg is assumed to be the result of a logical expression. */
+
+gaint ffif (struct gafunc *pfc, struct gastat *pst) {
+struct gastat pst2,pst3;
+struct gagrid *mypgr,*pgr1,*pgrres1,*pgrres2,*pgrres3;
+gaint rc,i,savaloc;
+
+  if (pfc->argnum!=3) {
+    gaprnt (0,"Error from IF:  Too many or too few args \n");
+    gaprnt (0,"                Three arguments expected \n");
+    return (1);
+  }
+
+  pst2 = *pst;
+  pst3 = *pst;
+
+  rc = gaexpr(pfc->argpnt[0],pst);
+  if (rc) {
+    return (rc);
+  }
+
+  rc = gaexpr(pfc->argpnt[1],&pst2);
+  if (rc) {
+    gafree (pst);
+    return (rc);
+  }
+
+  rc = gaexpr(pfc->argpnt[2],&pst3);
+  if (rc) {
+    gafree (pst);
+    gafree (&pst2);
+    return (rc);
+  }
+
+  if (pst->type!=1 || pst2.type!=1 || pst3.type!=1) {
+    gaprnt (0,"Error from IF:  Arguments must be grids \n");
+    goto err1;
+  }
+
+  /* We need a copy of the result of the logical expression (arg 1)
+     since we need to use that result twice, and gagrop
+     may put its result grid there for our first
+     step.  We will re-use the scaling info, but we have to be
+     careful with the alocf issue. */
+
+  mypgr = galloc(sizeof(struct gagrid),"ffif3");
+  if (mypgr==NULL) goto err1;
+
+  pgr1 = pst->result.pgr;
+  savaloc = pgr1->alocf;   /* preserve original alocf value */
+  *mypgr = *pgr1;
+  mypgr->alocf = 0;
+  pgr1->alocf = 0;   /* don't let scaling info get freed until we are ready */
+
+  if (mypgr->idim != -1 && mypgr->jdim != -1) {
+    mypgr->grid = galloc(sizeof(gadouble)*mypgr->isiz*mypgr->jsiz,"ffif1");
+    if (mypgr->grid==NULL) goto err1;
+    mypgr->umask = galloc(sizeof(char)*mypgr->isiz*mypgr->jsiz,"ffif2");
+    if (mypgr->umask==NULL) {
+      gree (mypgr->grid,"ffif1");
+      goto err1;
+    }
+    for (i=0; i<mypgr->isiz*mypgr->jsiz; i++) {
+      *(mypgr->grid+i) = *(pgr1->grid+i);
+      *(mypgr->umask+i) = *(pgr1->umask+i);
+    }
+  }
+
+  /* Don't let gagrop free anything  */
+
+  rc = 0;
+  pgrres1=NULL; pgrres2=NULL; pgrres3=NULL;
+
+  pgrres1 = gagrop(pgr1, pst2.result.pgr, 14, 0);
+  if (pgrres1==NULL) rc = 1;
+  if (rc==0) pgrres2 = gagrop(mypgr, pst3.result.pgr, 15, 0);
+  if (pgrres2==NULL) rc = 1;
+  if (rc==0) pgrres3 = gagrop(pgrres2, pgrres1, 2, 0);
+  if (pgrres3==NULL) rc = 1;
+
+  /* We don't really know what original pgr ended up being our final result.
+     We sure don't want to free that one! We'll do something kloodgy
+     and compare pointers.  On error, pgrres3 ends up NULL, so everything
+     will get free'd  */
+
+  /* printf ("xxxx %p %p %p %p %p\n",pgrres3,pst->result.pgr,
+                   pst2.result.pgr,pst3.result.pgr,mypgr);
+  printf ("xxxx before gafree pst\n",rc); */
+
+  if (pgrres3 == mypgr) mypgr->alocf = savaloc; /* propagate alocf... */
+  else pgr1->alocf = savaloc;      /*  or restore it */
+
+  if (pgrres3 != pst->result.pgr) gafree(pst);
+  if (pgrres3 != pst2.result.pgr) gafree(&pst2);
+  if (pgrres3 != pst3.result.pgr) gafree(&pst3);
+  if (pgrres3 != mypgr) gagfre(mypgr);
+
+  if (rc==0) {
+    pst->type = 1;
+    pst->result.pgr = pgrres3;
+  }
+
+  return (rc);
+
+  err1:
+    gafree(pst);
+    gafree(&pst2);
+    gafree(&pst3);
+    return(1);
+}
+
 
 gaint ffpow (struct gafunc *pfc, struct gastat *pst) {
 struct gastat pst2;
@@ -837,9 +958,6 @@ gadouble r,s,r1,r2,r3,s1,s2,s3,fijm1,fij,fijp1,fijp2,u,fr[4],del,del2,del3;
 char uijm1,uij,uijp1,uijp2;
 struct dt t1g1;
 gadouble tval;
-/* only needed for legacy bilin code */
-/* gadouble xd,yd,rd,t1,t2;   */
-/* gaint i1,j1,idir2,jdir2; */
 
   rad = M_PI/180.0;
 
@@ -1737,7 +1855,7 @@ char *ch,*fnam,resu;
   /* Check for valid number of args       */
   if (pfc->argnum==2 && !strncmp(pfc->argpnt[1],"global",1)) gflag=1;
   if (pfc->argnum!=5 && !gflag) {
-    snprintf(pout,255,"Error from %s:  Too many or too few args\n",fnam);
+    snprintf(pout,1255,"Error from %s:  Too many or too few args\n",fnam);
     gaprnt(0,pout);
     gaprnt (0,"                  5 arguments expected \n");
     return (1);
@@ -1745,7 +1863,7 @@ char *ch,*fnam,resu;
 
   /* Check environment.  Z or T or E can't vary.  */
   if (pst->idim>1 || pst->jdim>1) {
-    snprintf(pout,255,"Error from %s  Invalid environment.  ",fnam);
+    snprintf(pout,1255,"Error from %s  Invalid environment.  ",fnam);
     gaprnt(0,pout);
     gaprnt (0,"Z, T, or E can't vary.\n");
     return (1);
@@ -1813,7 +1931,7 @@ char *ch,*fnam,resu;
   return (0);
 
 err1:
-  snprintf(pout,255,"Error from %s:  Invalid dimension expression \n",fnam);
+  snprintf(pout,1255,"Error from %s:  Invalid dimension expression \n",fnam);
   gaprnt(0,pout);
   return (1);
 }
@@ -1872,7 +1990,7 @@ gaint mnmx (struct gafunc *pfc, struct gastat *pst, int sel) {
   /* Check for valid number of args       */
   if (pfc->argnum==2 && !strncmp(pfc->argpnt[1],"global",1)) gflag=1;
   if (pfc->argnum!=5 && !gflag) {
-    snprintf(pout,255,"Error from %s:  Too many or too few args\n",fnam);
+    snprintf(pout,1255,"Error from %s:  Too many or too few args\n",fnam);
     gaprnt(0,pout);
     gaprnt (0,"                  5 arguments expected \n");
     return (1);
@@ -1880,7 +1998,7 @@ gaint mnmx (struct gafunc *pfc, struct gastat *pst, int sel) {
 
   /* Check environment.  Z or T or E can't vary.  */
   if (pst->idim>1 || pst->jdim>1) {
-    snprintf(pout,255,"Error from %s  Invalid environment.  ",fnam);
+    snprintf(pout,1255,"Error from %s  Invalid environment.  ",fnam);
     gaprnt(0,pout);
     gaprnt (0,"Z, T, or E can't vary.\n");
     return (1);
@@ -1978,7 +2096,7 @@ gaint mnmx (struct gafunc *pfc, struct gastat *pst, int sel) {
   return (0);
 
 err1:
-  snprintf(pout,255,"Error from %s:  Invalid dimension expression \n",fnam);
+  snprintf(pout,1255,"Error from %s:  Invalid dimension expression \n",fnam);
   gaprnt(0,pout);
   return (1);
 }
@@ -2368,7 +2486,7 @@ size_t sz;
   fnam = tmnam[sel-1];
   /* Check for valid number of args       */
   if (pfc->argnum!=4) {
-    snprintf(pout,255,"Error from %s:  Too many or too few args\n",fnam);
+    snprintf(pout,1255,"Error from %s:  Too many or too few args\n",fnam);
     gaprnt (0,pout);
     gaprnt (0,"                   4 arguments expected \n");
     return (1);
@@ -2378,11 +2496,11 @@ size_t sz;
   pfi = pst->pfid;
   ch = dimprs (pfc->argpnt[2], pst, pfi, &dim, &t1, 1, &wflag);
   if (ch==NULL || dim!=3 || wflag==2) {
-    snprintf(pout,255,"Error from %s:  1st dimension expr invalid\n",fnam);
+    snprintf(pout,1255,"Error from %s:  1st dimension expr invalid\n",fnam);
     gaprnt (0,pout);
     if (dim!=3) gaprnt (0,"  expr does not describe time dimension\n");
     if (wflag==2) {
-      snprintf(pout,255,"  offt expression not supported as an arg to %s\n",fnam);
+      snprintf(pout,1255,"  offt expression not supported as an arg to %s\n",fnam);
       gaprnt (0,pout);
     }
     return (1);
@@ -2391,12 +2509,12 @@ size_t sz;
   /* Now parse the 2nd dimension expression.  */
   ch = dimprs (pfc->argpnt[3], pst, pfi, &dim, &t2, 1, &wflag);
   if (ch==NULL || dim!=3 || t2<t1 || wflag==2) {
-    snprintf(pout,255,"Error from %s:  2nd dimension expr invalid\n",fnam);
+    snprintf(pout,1255,"Error from %s:  2nd dimension expr invalid\n",fnam);
     gaprnt (0,pout);
     if (dim!=3) gaprnt (0,"  expr does not describe time dimension\n");
     if (t2<t1)  gaprnt (0,"  end time is earlier than start time\n");
     if (wflag==2) {
-      snprintf(pout,255,"  offt expression not supported as an arg to %s\n",fnam);
+      snprintf(pout,1255,"  offt expression not supported as an arg to %s\n",fnam);
       gaprnt (0,pout);
     }
     return (1);
@@ -2406,7 +2524,7 @@ size_t sz;
   if (pst->jdim==dim) pst->jdim = -1;
   d1 =  ceil(t1-0.001);          /* Loop limits are integers    */
   d2 = floor(t2+0.001);          /* No weighting  */
-  snprintf(pout,255,"%s:  dim = %i, start = %i, end = %i\n", fnam, dim, d1, d2);
+  snprintf(pout,1255,"%s:  dim = %i, start = %i, end = %i\n", fnam, dim, d1, d2);
   gaprnt (2,pout);
 
   rc = 0;
@@ -2422,7 +2540,7 @@ size_t sz;
     }
     pgr = pst->result.pgr;
     if (pgr->idim != -1 || pgr->isiz!=1 || pgr->jsiz!=1) {
-      snprintf(pout,255,"Error from %s:  1st arg must be 0-D\n",fnam);
+      snprintf(pout,1255,"Error from %s:  1st arg must be 0-D\n",fnam);
       gaprnt (0,pout);
       gafree (pst);
       goto err2;
@@ -2646,19 +2764,19 @@ size_t sz;
   return (0);
 
 err1:
-  snprintf(pout,255,"Error from %s:  Memory allocation error\n",fnam);
+  snprintf(pout,1255,"Error from %s:  Memory allocation error\n",fnam);
   gaprnt (0,pout);
   if (mn1) gree(mn1,"f411");
   if (mn1u) gree(mn1u,"f412");
   return (1);
 err2:
-  snprintf(pout,255,"Error from %s:  Error getting grids\n",fnam);
+  snprintf(pout,1255,"Error from %s:  Error getting grids\n",fnam);
   gaprnt (0,pout);
   if (mn1) gree(mn1,"f413");
   if (mn1u) gree(mn1u,"f414");
   return (1);
 err3:
-  snprintf(pout,255,"Error from %s:  Args must be grid data\n",fnam);
+  snprintf(pout,1255,"Error from %s:  Args must be grid data\n",fnam);
   gaprnt (0,pout);
   if (mn1) gree(mn1,"f415");
   if (mn1u) gree(mn1u,"416");
@@ -2735,7 +2853,7 @@ char *ch,*fnam,*sumu,*cntu,*valu;
 
   /* Check for valid number of args */
   if (pfc->argnum<3 || pfc->argnum>5) {
-    snprintf(pout,255,"Error from %s:  Too many or too few args \n",fnam);
+    snprintf(pout,1255,"Error from %s:  Too many or too few args \n",fnam);
     gaprnt(0,pout);
     gaprnt (0,"                 3 to 5 arguments expected \n");
     return (1);
@@ -2745,10 +2863,10 @@ char *ch,*fnam,*sumu,*cntu,*valu;
   pfi = pst->pfid;
   ch = dimprs (pfc->argpnt[1], pst, pfi, &dim, &gr1, 1, &wflag);
   if (ch==NULL || wflag==2) {
-    snprintf(pout,255,"Error from %s:  1st dimension expression invalid\n",fnam);
+    snprintf(pout,1255,"Error from %s:  1st dimension expression invalid\n",fnam);
     gaprnt(0,pout);
     if (wflag==2) {
-      snprintf(pout,255,"  offt expression not supported as an arg to %s\n",fnam);
+      snprintf(pout,1255,"  offt expression not supported as an arg to %s\n",fnam);
       gaprnt (0,pout);
     }
     return (1);
@@ -2757,12 +2875,12 @@ char *ch,*fnam,*sumu,*cntu,*valu;
   /* Parse the 2nd dimension expression */
   ch = dimprs (pfc->argpnt[2], pst, pfi, &dim2, &gr2, 1, &wflag);
   if (ch==NULL || dim2!=dim || gr2<gr1 || wflag==2) {
-    snprintf(pout,255,"Error from %s:  2nd dimension expression invalid\n",fnam);
+    snprintf(pout,1255,"Error from %s:  2nd dimension expression invalid\n",fnam);
     gaprnt(0,pout);
     if (dim2!=dim) gaprnt (0,"  start and end points have different dimensions\n");
     if (gr2<gr1)   gaprnt (0,"  end grid point is less than start grid point \n");
     if (wflag==2) {
-      snprintf(pout,255,"  offt expression not supported as an arg to %s\n",fnam);
+      snprintf(pout,1255,"  offt expression not supported as an arg to %s\n",fnam);
       gaprnt (0,pout);
     }
     return (1);
@@ -2776,14 +2894,14 @@ char *ch,*fnam,*sumu,*cntu,*valu;
     if (*(pfc->argpnt[3]) == '-') {    /* Option flags? */
       if (*(pfc->argpnt[3]+1) == 'b') bndflg = 1;
       else {
-        snprintf(pout,255,"Error from %s: Invalid option flags\n",fnam);
+        snprintf(pout,1255,"Error from %s: Invalid option flags\n",fnam);
         gaprnt(0,pout);
         return(1);
       }
     } else {
       /* Must be time increment */
       if (dim!=3) {
-        snprintf(pout,255,"Error from %s: Invalid usage of increment value\n",fnam);
+        snprintf(pout,1255,"Error from %s: Invalid usage of increment value\n",fnam);
         gaprnt(0,pout);
         gaprnt (0,"                Can only be used with time averaging\n");
         return (1);
@@ -2816,7 +2934,7 @@ char *ch,*fnam,*sumu,*cntu,*valu;
     if (*(pfc->argpnt[4]) == '-' &&
         *(pfc->argpnt[4]+1) == 'b') bndflg = 1;
     else {
-      snprintf(pout,255,"Error from %s: Invalid option flags\n",fnam);
+      snprintf(pout,1255,"Error from %s: Invalid option flags\n",fnam);
       gaprnt(0,pout);
       return(1);
     }
@@ -2844,9 +2962,9 @@ char *ch,*fnam,*sumu,*cntu,*valu;
 
   if(mfcmn.warnflg > 0) {
     if (sel == 1) {
-      snprintf(pout,255,"Averaging.  dim = %i, start = %i, end = %i\n", dim, d1, d2);
+      snprintf(pout,1255,"Averaging.  dim = %i, start = %i, end = %i\n", dim, d1, d2);
     } else {
-      snprintf(pout,255,"%sing.  dim = %i, start = %i, end = %i\n", fnam, dim, d1, d2);
+      snprintf(pout,1255,"%sing.  dim = %i, start = %i, end = %i\n", fnam, dim, d1, d2);
     }
     gaprnt (2,pout);
   }
@@ -3227,7 +3345,7 @@ char *ch,*fnam,*sumu,*cntu,*valu;
     if (rc==-1) gafree (pst);
     gagfre(pgr1);
     gagfre(pgr2);
-    snprintf(pout,255,"Error from %s:  Error getting grids \n",fnam);
+    snprintf(pout,1255,"Error from %s:  Error getting grids \n",fnam);
     gaprnt(0,pout);
     return (rc);
   } else {
@@ -3239,12 +3357,12 @@ char *ch,*fnam,*sumu,*cntu,*valu;
       for (i=0; i<siz; i++) {
         if (*sumu!=0) {
           if (sel < 3 && *cnt==0.0) {
-            snprintf(pout,255,"Error from %s:  Internal logic check 100\n",fnam);
+            snprintf(pout,1255,"Error from %s:  Internal logic check 100\n",fnam);
             gaprnt(0,pout);
             return (1);
           }
           if (sel > 6 && *cntu==0) {
-            snprintf(pout,255,"Error from %s:  Internal logic check 101\n",fnam);
+            snprintf(pout,1255,"Error from %s:  Internal logic check 101\n",fnam);
             gaprnt(0,pout);
             return (1);
           }
@@ -3268,7 +3386,7 @@ char *ch,*fnam,*sumu,*cntu,*valu;
   return (0);
 
 err3:
-  snprintf(pout,255,"Error from %s: Invalid time increment argument\n",fnam);
+  snprintf(pout,1255,"Error from %s: Invalid time increment argument\n",fnam);
   gaprnt(0,pout);
   return (1);
 }
@@ -3333,7 +3451,7 @@ char *ch,*sumu,*valu;
   d2 = floor(gr2+0.001);
 
   if(mfcmn.warnflg > 0) {
-    snprintf(pout,255,"Integrating.  dim = %i, start = %i, end = %i\n", dim, d1, d2);
+    snprintf(pout,1255,"Integrating.  dim = %i, start = %i, end = %i\n", dim, d1, d2);
     gaprnt (2,pout);
   }
 
@@ -3872,7 +3990,7 @@ char *tvu, *rhu;
     }
   } else {
     p = pst->dmin[2];
-    snprintf(pout,255," Using fixed pressure level %g mb\n",p);
+    snprintf(pout,1255," Using fixed pressure level %g mb\n",p);
     if (tflag) {
       gaprnt (2,"Notice from TVRH2T:");
     } else {
@@ -3910,7 +4028,7 @@ char *tvu, *rhu;
   }
 
   if (errcnt) {
-    snprintf(pout,255," Convergence failed for %i grid points\n",errcnt);
+    snprintf(pout,1255," Convergence failed for %i grid points\n",errcnt);
     if (tflag) {
       gaprnt (1,"Warning from TVRH2T:");
     } else {
@@ -5065,7 +5183,7 @@ gaint ffclgr (struct gafunc *pfc, struct gastat *pst) {
   clct0 = *(pst->pclct+clnm);
   clct = clct0;
   if (clct==NULL) {
-     snprintf(pout,255,"Error from COLL2GR:  Collection %i empty\n",clnm);
+     snprintf(pout,1255,"Error from COLL2GR:  Collection %i empty\n",clnm);
      gaprnt (0,pout);
      return (1);
   }
@@ -6004,7 +6122,7 @@ size_t sz;
   gr2t (pfi->grvals[3],d2,&tend);
   gat2ch (&tstrt,5,chs,20);
   gat2ch (&tend,5,che,20);
-  snprintf(pout,255,"Stn Averaging.  Dim = %i, Start = %s, End = %s Incr(mos,mns) = %i %i\n",
+  snprintf(pout,1255,"Stn Averaging.  Dim = %i, Start = %s, End = %s Incr(mos,mns) = %i %i\n",
            dim, chs, che, mos, mns);
   gaprnt (2,pout);
 
@@ -6139,7 +6257,7 @@ err:
   gasfre(stnr);
   return(1);
 err3:
-  snprintf(pout,255,"Error from STNAVE: Invalid time increment argument\n");
+  snprintf(pout,1255,"Error from STNAVE: Invalid time increment argument\n");
   gaprnt(0,pout);
   return (1);
 }
@@ -6375,14 +6493,14 @@ size_t sz;
 
   /* Check for X, Y varying environment */
   if (pst->idim!=0 || pst->jdim!=1) {
-    snprintf(pout,255,"Error from %s:  X, Y varying environment required\n",fnam);
+    snprintf(pout,1255,"Error from %s:  X, Y varying environment required\n",fnam);
     gaprnt (0,pout);
     return(1);
   }
 
   /* Check for valid number of args */
   if (pfc->argnum<3 || pfc->argnum>4) {
-    snprintf(pout,255,"Error from %s:  Too many or too few args \n",fnam);
+    snprintf(pout,1255,"Error from %s:  Too many or too few args \n",fnam);
     gaprnt (0,pout);
     gaprnt (0,"                    3 or 4 arguments expected \n");
     return (1);
@@ -6392,10 +6510,10 @@ size_t sz;
   pfi = pst->pfid;
   ch = dimprs (pfc->argpnt[1], pst, pfi, &dim, &gr1, 1, &wflag);
   if (ch==NULL || dim!=3 || wflag==2) {
-    snprintf(pout,255,"Error from %s:  1st dimension expression invalid\n",fnam);
+    snprintf(pout,1255,"Error from %s:  1st dimension expression invalid\n",fnam);
     gaprnt (0,pout);
     if (wflag==2) {
-      snprintf(pout,255,"  offt expression not supported as an arg to %s\n",fnam);
+      snprintf(pout,1255,"  offt expression not supported as an arg to %s\n",fnam);
       gaprnt (0,pout);
     }
     return (1);
@@ -6404,10 +6522,10 @@ size_t sz;
   /* Now parse the 2nd dimension expression. */
   ch = dimprs (pfc->argpnt[2], pst, pfi, &dim2, &gr2, 1, &wflag);
   if (ch==NULL || dim2!=dim || wflag==2) {
-    snprintf(pout,255,"Error from %s:  2nd dimension expression invalid\n",fnam);
+    snprintf(pout,1255,"Error from %s:  2nd dimension expression invalid\n",fnam);
     gaprnt (0,pout);
     if (wflag==2) {
-      snprintf(pout,255,"  offt expression not supported as an arg to %s\n",fnam);
+      snprintf(pout,1255,"  offt expression not supported as an arg to %s\n",fnam);
       gaprnt (0,pout);
     }
     return (1);
@@ -6505,7 +6623,7 @@ size_t sz;
   return(0);
 
 err:
-  snprintf(pout,255,"Error from %s:  Unable to evaluate expression\n",fnam);
+  snprintf(pout,1255,"Error from %s:  Unable to evaluate expression\n",fnam);
   gaprnt (0,pout);
   gafree(pst);
   gasfre(stnr);
@@ -6711,185 +6829,6 @@ size_t sz;
   pgr->grid = res;
   pgr->umask = resundef;
   return (0);
-}
-
-/* Routine to read the user function definition file, and build
-   the appropriate link list of function definition blocks.
-   The file name is pointed to by the GAFDEF environment variable;
-   if unset then no user functions will be set up */
-
-void gafdef (void) {
-/* struct gaufb *ufb, *oufb=NULL; */
-/* char *cname; */
-/* FILE *cfile; */
-/* char rec[260],*ch; */
-/* gaint i,j,pass; */
-
-  ufba = NULL;
-  return;
-
-  /* remainder of subroutine commented out pending implementation of DLLs */
-
-
-/*   /\* Make two passes.  First read user function table, then read */
-/*      system function table *\/ */
-
-/*   pass = 0; */
-/*   while (pass<2) { */
-/*     if (pass==0) { */
-/*       cname = getenv("GAUDFT"); */
-/*       if (cname==NULL) { */
-/*         pass++; */
-/*         continue; */
-/*       } */
-/*       cfile = fopen(cname,"r"); */
-/*       if (cfile==NULL) { */
-/*         gaprnt(0,"Error opening user function definition table\n"); */
-/*         snprintf(pout,255,"  File name is: %s\n",cname); */
-/*         gaprnt (0,pout); */
-/*         pass++; */
-/*      gree(cname,"f300"); */
-/*         continue; */
-/*       } */
-/*     } else { */
-/*       cname = gxgnam("udft"); */
-/*       cfile = fopen(cname,"r"); */
-/*       if (cfile==NULL) { */
-/*      gree(cname,"f301"); */
-/*      break; */
-/*       } */
-/*     } */
-
-/*     /\* Read the file. *\/ */
-
-/*     while (1) { */
-/*       ufb = (struct gaufb *)malloc(sizeof(struct gaufb)); */
-/*       if (ufb==NULL) goto memerr; */
-
-/*       /\* Read First record (name and arg types) *\/ */
-
-/*       ch = fgets(rec,256,cfile); */
-/*       if (ch==NULL) break; */
-/*       ch = rec; */
-/*       lowcas(ch); */
-/*       while (*ch==' ') ch++; */
-/*       i = 0; */
-/*       while (*ch!=' ' && *ch!='\0' && *ch!='\n') { */
-/*         if (i<15) { */
-/*           ufb->name[i] = *ch; */
-/*           i++; */
-/*         } */
-/*         ch++; */
-/*       } */
-/*       ufb->name[i] = '\0'; */
-/*       if (*ch!=' ') goto fmterr; */
-/*       while (*ch==' ') ch++; */
-/*       if (intprs(ch,&(ufb->alo))==NULL) goto fmterr; */
-/*       if ( (ch = nxtwrd(ch))==NULL) goto fmterr; */
-/*       if (intprs(ch,&(ufb->ahi))==NULL) goto fmterr; */
-/*       i = 0; */
-/*       while (i<ufb->ahi) { */
-/*         if ( (ch = nxtwrd(ch))==NULL) goto fmterr; */
-/*         if (cmpwrd("expr",ch)) ufb->atype[i]=1; */
-/*         else if (cmpwrd("value",ch)) ufb->atype[i]=2; */
-/*         else if (cmpwrd("char",ch)) ufb->atype[i]=3; */
-/*         else goto fmterr; */
-/*         i++; */
-/*       } */
-
-/*       /\* Read 2nd record -- options *\/ */
-
-/*       ch = fgets(rec,256,cfile); */
-/*       if (ch==NULL) goto rderr; */
-/*       ch = rec; */
-/*       lowcas(ch); */
-/*       while (*ch==' ') ch++; */
-/*       if (*ch=='\n' || *ch=='\0') goto fmterr; */
-/*       while (1) { */
-/*         if (cmpwrd("direct",ch)) ufb->sflg=0; */
-/*         else if (cmpwrd("sequential",ch)) ufb->sflg=1; */
-/*         else goto fmterr; */
-/*         if ( (ch = nxtwrd(ch))==NULL) break; */
-/*       } */
-
-/*       /\* Read 3rd record -- file name of executable *\/ */
-
-/*       ch = fgets(rec,256,cfile); */
-/*       if (ch==NULL) goto rderr; */
-/*       i = 0; */
-/*       while (rec[i]!='\n' && rec[i]!='\0') i++; */
-/*       ufb->fname = (char *)malloc(i+1); */
-/*       if (ufb->fname==NULL) { */
-/*         free(ufb); */
-/*         goto memerr; */
-/*       } */
-/*       for (j=0; j<i; j++) *(ufb->fname+j) = rec[j]; */
-/*       *(ufb->fname+i) = '\0'; */
-
-/*       /\* Read 4th record -- file name of data transfer to user *\/ */
-
-/*       ch = fgets(rec,256,cfile); */
-/*       if (ch==NULL) goto rderr; */
-/*       i = 0; */
-/*       while (rec[i]!='\n' && rec[i]!='\0') i++; */
-/*       ufb->oname = (char *)malloc(i+1); */
-/*       if (ufb->oname==NULL) { */
-/*         free(ufb); */
-/*         goto memerr; */
-/*       } */
-/*       for (j=0; j<i; j++) *(ufb->oname+j) = rec[j]; */
-/*       *(ufb->oname+i) = '\0'; */
-
-/*       /\* Read 5th record -- file name for data transfer from user *\/ */
-
-/*       ch = fgets(rec,256,cfile); */
-/*       if (ch==NULL) goto rderr; */
-/*       i = 0; */
-/*       while (rec[i]!='\n' && rec[i]!='\0') i++; */
-/*       ufb->iname = (char *)malloc(i+1); */
-/*       if (ufb->iname==NULL) { */
-/*         free(ufb); */
-/*         goto memerr; */
-/*       } */
-/*       for (j=0; j<i; j++) *(ufb->iname+j) = rec[j]; */
-/*       *(ufb->iname+i) = '\0'; */
-
-/*       /\* Chain this ufb *\/ */
-
-/*       ufb->ufb = NULL; */
-
-/*       if (ufba==NULL) ufba = ufb; */
-/*       else oufb->ufb = ufb; */
-/*       oufb = ufb; */
-/*     } */
-
-/*     fclose (cfile); */
-/*     if (pass>0 && cname!=NULL) gree(cname,"f306"); */
-/*     pass++; */
-/*   } */
-/*   return; */
-
-/* memerr: */
-/*   gaprnt(0,"Memory allocation error: user defined functions\n"); */
-/*   return; */
-
-/* fmterr: */
-/*   gaprnt(0,"Format error in user defined function table:\n"); */
-/*   snprintf(pout,255,"  Processing function name: %s\n",ufb->name); */
-/*   gaprnt (0,pout); */
-/*   free(ufb); */
-/*   goto wname; */
-
-/* rderr: */
-/*   gaprnt(0,"Read error on user defined function table:\n"); */
-/*   free(ufb); */
-/*   goto wname; */
-
-/* wname: */
-/*   snprintf(pout,255,"  File name is: %s\n",cname); */
-/*   gaprnt (0,pout); */
-/*   if (cname!=NULL) gree(cname,"f309"); */
-/*   return; */
 }
 
 
@@ -7253,4 +7192,59 @@ size_t sz;
   pst->result.pgr = pgr;
 
   return (0);
+}
+
+gaint ffudpi (struct gafunc *pfc, struct gastat *pst2, struct gaupb *upb) {
+struct gaudpinfo *pudpinfo;
+void *handle;
+char *error;
+gaint rc;
+gaint (*pfunc)(struct gafunc *, struct gastat *, struct gaudpinfo *);
+
+  /* set up the pointer to gaexpr */
+  pudpinfo = malloc(sizeof(struct gaudpinfo));
+  pudpinfo->exprptr = gaexpr;
+  pudpinfo->version = UDPVERS;
+
+  /* load the shared object file and get the function pointer */
+  if (upb->pfunc == NULL) {
+    handle = dlopen(upb->fname,RTLD_LAZY);
+    if (handle==NULL) {
+      snprintf (pout,1255,"Error: dlopen failed to get a handle on %s \n",upb->fname);
+      gaprnt (0,pout);
+      return (1);
+    }
+    dlerror();
+    pfunc = dlsym(handle,upb->name);
+    if ((error=dlerror()) != NULL) {
+      snprintf (pout,1255,"Error: dlsym failed to load %s \n%s \n",upb->name,error);
+      gaprnt (0,pout);
+      return (1);
+    }
+    /* save the function pointer */
+    upb->pfunc = pfunc;
+  }
+  else {
+    pfunc = upb->pfunc;
+  }
+
+  /* call the function */
+  rc = (*pfunc)(pfc,pst2,pudpinfo);
+
+  free (pudpinfo);
+  return (rc);
+}
+
+/* Prints the contents of the chain of upb structures */
+void gaprntupb (void) {
+struct gaupb *upb;
+  upb = upba;
+  while (upb) {
+    if (upb->type==1) sprintf (pout,"function   %-15s  %s\n",upb->name, upb->fname);
+    if (upb->type==2) sprintf (pout,"defop      %-15s  %s\n",upb->name, upb->fname);
+    if (upb->type==3) sprintf (pout,"gxdisplay  %-15s  %s\n",upb->name, upb->fname);
+    if (upb->type==4) sprintf (pout,"gxprint    %-15s  %s\n",upb->name, upb->fname);
+    gaprnt (2,pout);
+    upb = upb->upb;
+  }
 }

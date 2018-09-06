@@ -1,18 +1,18 @@
-dnl acinclude.m4: 
+dnl acinclude.m4:
 dnl
 dnl  This file contains custom M4 macro definitions for the GrADS build system.
 dnl  It is merged with automake-related macros in "aclocal.m4" by the "aclocal"
-dnl  program. The merged "aclocal.m4" file is in turn used by the "autoconf" 
-dnl  program to generate the "configure" script. 
+dnl  program. The merged "aclocal.m4" file is in turn used by the "autoconf"
+dnl  program to generate the "configure" script.
 dnl
 
 
-dnl GA_SET_SUPPLIBS : Find a supplibs directory. 
-dnl		      If SUPPLIBS environment variable is not set, then 
+dnl GA_SET_SUPPLIBS : Find a supplibs directory.
+dnl		      If SUPPLIBS environment variable is not set, then
 dnl  		      search for "supplibs" in the paths given in the args
 dnl args: paths-to-search (eg. [. ..])
 AC_DEFUN([GA_SET_SUPPLIBS],
-[ 
+[
   AC_MSG_CHECKING([for supplibs directory])
   if test -n "${SUPPLIBS}" ; then
     # Use present supplib name unmodified, assume it is absolute path
@@ -21,12 +21,12 @@ AC_DEFUN([GA_SET_SUPPLIBS],
     ga_supplib_dir="${SUPPLIBS}"
   else
     # Look for "supplibs" directory in ${top_builddir}
-    for ga_supplib_prefix in $1 ; do 
+    for ga_supplib_prefix in $1 ; do
       SUPPLIBS="${ga_supplib_prefix}/supplibs"
       if test -d "${SUPPLIBS}" ; then
         AC_MSG_RESULT([${SUPPLIBS}])
         break
-      fi 
+      fi
     done
     if test ! -d "${SUPPLIBS}" ; then
       AC_MSG_RESULT([not found])
@@ -43,17 +43,17 @@ AC_DEFUN([GA_SET_SUPPLIBS],
 dnl GA_SET_FLAGS : Sets the compile and link paths to supplibs, plus any extra
 dnl 		   compiler or linker flags given, and saves original settings
 dnl 		   for restoration by GA_UNSET_FLAGS
-dnl  args: 	   extra_supplib_inc_names, extra-CPP-flags, extra-LD-flags, 
+dnl  args: 	   extra_supplib_inc_names, extra-CPP-flags, extra-LD-flags,
 dnl                   extra-LIB-flags
 AC_DEFUN([GA_SET_FLAGS],
 [
-  # Use to make temporary changes to -I and -L paths 
-  # Just for use during tests, because configure and make may run 
-  # from different directories. 
+  # Use to make temporary changes to -I and -L paths
+  # Just for use during tests, because configure and make may run
+  # from different directories.
   ga_saved_cppflags=$CPPFLAGS
   ga_saved_ldflags=$LDFLAGS
   ga_saved_libs=$LIBS
-  CPPFLAGS=""
+  CPPFLAGS="-I${ga_supplib_dir}/include"
   m4_if([$1], [], [:], [
     for ga_inc_name in $1 ; do
       CPPFLAGS="$CPPFLAGS -I${ga_supplib_dir}/include/${ga_inc_name}"
@@ -68,27 +68,10 @@ dnl GA_UNSET_FLAGS : Undoes changes to compiler and linker flags made by GA_SET_
 dnl  args:	     none
 AC_DEFUN([GA_UNSET_FLAGS],
 [
-  # Use to undo temporary changes to -I and -L paths 
+  # Use to undo temporary changes to -I and -L paths
   CPPFLAGS=$ga_saved_cppflags
   LDFLAGS=$ga_saved_ldflags
   LIBS=$ga_saved_libs
-])
-
-dnl GA_SET_CAIRO_FLAGS : Sets the compile and link paths to place where cairo is installed
-dnl 		   and saves original settings for restoration by GA_UNSET_FLAGS
-dnl  no args
-
-AC_DEFUN([GA_SET_CAIRO_FLAGS],
-[
-  # Use to make temporary changes to -I and -L paths 
-  # Just for use during tests, because configure and make may run 
-  # from different directories. 
-  ga_saved_cppflags=$CPPFLAGS
-  ga_saved_ldflags=$LDFLAGS
-  ga_saved_libs=$LIBS
-  CPPFLAGS="-I/opt/local/include/cairo"
-  LDFLAGS="-L/opt/local/lib"
-
 ])
 
 dnl GA_SET_LIB_VAR : Puts necessary linker options to link with libraries given into
@@ -100,7 +83,7 @@ AC_DEFUN([GA_SET_LIB_VAR],
   ga_lib_suffix='.a'
   for ga_lib_name in $2 ; do
       $1="$$1 ${ga_lib_prefix}${ga_lib_name}${ga_lib_suffix}"
-  done  
+  done
 ])
 
 dnl GA_SET_DYNLIB_VAR : Puts necessary linker options to link dynamically with libraries given into
@@ -111,32 +94,17 @@ AC_DEFUN([GA_SET_DYNLIB_VAR],
   ga_lib_prefix='-l'
   for ga_lib_name in $2 ; do
       $1="$$1 ${ga_lib_prefix}${ga_lib_name}"
-  done  
+  done
 ])
 
-dnl GA_SET_INCLUDE_VAR : Puts necessary options to compile with include directories 
-dnl                      given into a shell variable. 
-dnl   args:	   : shell-variable-name, list-of-directories 
+dnl GA_SET_INCLUDE_VAR : Puts necessary options to compile with include directories
+dnl                      given into a shell variable.
+dnl   args:	   : shell-variable-name, list-of-directories
 AC_DEFUN([GA_SET_INCLUDE_VAR],
 [
   ga_include_prefix='-I$(supp_include_dir)'
 
   for ga_include_name in $2 ; do
       $1="$$1 ${ga_include_prefix}/${ga_include_name}"
-  done  
-])
-
-dnl GA_SET_CAIRO_INCLUDE : Puts necessary options to compile with cairo include directory
-dnl   no args
-AC_DEFUN([GA_SET_CAIRO_INCLUDE],
-[
-  $1="-I/opt/local/include/cairo"
-])
-
-dnl GA_SET_CAIRO_LIB : Puts necessary options to compile with cairo library 
-dnl   no args
-AC_DEFUN([GA_SET_CAIRO_LIB],
-[
-  ga_lib_prefix='$(supp_lib_dir)'
-  $1="-L${ga_lib_prefix} -lcairo "
+  done
 ])

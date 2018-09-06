@@ -1,4 +1,4 @@
-/* Copyright (C) 1988-2016 by George Mason University. See file COPYRIGHT for more information. */
+/* Copyright (C) 1988-2017 by George Mason University. See file COPYRIGHT for more information. */
 
 #include <stdlib.h>
 
@@ -168,10 +168,74 @@ struct gxdbquery {
   gadouble wid;
   gaint red,green,blue,alpha,tile;
   gaint ptype,pxs,pys,pthick,pfcol,pbcol;
-  gaint fbold,fitalic,fstatus;
+  gaint fbold,fitalic;
   char *fname;
 };
 
+/* Structure that contains the function pointers to the printing subroutines */
+struct gxpsubs {
+  void (*gxpcfg) (void);
+  void (*gxpbgn) (gadouble,gadouble);
+  void (*gxpinit) (gadouble ,gadouble);
+  void (*gxpend) (void);
+  gaint (*gxprint) (char*,gaint,gaint,gaint,gaint,char*,char*,gaint,gadouble);
+  void (*gxpcol) (gaint);
+  void (*gxpacol) (gaint);
+  void (*gxpwid) (gaint);
+  void (*gxprec) (gadouble,gadouble,gadouble,gadouble);
+  void (*gxpbpoly) (void);
+  gaint (*gxpepoly) (gadouble*,gaint);
+  void (*gxpmov) (gadouble,gadouble);
+  void (*gxpdrw) (gadouble,gadouble);
+  void (*gxpflush) (void);
+  void (*gxpsignal) (gaint);
+  void (*gxpclip) (gadouble,gadouble,gadouble,gadouble);
+  gadouble (*gxpch) (char,gaint,gadouble,gadouble,gadouble,gadouble,gadouble);
+  gadouble (*gxpqchl) (char,gaint,gadouble);
+};
+
+/* Structure that contains the function pointers to the display subroutines */
+struct gxdsubs {
+  void (*gxdcfg) (void);
+  void (*gxdbb) (char*);
+  void (*gxdfb) (char*);
+  gaint (*gxdacol) (gaint,gaint,gaint,gaint,gaint);
+  void (*gxdbat) (void);
+  void (*gxdbgn) (gadouble,gadouble);
+  void (*gxdbtn) (gaint,gadouble*,gadouble*,gaint*,gaint*,gaint*,gadouble*);
+  gadouble (*gxdch) (char,gaint,gadouble,gadouble,gadouble,gadouble,gadouble);
+  void (*gxdclip) (gadouble,gadouble,gadouble,gadouble);
+  void (*gxdcol) (int);
+  void (*gxddbl) (void);
+  void (*gxddrw) (gadouble,gadouble);
+  void (*gxdend) (void);
+  void (*gxdfil) (gadouble*,gaint);
+  void (*gxdfrm) (int);
+  void (*gxdgeo) (char *);
+  void (*gxdgcoord) (gadouble,gadouble,gaint *,gaint *);
+  void (*gxdimg) (gaint *,gaint,gaint,gaint,gaint);
+  char* (*gxdlg) (struct gdlg *);
+  void (*gxdmov) (gadouble,gadouble);
+  void (*gxdopt) (gaint);
+  void (*gxdpbn) (int,struct gbtn *,int,int,int);
+  void (*gxdptn) (gaint,gaint,gaint);
+  gadouble (*gxdqchl) (char,gaint,gadouble);
+  void (*gxdrbb) (gaint,gaint,gadouble,gadouble,gadouble,gadouble,gaint);
+  void (*gxdrec) (gadouble,gadouble,gadouble,gadouble);
+  void (*gxdrmu) (int,struct gdmu*,int,int);
+  void (*gxdsfr) (int);
+  void (*gxdsgl) (void);
+  void (*gxdsignal) (gaint);
+  void (*gxdssh) (int);
+  void (*gxdssv) (int);
+  void (*gxdswp) (void);
+  void (*gxdwid) (int);
+  void (*gxdXflush) (void);
+  void (*gxdxsz) (int,int);
+  void (*gxrs1wd) (int,int);
+  void (*gxsetpatt) (gaint);
+  gaint (*win_data) (struct xinfo*);
+};
 
 /* Function prototypes for GX library routines  */
 
@@ -192,7 +256,6 @@ struct gxdbquery {
    gxdxsz: Resize X Window (X only)
    gxdbtn: Get pointer pos at mouse btn press
    gxdbck: Set hardware background/foreground
-   gxrswd: Reset Widget Structures
    gxrs1wd: Reset one widget
    gxcpwd: Copy widgets on swap in double buffer mode
    gxevbn: Handle button press event
@@ -203,57 +266,30 @@ struct gxdbquery {
    gxmaskclear: Clear (unset) mask array
                                                            */
 
-void gxqdrgb (gaint, gaint *, gaint *, gaint *); /* query default color rgb values */
-void gxdbgn (gadouble, gadouble);
-void gxdbat (void);
-void gxdend (void);
-void gxdfrm (int);
-void gxdcol (int);
-gaint gxdbacol (int, int, int, int, int);
-void gxdwid (int);
-void gxdmov (gadouble, gadouble);
-void gxddrw (gadouble, gadouble);
-void gxdrec (gadouble, gadouble, gadouble, gadouble);
-void gxdsgl (void);
-void gxdbl (void);
-void gxdswp (void);
-void gxdfil (gadouble *, gaint);
-void gxdxsz (int, int);
-void gxdbck (int);
-gaint gxdbkq (void);
-void gxdeve (int);
-void gxdbtn (gaint, gadouble *, gadouble *, gaint *, gaint *, gaint *, gadouble *);
-void gxdpbn (int, struct gbtn *, int, int, int);
-void gxdrmu (int, struct gdmu *, int, int);
+/* these are in gxX11.c */
+void gxqdrgb (gaint,gaint *, gaint *, gaint *); /* query default color rgb values */
 void gxdsfn (void);
-void gxdcf (void);
-void gxdrdw (void);
-void gxdopt (gaint);
 void gxrdrw (int);
-void gxrswd (int);
-void gxrs1wd (int, int);
 void gxcpwd (void);
 void gxevbn (struct gevent *, int);
 void gxevrb (struct gevent *, int, int, int);
 gaint gxevdm (struct gevent *, int, int, int);
 gaint gxpopdm(struct gdmu *, int, int, int, int);
-void gxdrbb (gaint, gaint, gadouble, gadouble, gadouble, gadouble, gaint);
-char *gxdlg (struct gdlg *);
-void gxdptn (int, int, int);
-void gxdssv (int);
-void gxdssh (int);
-void gxdsfr (int);
-gaint win_data (struct xinfo *);
+void gxdeve (int);
+void gxdrdw (void);
+
+/* these are in gxdb.c */
+gaint gxdbacol (int, int, int, int, int);
+void  gxdbck (int);
+gaint gxdbkq (void);
+void gxdboutbck (gaint);
+
+/* these are in gxsubs.c */
+void gxcfg (char *, char *);
 void gxmaskrec (gadouble, gadouble, gadouble, gadouble);
 gaint gxmaskrq (gadouble, gadouble, gadouble, gadouble);
 void gxmaskclear (void);
-void dump_back_buffer (char *);
-void dump_front_buffer (char *);
-void gxdgeo (char *);
-int gxheps(char*);
-void gxdimg(gaint *, gaint, gaint, gaint, gaint);
-void gxdgcoord(gadouble, gadouble, gaint *, gaint *);
-void gxdboutbck (gaint);
+
 
 /* Routines in gxsubs:
    gxstrt: Initialize graphics output
@@ -293,19 +329,22 @@ void gxdboutbck (gaint);
    gxgnam: Get full path name
    gxptrn: Set fill pattern
    gxqchl: Query the width of a character
+   gxload: Loads the display/printing graphics routines
+   getpsubs: Passes the pointer containing printing function pointers
+   getdsubs: Passes the pointer containing printing function pointers
 */
 
-void gxstrt (gadouble, gadouble, int, int);
+gaint gxstrt (gadouble, gadouble, gaint, gaint, char *, char *, char *);
 void gxend (void);
-void gxfrme (int);
-void gxcolr (int);
-gaint gxacol (int, int, int, int, int);
-void gxwide (int);
+void gxfrme (gaint);
+void gxcolr (gaint);
+gaint gxacol (gaint, gaint, gaint, gaint, gaint);
+void gxwide (gaint);
 void gxmove (gadouble, gadouble);
 void gxdraw (gadouble, gadouble);
 void gxsdrw (gadouble, gadouble);
-void gxstyl (int);
-void gxplot (gadouble, gadouble, int);
+void gxstyl (gaint);
+void gxplot (gadouble, gadouble, gaint);
 void gxclip (gadouble, gadouble, gadouble, gadouble);
 void gxtitl (char *, gadouble, gadouble, gadouble, gadouble, gadouble);
 void gxvpag (gadouble, gadouble, gadouble, gadouble, gadouble, gadouble);
@@ -321,7 +360,7 @@ void gxconv (gadouble, gadouble, gadouble *, gadouble *, gaint);
 void gxxy2w (gadouble, gadouble, gadouble *, gadouble *);
 void gxgrmp (gadouble, gadouble, gadouble *, gadouble *);
 void gxcord (gadouble *, gaint, gaint);
-void gxrset (int);
+void gxrset (gaint);
 void gxrecf (gadouble, gadouble, gadouble, gadouble);
 gaint gxqwid (void);
 gaint gxqclr (void);
@@ -336,6 +375,9 @@ char *gxgnam(char *);
 gadouble gxdrawch (char, gaint, gadouble, gadouble, gadouble, gadouble, gadouble);
 gadouble gxqchl (char, gaint, gadouble);
 void gxsignal (gaint);
+gaint gxload(char *, char *);
+struct gxpsubs *getpsubs(void);
+struct gxdsubs *getdsubs(void);
 
 
 
@@ -383,7 +425,6 @@ void gxdbsetwid (gaint, gadouble);
 gaint gxdbqhersh (void);
 void gxdbsethersh (gaint);
 void gxdbsetfn (gaint, char *);
-void gxdbsetfnstatus (gaint, gaint);
 void gxdbsetpatt (gaint *, char *);
 void gxdbqpatt (gaint, struct gxdbquery *);
 void gxdbsettransclr (gaint);
@@ -392,6 +433,7 @@ gaint gxdbqtransclr (void);
 /* Routines in gxchpl:
    gxchii: Initialize character plotting
    gxchdf: Set default font
+   gxqdf:  Return default font number
    gxchpl: Plot character string
    gxchln: Determine length (in plotting units) of a string
    gxchgc: Get character info given character and font
@@ -399,6 +441,7 @@ gaint gxdbqtransclr (void);
                             */
 void  gxchii (void);
 void  gxchdf (gaint);
+gaint gxqdf (void);
 void  gxchpl (char *, gaint, gadouble, gadouble, gadouble, gadouble, gadouble);
 gaint gxchln (char *, gaint, gadouble, gadouble *);
 char *gxchgc (gaint, gaint, gaint *);
@@ -426,6 +469,8 @@ int gxqclab (gadouble, gadouble, gadouble);
 gaint pathln (gadouble, gadouble, gadouble, gadouble);
 void gxcrel (void);
 void gxpclin (void);
+gaint gxclvert(FILE *);
+
 /* Routines in gxshad -- color filled contour routine:
 
    gxshad -- do color filled contours
@@ -518,7 +563,6 @@ void gree();
 /* routines in gxX.c */
 gadouble gxdch (char, gaint, gadouble, gadouble, gadouble, gadouble, gadouble);
 gadouble gxdqchl (char, gaint, gadouble);
-void gxdopt(gaint);
 void gxinitimg (gaint, gaint);
 void gxendimg (char *);
 void gxdsignal (gaint);
@@ -526,22 +570,3 @@ void gxsetpatt (gaint);
 void gxdXflush (void);
 void gxdclip (gadouble, gadouble, gadouble, gadouble);
 gaint gxdacol (gaint, gaint, gaint, gaint, gaint);
-
-/* routines in gxprint.c */
-void gxpbgn (gadouble, gadouble);
-void gxpinit (gadouble , gadouble);
-void gxpend (void);
-gaint gxprint (char *, gaint, gaint, gaint, gaint, char *, char *, gaint, gadouble);
-void gxpcol (gaint);
-void gxpacol (gaint);
-void gxpwid (gaint);
-void gxprec (gadouble, gadouble, gadouble, gadouble);
-void gxpbpoly (void);
-gaint gxpepoly (gadouble *, gaint);
-void gxpmov (gadouble, gadouble);
-void gxpdrw (gadouble, gadouble);
-void gxpflush (void);
-void gxpsignal (gaint);
-void gxpclip (gadouble, gadouble, gadouble, gadouble);
-gadouble gxpch (char, gaint , gadouble, gadouble, gadouble, gadouble, gadouble);
-gadouble gxpqchl (char, gaint , gadouble);

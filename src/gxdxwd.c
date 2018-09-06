@@ -1,4 +1,4 @@
-/* Copyright (C) 1988-2016 by George Mason University. See file COPYRIGHT for more information. */
+/* Copyright (C) 1988-2017 by George Mason University. See file COPYRIGHT for more information. */
 
 /*
  * Include ./configure's header file
@@ -13,14 +13,13 @@
 #include <X11/Xos.h>
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
-
 #include <X11/Xmu/WinUtil.h>
+#include <X11/XWDFile.h>
 #include "gatypes.h"
 #define FEEP_VOLUME 0
 
 /* Window_Dump: dump a window to a file which must already be open for writing. */
 
-#include "X11/XWDFile.h"
 
 #ifdef __alpha
 #define NON_STANDARD_XCOLOR_SIZE 4

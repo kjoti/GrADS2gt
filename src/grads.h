@@ -1,18 +1,20 @@
-/* Copyright (C) 1988-2016 by George Mason University. See file COPYRIGHT for more information. */
+/* Copyright (C) 1988-2017 by George Mason University. See file COPYRIGHT for more information. */
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/types.h>
-#include "gabufr.h"
 #if GRIB2==1
-#include "grib2.h"
+#include <grib2.h>
 #endif
 #if USESHP==1
-#include "shapefil.h"
+#include <shapefil.h>
 #endif
 #if USEHDF5==1
 #include <hdf5.h>
 #endif
+#include "gabufr.h"
+
+#define UDPVERS 1
 
 /* Handling of missing data values. After the data I/O is done,
    grid values are tested to see if they are within a small range
@@ -30,7 +32,7 @@
    Static memory usage is sizeof(pointer) * BLKNUM bytes */
 
 #define RPTNUM 200
-#define BLKNUM 5000
+#define BLKNUM 50000
 
 #ifdef __hpux
 #define CPULIMSIG _SIGXCPU
@@ -226,6 +228,7 @@ struct gacmn {
   gaint wxcols[5];             /* wx symbol colors */
   gaint wxopt;                 /* wx options */
   gaint tser;                  /* station time series type */
+  gaint barbolin;              /* Wind barb pennant outline flag */
   gaint bargap;                /* Bar Gap in percent  */
   gaint barolin;               /* Bar outline flag */
   gadouble barbase;            /* Bar Base Value      */
@@ -299,10 +302,13 @@ struct gacmn {
   gaint ptang;               /* Line pattern angle */
   gaint dwrnflg;             /* Issue, or not, warnings about missing or constant data */
   gadouble undef;            /* default or user-defined undef value for print and file output */
-  gadouble cachesf;          /* global scale factor for netcdf4/hdf5 cache size */
+  long cachesf;              /* global scale factor for netcdf4/hdf5 cache size */
   gaint fillpoly;            /* color to fill shapfile polygons, -1 for no fill */
   gaint marktype;            /* type of mark for shapefile points */
   gadouble marksize;         /* size of mark for shapefile points */
+  char xgeom[100];           /* geometry string for size of X window on startup */
+  char gxdopt[16];           /* Name of graphics display back end     */
+  char gxpopt[16];           /* Name of graphics printing back end    */
 };
 
 /* Sructure for string substitution in templating -- the %ch template.
@@ -438,7 +444,7 @@ struct gastat {
   struct gaindx *pindx;        /* Index Strucure if indexed file */
   struct gaindxb *pindxb;      /* Index Strucure if off_t offsets are being used */
 #if GRIB2
-  struct gag2indx *g2indx;     /* Index Strucure if GRIB2 file */
+  struct gag2indx *g2indx;     /* Index Strucure for grib2 index file */
 #endif
   gaint tmplat;                /* File name templating:
                                    3==templating on E and T
@@ -463,6 +469,7 @@ struct gastat {
   char *undefattr;             /* undef attribute name */
   char *undefattr2;            /* secondary undef attribute name */
   long xyhdr;                  /* Number of bytes to ignore at head of xy grids*/
+  long xytrlr;                 /* Number of bytes to ignore at end of xy grids*/
   gaint calendar;              /* Support for 365-day calendars */
   gaint pa2mb;                 /* convert pressure values in descriptor file from Pa -> mb */
   gaint bufrflg;               /* 1==dtype bufr */
@@ -665,7 +672,7 @@ struct gastn {
 /* Structure that describes a variable in a file.  These structures
    are built in arrays that are hung off of gafile structures.         */
 struct gavar {
-  char varnm[128];             /* Variable description.                */
+  char varnm[162];             /* Variable description.                */
   char abbrv[16];              /* Variable abbreviation.               */
   char longnm[257];            /* netcdf/hdf var name if different     */
   gadouble units[48];          /* Units indicator.
@@ -674,7 +681,7 @@ struct gavar {
                                   Vals 8-15 are for grib level codes;
                                   Vals 16-48 are for extra grib2 codes */
   gaint g2aflg;                /* var requires additional grib2 codes  */
-  gaint offset;                /* Offset in grid elements of the start
+  off_t offset;                /* Offset in grid elements of the start
                                   of this variable within a time group
                                   within this file.                    */
   gaint recoff;                /* Record (XY grid) offset of the start
@@ -712,16 +719,20 @@ struct gafunc {
   char buff[1000];             /* Argument string buffer               */
 };
 
-/* Structure that describes a user defined function                    */
-struct gaufb {
-  struct gaufb *ufb;           /* Forward pointer                      */
-  char name[8];                /* Function name                        */
-  gaint alo,ahi;               /* Limits on number of args             */
-  gaint atype[8];              /* Types of args. 0=expr,1=float,2=int,3=char */
-  gaint sflg;                  /* Sequential or direct                 */
+/* Structure that contains a pointer to gaexpr (for user defined plug-ins) */
+struct gaudpinfo {
+  gaint version;               /* for keeping track of compatibility */
+  gaint (*exprptr)(char *, struct gastat *);
+};
+
+/* Structure that describes a user defined plug-in */
+struct gaupb {
+  struct gaupb *upb;           /* Forward pointer                      */
+  char name[16];               /* Function name                        */
   char *fname;                 /* Name of user executable              */
-  char *oname;                 /* File name for data transfer to user  */
-  char *iname;                 /* File name for data transfer from user */
+  gaint type;                  /* 1==function,  2==defop (not in use)
+                                  3==gxdisplay, 4==gxprint             */
+  gaint (*pfunc)(struct gafunc *, struct gastat *, struct gaudpinfo *);  /* Function pointer */
 };
 
 /* Structure that describes a defined grid */
@@ -827,6 +838,10 @@ struct sdfnames {
 
 void gasig (gaint);
 gaint gaqsig (void);
+void gainit (void);
+void gaudpdef (void);
+char * gaqupb (char *, gaint);
+void setupba(struct gaupb *);
 
 /* Functions in GAUSER:
     gacmd:  Process a user command
@@ -849,8 +864,6 @@ gaint gaqsig (void);
     gagsdo: Execute command for a script
     getpst: Allocate and initialize a gastat block              */
 
-void gainit (void);
-gadouble qcachesf (void);
 
 gaint gacmd (char *, struct gacmn *, gaint);
 void gacln (struct gacmn *,gaint);
@@ -866,7 +879,6 @@ gaint gaqdef (char *, struct gacmn *, gaint);
 gaint gaqury (char *, char *, struct gacmn *);
 gaint gahelp (char *, struct gacmn *);
 gaint gaset (char *, char *, struct gacmn *);
-void set_nc_cache(size_t);
 #if USESHP==1
 SHPHandle gaopshp (char *);
 DBFHandle gaopdbf (char *);
@@ -926,14 +938,14 @@ char *stnvar (char *, char *, struct gafile *, struct gavar *,
               struct gastat *);
 
 /* Functions in GAFUNC:
-    rtnprs: Parse and execute a function call
-    gafopr: Perform opration for two-op function call
-    gafdef: Read user function definition table
-                                                                     */
+    rtnprs:   Parse and execute a function call
+    gafopr:   Perform opration for two-op function call
+    gaprntupb: Prints the contents of the chain of upb structures  */
 
 char *rtnprs (char *, char *, struct gastat *) ;
 gaint gafopr (struct gastat *, struct gastat *, gaint );
-void gafdef (void);
+gaint ffudpi (struct gafunc *, struct gastat *, struct gaupb *);
+void gaprntupb (void);
 
 /* Functions in GAIO:
     gaggrd: Get a grid from a data file
@@ -958,6 +970,7 @@ void gafdef (void);
 Note:  function prototype for garead is now in gaio.c
 */
 
+void setcachesf (long);
 gaint gaggrd (struct gagrid *);
 gaint gagrow (gadouble *, char *, gaint *);
 long gafcor (gaint, gaint, gaint, gaint);
@@ -1035,7 +1048,7 @@ void g2clear(void);
     gagfil: Fill grids with shaded ranges
     gaimap: Output grid with image dump
                                                                       */
-void gagx (struct gacmn *);
+gaint gagx (struct gacmn *);
 void gaplot (struct gacmn *);
 void gas1d (struct gacmn *, gadouble, gadouble, gaint, gaint, struct gagrid *, struct gastn *);
 void gas2d (struct gacmn *, struct gagrid *, gaint);
@@ -1083,7 +1096,7 @@ void gafstn (struct gacmn *);
 void gapstn (struct gacmn *);
 void gawsym (struct gacmn *);
 void gasmrk (struct gacmn *);
-void gabarb (gadouble, gadouble, gadouble, gadouble, gadouble, gadouble, gadouble, gaint);
+void gabarb (gadouble, gadouble, gadouble, gadouble, gadouble, gadouble, gadouble, gaint, gaint);
 void gapmdl (struct gacmn *);
 gaint gasmdl (struct gacmn *, struct garpt *, gadouble *, char *);
 gadouble wndexit (gadouble, gadouble, gadouble, gadouble, gadouble, gadouble *,
@@ -1133,7 +1146,6 @@ gaint gashdc (struct gacmn *, gadouble);
     lev2gr: Discrete level scaling routine
     intprs: Parse an integer expression
     longprs: Parse an long integer expression kk 020624 ---
-    valprs: Parse a floating number expression
     dimprs: Parse a dimension expression
     lowcas: Convert a string to lower case
     uppcas: Convert a string to upper case
@@ -1234,10 +1246,6 @@ gaint nxrdln (char *, char *);
 /* Functions in GASRCP:
     gsfile: run a script file used in gauser.c */
 char *gsfile (char *, gaint *, gaint);
-
-/* Functions in gxX:
-    gxwdln: use X server for wide lines */
-void gxwdln(void);
 
 
 #ifdef USEGADAP

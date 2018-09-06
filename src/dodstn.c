@@ -1,4 +1,4 @@
-/* Copyright (C) 1988-2016 by George Mason University. See file COPYRIGHT for more information. */
+/* Copyright (C) 1988-2017 by George Mason University. See file COPYRIGHT for more information. */
 
 /* Authored by Joe Wielgosz
  *
@@ -302,7 +302,7 @@ gaint dappfi (char *url, struct gafile *pfi) {
       }
       pvar->abbrv[len] = '\0';
       len = 0;
-      while (*(longname+len) && len < 128) {
+      while (*(longname+len) && len < 160) {
         pvar->varnm[len] = (*(longname+len));
         len++;
       }
@@ -345,7 +345,7 @@ gaint dappfi (char *url, struct gafile *pfi) {
   else if (isepic(handle)) {
     trngid = gadap_d_attrindex(handle,nvars,"time_range");
     trngstr = gadap_d_attrstr(handle,nvars,trngid);
-    tmin = strtod(trngstr,&trngstr);
+    tmin = strtod(trngstr,(char**)&trngstr);
     tmax = strtod(trngstr,NULL);
     dt1 = epict2dt(tmax);
     dt1 = epict2dt(tmin);
@@ -520,7 +520,7 @@ gaint dapget(struct gastn *stn) {
         if (stid2[j] == '\0') break;
         stid[j] = stid2[j];
       }
-      if (stid2) free(stid2);
+      if (stid2) free((char*)stid2);
       gadap_r_valdbl(r_handle, i, 0, rptinfo[3], 0, &time);
     }
 

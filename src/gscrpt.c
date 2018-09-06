@@ -1,4 +1,4 @@
-/* Copyright (C) 1988-2016 by George Mason University. See file COPYRIGHT for more information. */
+/* Copyright (C) 1988-2017 by George Mason University. See file COPYRIGHT for more information. */
 
 /* Authored by B. Doty */
 
@@ -1916,6 +1916,7 @@ gaint len, rc, i, cflg, pcnt;
   else if (cmpwrd(name,"read")) rc = gsfrd(pcmn);
   else if (cmpwrd(name,"write")) rc = gsfwt(pcmn);
   else if (cmpwrd(name,"close")) rc = gsfcl(pcmn);
+  else if (cmpwrd(name,"sys")) rc = gsfsys(pcmn);
   else if (cmpwrd(name,"gsfallow")) rc = gsfallw(pcmn);
   else if (cmpwrd(name,"gsfpath")) rc = gsfpath(pcmn);
   else if (cmpwrd(name,"math_log")) rc = gsfmath(pcmn,1);
@@ -1970,7 +1971,7 @@ gaint len, rc, i, cflg, pcnt;
           printf ("Loaded function file %s\n",pcmn->lfdef->name);
           printf ("  But... ");
         }
-      } else if (rc!=9) {        /* An error ocurred */
+      } else if (rc!=9) {        /* An error occurred */
         printf ("Error while loading function: ");
         for (i=0; i<16; i++) printf("%c",name[i]);
         printf ("\n");
@@ -2278,6 +2279,84 @@ gaint dflg,eflg,len;
 }
 
 /*  Intrinsic functions.  */
+
+/* Sys function. Expects one arg, the command to execute.
+   Uses popen to execute the command and read the stdout from it.
+   Note that popen has limitations. */
+
+gaint gsfsys (struct gscmn *pcmn) {
+FILE *pipe;
+struct gsvar *pvar;
+char *cmd,*res,*buf;
+gadouble v;
+gaint ret,len,siz,incr,pos,ntype;
+
+  pcmn->rres = NULL;
+
+  pvar = pcmn->farg;
+  if (pvar==NULL) {
+    printf ("Error from script function: sys:  1st argument missing\n");
+    ret = 1;
+    goto retrn;
+  }
+  cmd = pvar->strng;
+
+  incr = 1000;
+  pvar = pvar->forw;
+  if (pvar!=NULL) {
+    gsnum (pvar->strng, &ntype, &ret, &v);
+    if (ntype!=1 || ret<5000) {
+      printf ("Warning from script function: sys: 2nd arg invalid, ignored\n");
+    } else incr = ret;
+  }
+
+  /* Call popen to execute the command. */
+
+  pipe = popen(cmd, "r");
+  if (pipe==NULL) {
+    printf ("Error from script function: sys:  popen error\n");
+    ret = 1;
+    goto retrn;
+  }
+
+  /* Allocate storage for the result and read the result */
+
+  siz = incr;
+  res = NULL;
+  pos = 0;
+  while (1) {
+    buf = (char *)realloc(res,siz+10);
+    if (buf==NULL) {
+      printf ("Error from script function: sys:  Memory allocation error\n");
+      printf ("Error from script function: sys:  Attempted size %i\n",siz);
+      free (res);
+      pclose(pipe);
+      ret = 1;
+      goto retrn;
+    }
+    res = buf;
+    len = fread(res+pos,sizeof(char),incr,pipe);
+    pos += len;
+    if (len<incr) break;
+    if (siz>10000 && incr<5000) incr=5000;
+    if (siz>100000 && incr<10000) incr=10000;
+    if (siz>1000000 && incr<100000) incr=100000;
+    siz += incr;
+  }
+  *(res+pos) = '\0';
+  pclose(pipe);
+
+  ret = 0;
+  pcmn->rres = res;
+
+  /* Release arg storage and return */
+
+retrn:
+
+  gsfrev (pcmn->farg);
+  pcmn->farg = NULL;
+  return (ret);
+}
 
 /* Substring function.  Expects three args:  string, start, length */
 

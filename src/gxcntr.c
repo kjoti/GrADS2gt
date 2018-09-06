@@ -1,4 +1,4 @@
-/* Copyright (C) 1988-2016 by George Mason University. See file COPYRIGHT for more information. */
+/* Copyright (C) 1988-2017 by George Mason University. See file COPYRIGHT for more information. */
 
 /* qqq resolve gxdraw vs gxsdrw issue for cterp off */
 /* qqq clip labels and masking outside of parea */
@@ -24,7 +24,7 @@ void *galloc(size_t,char *);
 void gree();
 char *intprs (char *, gaint *);
 char *getdbl (char *, gadouble *);
-gaint gxclvert (FILE *);
+/* gaint gxclvert (FILE *); */
 gaint dequal(gadouble, gadouble, gadouble);
 
 /* For buffering contour lines, when label masking is in use */

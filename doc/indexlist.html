@@ -52,6 +52,7 @@
 <p class="plaintext">
 <code>set <a href="gradcomdsetbackground.html" target="pages">background</a></code><br>
 <code>set <a href="gradcomdsetbarbase.html" target="pages">barbase</a></code><br>
+<code>set <a href="gradcomdsetbarbopts.html" target="pages">barbopts</a></code><br>
 <code>set <a href="gradcomdsetbargap.html" target="pages">bargap</a></code><br>
 <code>set <a href="gradcomdsetbaropts.html" target="pages">baropts</a></code><br>
 <code><a href="basemap.html" target="pages">basemap.gs</a></code><br>
@@ -137,7 +138,7 @@ data descriptor files:<br>
 <code>q <a href="gradcomdqdbf.html" target="pages">dbf</a></code><br>
 <code>set <a href="gradcomdsetdbuff.html" target="pages">dbuff</a></code><br>
 <code><a href="gradcomddefine.html" target="pages">define</a></code><br>
-<code><a href="gradcomdquery.html" target="pages">q</a> define</code><br>
+<code>q<a href="gradcomdqdefine.html" target="pages"> define</a></code><br>
 <code><a href="gradcomdquery.html" target="pages">q</a> defval</code><br>
 <code>set <a href="gradcomdsetdefval.html" target="pages">defval</a></code><br>
 <a href="fontcontrol.html#overrides" target="pages">degree symbol</a><br>
@@ -235,7 +236,8 @@ data descriptor files:<br>
 <code><a href="gradcomdgrads.html" target="pages">gradsdods</a></code><br>
 <code><a href="gradcomdgrads.html" target="pages">gradshdf</a></code><br>
 <code><a href="gradcomdgrads.html" target="pages">gradsnc</a></code><br>
-  <a href="grib.html" target="pages">GRIB format</a><br>
+<a href="plugins.html" target="pages">graphics plug-ins</a><br>
+<a href="grib.html" target="pages">GRIB format</a><br>
 <code><a href="gradutilgribmap.html" target="pages">gribmap</a></code><br>
 <code><a href="gradutilgribscan.html" target="pages">gribscan</a></code><br>
 <code><a href="gradutilgrib2scan.html" target="pages">grib2scan</a></code><br>
@@ -263,7 +265,7 @@ data descriptor files:<br>
 <p class="plaintext">
 <a href="imageoutput.html" target="pages">hardcopy output</a><br>
 <code><a href="gradfunchcurl.html" target="pages">hcurl()</a></code><br>
-  <code><a href="SDFdescriptorfile.html" target="pages">HDF-SDS format</a></code><br>
+<code><a href="SDFdescriptorfile.html" target="pages">HDF-SDS format</a></code><br>
 <code><a href="gradfunchdivg.html" target="pages">hdivg()</a></code><br>
 <code><a href="gradcomdhelp.html" target="pages">help</a></code><br>
 <code>set <a href="gradcomdsethempref.html" target="pages">hempref</a></code><br>
@@ -277,6 +279,7 @@ data descriptor files:<br>
 </table>
 </a>
 <p class="plaintext">
+<code><a href="gradfuncif.html" target="pages">if()</a></code><br>
 <a href="imageoutput.html" target="pages">image output</a><br>
 <code>set <a href="gradcomdsetimprun.html" target="pages">imprun</a></code><br>
 
@@ -403,6 +406,7 @@ script <a href="library.html" target="pages">library</a><br>
 <code><a href="pdef.html" target="pages">PDEF</a></code><br>
 <code><a href="gradcomdpdefwrite.html" target="pages">pdefwrite</a></code><br>
 <a href="pagecontrol.html#plotarea" target="pages">plot area</a><br>
+<a href="plugins.html" target="pages">plug-ins</a><br>
 <code>set <a href="gradcomdsetpoli.html" target="pages">poli</a></code><br>
 <code>draw <a href="gradcomddrawpolyf.html" target="pages">polyf</a></code><br>
 <code>q <a href="gradcomdqpos.html" target="pages">pos</a></code><br> 
@@ -426,6 +430,7 @@ script <a href="library.html" target="pages">library</a><br>
 <code><a href="gradcomdquery.html" target="pages">q (query)</a></code><br>
 <code><a href="gradcomdqattr.html" target="pages">q attr</a></code><br> 
 <code><a href="gradcomdqdbf.html" target="pages">q dbf</a></code><br>
+<code><a href="gradcomdqdefine.html" target="pages">q define</a></code><br>
 <code><a href="gradcomdqdialog.html" target="pages">q dialog</a></code><br>
 <code><a href="gradcomdqens.html" target="pages">q ens</a></code><br> 
 <code><a href="gradcomdqfwrite.html" target="pages">q fwrite</a></code><br> 
@@ -637,7 +642,8 @@ using <a href="usingstationdata.html" target="pages">station data</a><br>
 <code>set <a href="gradcomdsetstrsiz.html" target="pages">strsiz</a></code><br>
 <code><a href="gradfuncsum.html" target="pages">sum()</a></code><br>
 <code><a href="gradfuncsumg.html" target="pages">sumg()</a></code><br>
-<a href="supplibs.html" target="pages">supplibs</a><br>
+<a href="supplibs.html" target="pages">supplibs (2.1)</a><br>
+<a href="supplibs2.html" target="pages">supplibs (2.2)</a><br>
 <code><a href="gradcomdswap.html" target="pages">swap</a></code><br>
 </font>
 <p>
@@ -681,8 +687,10 @@ using <a href="usingstationdata.html" target="pages">station data</a><br>
 <code><a href="gradcomdquery.html" target="pages">q</a> undef</code><br>
 <code>set <a href="gradcomdsetundef.html" target="pages">undef</a></code><br>
 <code><a href="gradcomdundefine.html" target="pages">undefine</a></code><br>
-<a href="udf.html" target="pages">user defined functions</a><br>
-<a href="users.html" target="pages">user's guide</a><br>
+<a href="udf.html" target="pages">User-Defined Functions</a><br>
+<a href="udp.html" target="pages">User-Defined Plug-ins</a><br>
+<a href="udpt.html" target="pages">UDPT</a><br>
+<a href="users.html" target="pages">User's Guide</a><br>
 external <a href="utilities.html" target="pages">utilites</a><br>
 </font>
 

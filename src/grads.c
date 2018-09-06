@@ -1,33 +1,19 @@
-/* Copyright (C) 1988-2016 by George Mason University. See file COPYRIGHT for more information. */
+/* Copyright (C) 1988-2017 by George Mason University. See file COPYRIGHT for more information. */
 
 /* Main program for GrADS (Grid Analysis and Display System).
    This program loops on commands from the user, and calls the
    appropriate routines based on the command entered.             */
 
-/* GrADS originally authored by Brian E. Doty.  Many others have
-   contributed over the years...
+/* GrADS is originally authored by Brian E. Doty.
+   Many others have contributed over the years...
 
-   Jennifer M. Adams
-   Reinhard Budich
-   Luigi Calori
-   Wesley Ebisuzaki
-   Mike Fiorino
-   Graziano Giuliani
-   Matthias Grzeschik
-   Tom Holt
-   Don Hooper
-   James L. Kinter
-   Steve Lord
-   Gary Love
-   Karin Meier
-   Matthias Munnich
-   Uwe Schulzweida
-   Arlindo da Silva
-   Michael Timlin
-   Pedro Tsai
-   Joe Wielgosz
-   Brian Wilkinson
-   Katja Winger
+   Jennifer M. Adams      Tom Holt            Uwe Schulzweida
+   Reinhard Budich        Don Hooper          Arlindo da Silva
+   Luigi Calori           James L. Kinter     Michael Timlin
+   Wesley Ebisuzaki       Steve Lord          Pedro Tsai
+   Mike Fiorino           Gary Love           Joe Wielgosz
+   Graziano Giuliani      Karin Meier         Brian Wilkinson
+   Matthias Grzeschik     Matthias Munnich    Katja Winger
 
    We apologize if we have neglected your contribution --
    but let us know so we can add your name to this list.
@@ -35,7 +21,6 @@
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
-/* If autoconfed, only include malloc.h when it's presen */
 #ifdef HAVE_MALLOC_H
 #include <malloc.h>
 #endif
@@ -44,6 +29,7 @@
 #endif /* HAVE_CONFIG_H */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <math.h>
 #include <signal.h>
@@ -55,316 +41,357 @@
 
 #if READLINE ==1
 #include <time.h>
-#include <stdlib.h>
 #include <readline/history.h>
 extern gaint history_length;
 void write_command_log(char *logfile);
 #endif
 
-struct gacmn gcmn;
+static struct gaupb *upba=NULL;     /* Anchor for user defined plug-in */
+char *gxgnam(char *);               /* This is also in gx.h */
+static struct gacmn gcmn;
 static struct gawgds wgds;
 extern struct gamfcmn mfcmn;
 
+/* * * * * * * * * * * * * * * * *
+ * Here's where it all begins... *
+ * * * * * * * * * * * * * * * * */
 #ifdef OPENGRADS
+/* For opengrads, which needs a capital M for its 'main' routine */
 int Main (int argc, char *argv[])  {
 #else
+#ifdef SHRDOBJ
+/* For the gradspy shared object, which can't have a 'main' routine */
+int gamain (int argc, char *argv[])  {
+#else
+/* For the stand-alone grads exectuable */
 int main (int argc, char *argv[])  {
 #endif
+#endif
 
-void command_line_help(void) ;
-void gxdgeo (char *);
-void gxend (void);
-void gatxti(gaint on, gaint cs);
-char *gatxtl(char *str,gaint level);
+  void gapysavpcm(struct gacmn *pcm);
+  void command_line_help(void) ;
+  void gxdgeo (char *);
+  void gxend (void);
+  void gatxti(gaint on, gaint cs);
+  char *gatxtl(char *str,gaint level);
 
-char cmd[1024];
-gaint rc,i,j,land,port,cmdflg,hstflg,gflag,xwideflg,killflg,ratioflg;
-gaint metabuff,size=0,g2size=0;
-gaint txtcs=-2;
-gaint ipcflg = 0; /* for IPC friendly interaction via pipes */
-char *icmd,*arg,*rc1;
-void gasigcpu() ;
-gaint wrhstflg=0;
-gadouble aspratio;
-char *logfile,*userhome=NULL;
+  char cmd[1024];
+  gaint rc,i,j,land,port,cmdflg,hstflg,gflag,killflg,ratioflg;
+  gaint metabuff,size=0,g2size=0,geomflg=0;
+  gaint gxd=0,gxp=0;
+  char gxdopt[16],gxpopt[16],xgeom[100];
+  gaint txtcs=-2;
+  gaint ipcflg = 0; /* for IPC friendly interaction via pipes */
+  char *icmd,*arg,*rc1;
+  void gasigcpu() ;
+  gaint wrhstflg=0;
+  gadouble aspratio;
+  char *logfile,*userhome=NULL;
 
-/*--- common block sets before gainit ---*/
-gcmn.batflg = 0;
-land = 0;
-port = 0;
-cmdflg = 0;
-metabuff = 0;
-hstflg = 1;
-gflag = 0;
-xwideflg = 0;
-icmd = NULL;
-arg = NULL;
-rc1 = NULL;
-killflg = 0;
-ratioflg = 0;
-aspratio = -999.9;
+  /*--- common block sets before gainit ---*/
+  gcmn.batflg = 0;
+  land = 0;
+  port = 0;
+  cmdflg = 0;
+  metabuff = 0;
+  hstflg = 1;
+  gflag = 0;
+  icmd = NULL;
+  arg = NULL;
+  rc1 = NULL;
+  killflg = 0;
+  ratioflg = 0;
+  aspratio = -999.9;
+  gxdopt[0] = '\0';
+  gxpopt[0] = '\0';
+  xgeom[0] = '\0';
+
 
 #if READLINE == 1
 #ifdef __GO32__  /* MSDOS case */
-logfile= (char *) malloc(22);
-logfile= "c:\windows\grads.log";
+  logfile= (char *) malloc(22);
+  logfile= "c:\windows\grads.log";
 #else  /* Unix */
-userhome=getenv("HOME");
-if (userhome==NULL) {
-  logfile=NULL;
-}
-else {
-  logfile= (char *) malloc(strlen(userhome)+12);
-  if(logfile==NULL) {
-    printf("Memory allocation error for logfile name.\n");
+  userhome=getenv("HOME");
+  if (userhome==NULL) {
+    logfile=NULL;
   }
   else {
-    strcpy(logfile,userhome);
-    strcat(logfile,"/.grads.log");
+    logfile= (char *) malloc(strlen(userhome)+12);
+    if(logfile==NULL) {
+      printf("Memory allocation error for logfile name.\n");
+    }
+    else {
+      strcpy(logfile,userhome);
+      strcat(logfile,"/.grads.log");
+    }
   }
-}
 #endif /* __GO32__ */
 #endif /* READLINE == 1 */
 
-if (argc>1) {
-  for (i=1; i<argc; i++) {
-    if (*(argv[i])=='-' &&
-        *(argv[i]+1)=='h' && *(argv[i]+2)=='e' && *(argv[i]+3)=='l' && *(argv[i]+4)=='p') {
-      command_line_help();     /* answer a cry for help */
-      return(0);
-    } else if (cmdflg==1) {    /* next arg is the command to execute */
-      icmd = argv[i];
-      cmdflg = 0;
-    } else if (metabuff) {     /* next arg is the metafile buffer size */
-      arg = argv[i];
-      rc1 = intprs(arg,&size);
-      if (rc1!=NULL) metabuff = 0;
-    } else if ((txtcs==-1) && (*argv[i]!='-')) {  /* next arg is optional colorization scheme */
-      txtcs = (gaint) strtol(argv[i], (char **)NULL, 10);
-      if (txtcs>2) {
-        printf("Valid colorization schemes are 0, 1, or 2. Colorization option %d ignored. \n",txtcs);
-        txtcs = -2;
-      }
-    } else if (ratioflg) {    /* next arg is aspect ratio */
+  if (argc>1) {
+    for (i=1; i<argc; i++) {
+      /* user needs help */
+      if (*(argv[i]+0)=='-' &&
+          *(argv[i]+1)=='h' &&
+          *(argv[i]+2)=='e' &&
+          *(argv[i]+3)=='l' &&
+          *(argv[i]+4)=='p') {
+        command_line_help();
+        return(0);
+      } else if (cmdflg==1) {    /* next arg is the command to execute */
+        icmd = argv[i];
+        cmdflg = 0;
+      } else if (metabuff) {     /* next arg is the metafile buffer size */
+        arg = argv[i];
+        rc1 = intprs(arg,&size);
+        if (rc1!=NULL) metabuff = 0;
+      } else if (gxd) {     /* next arg is the graphics display back end choice */
+        snprintf(gxdopt,15,"%s",argv[i]);
+        gxd=0;
+      } else if (gxp) {     /* next arg is the graphics hardcopy printing back end choice */
+        snprintf(gxpopt,15,"%s",argv[i]);
+        gxp=0;
+      } else if ((txtcs==-1) && (*argv[i]!='-')) {  /* next arg is the colorization scheme */
+        txtcs = (gaint) strtol(argv[i], (char **)NULL, 10);
+        if (txtcs>2) {
+          printf("Valid colorization schemes are 0, 1, or 2. Option %d will be ignored.\n",txtcs);
+          txtcs = -2;
+        }
+      } else if (ratioflg) {                      /* next arg is aspect ratio */
         aspratio = atof(argv[i]);
         ratioflg = 0;
-    } else if (gflag) {        /* next arg is the geometry string */
-      gxdgeo(argv[i]);
-      gflag=0;
-    } else if (wrhstflg && *(argv[i])!='-') {   /* next arg is optional log file name */
+      } else if (geomflg) {                       /* next arg is the geometry string */
+        snprintf(xgeom,100,"%s",argv[i]);
+        geomflg=0;
+      } else if (wrhstflg && *(argv[i])!='-') {   /* next arg is optional log file name */
         logfile=argv[i];
-    } else if (*(argv[i])=='-') {
-      j = 1;
-      while (*(argv[i]+j)) {
-        if      (*(argv[i]+j)=='a') ratioflg = 1;    /* aspect ratio to follow */
-        else if (*(argv[i]+j)=='b') gcmn.batflg = 1; /* batch mode */
-        else if (*(argv[i]+j)=='c') cmdflg = 1;      /* command to follow */
-        else if (*(argv[i]+j)=='C') txtcs = -1;      /* text color scheme */
-        else if (*(argv[i]+j)=='E') hstflg = 0;      /* disable command line editing */
-        else if (*(argv[i]+j)=='g') gflag = 1;       /* geometry specification to follow */
-        else if (*(argv[i]+j)=='H') wrhstflg = 1;    /* write history to log file */
-        else if (*(argv[i]+j)=='l') land = 1;        /* landscape mode */
-        else if (*(argv[i]+j)=='m') metabuff = 1;    /* metafile buffer size to follow */
-        else if (*(argv[i]+j)=='p') port = 1;        /* portrait mode */
-        else if (*(argv[i]+j)=='W') xwideflg = 1;    /* use software to control wide lines (undocumented) */
-        else if (*(argv[i]+j)=='u') {                /* unbuffer output: needed for IPC via pipes */
-          hstflg = 0;                                /* no need for readline in IPC mode */
-          ipcflg = 1;
-          setvbuf(stdin,  (char *) NULL,  _IONBF, 0 );
-          setvbuf(stdout, (char *) NULL,  _IONBF, 0 );
-          setvbuf(stderr, (char *) NULL,  _IONBF, 0 );
+      } else if (*(argv[i])=='-') {
+        j = 1;
+        while (*(argv[i]+j)) {
+          if      (*(argv[i]+j)=='a') ratioflg = 1;    /* aspect ratio to follow */
+          else if (*(argv[i]+j)=='b') gcmn.batflg = 1; /* batch mode */
+          else if (*(argv[i]+j)=='c') cmdflg = 1;      /* command to follow */
+          else if (*(argv[i]+j)=='C') txtcs = -1;      /* text color scheme */
+          else if (*(argv[i]+j)=='d') gxd = 1;         /* graphics display back end choice  */
+          else if (*(argv[i]+j)=='E') hstflg = 0;      /* disable command line editing */
+          else if (*(argv[i]+j)=='g') geomflg = 1;     /* geometry specification to follow */
+          else if (*(argv[i]+j)=='h') gxp = 1;         /* graphics hardcopy printing back end choice */
+          else if (*(argv[i]+j)=='H') wrhstflg = 1;    /* write history to log file */
+          else if (*(argv[i]+j)=='l') land = 1;        /* landscape mode */
+          else if (*(argv[i]+j)=='m') metabuff = 1;    /* metafile buffer size to follow */
+          else if (*(argv[i]+j)=='p') port = 1;        /* portrait mode */
+          else if (*(argv[i]+j)=='u') {                /* unbuffer output: needed for IPC via pipes */
+            hstflg = 0;                                /* no need for readline in IPC mode */
+            ipcflg = 1;
+            setvbuf(stdin,  (char *) NULL,  _IONBF, 0 );
+            setvbuf(stdout, (char *) NULL,  _IONBF, 0 );
+            setvbuf(stderr, (char *) NULL,  _IONBF, 0 );
+          }
+          else if (*(argv[i]+j)=='x') killflg = 1;     /* quit after finishing (usually used with -c) */
+          else printf ("Unknown command line option: %c\n",*(argv[i]+j));
+          j++;
         }
-        else if (*(argv[i]+j)=='x') killflg = 1;     /* quit after finishing (usually used with -c) */
-        else printf ("Unknown command line option: %c\n",*(argv[i]+j));
-        j++;
-      }
-    } else printf ("Unknown command line keyword: %s\n",argv[i]);
-  }
-}
-
-if (txtcs > -2) gatxti(1,txtcs); /* turn on text colorizing */
-
-if (ratioflg==1) printf ("Note: -a option was specified, but no aspect ratio was provided\n");
-if (cmdflg==1)   printf ("Note: -c option was specified, but no command was provided\n");
-if (gflag==1)    printf ("Note: -g option was specified, but no geometry specification was provided\n");
-if (metabuff==1) printf ("Note: -m option was specified, but no metafile buffer size was provided\n");
-
-if (ipcflg) printf("\n<IPC>" );  /* delimit splash screen */
-
-printf ("\nGrid Analysis and Display System (GrADS) Version %s\n",gatxtl(GRADS_VERSION,0));
-printf ("Copyright (C) 1988-2016 by George Mason University\n");
-printf ("GrADS comes with ABSOLUTELY NO WARRANTY\n");
-printf ("See file COPYRIGHT for more information\n\n");
-
-gacfg(0);
-
-#ifdef OPENGRADS
-<gaudi(&gcmn); /* Initialize OpenGrADS User Defined Extensions */
-#endif
-
-
-if (!land && !port && aspratio<-990) {
-  nxtcmd (cmd,"Landscape mode? ('n' for portrait): ");
-  if (cmd[0]=='n') port = 1;
-}
-if (port) {
-  gcmn.xsiz = 8.5;
-  gcmn.ysiz = 11.0;
-} else {
-  gcmn.xsiz = 11.0;
-  gcmn.ysiz = 8.5;
-}
-if (aspratio>-990) { /* user has specified aspect ratio */
-  if (aspratio>0.2 && aspratio < 5.0) {   /* range is limited here. */
-    if (aspratio < 1.0) {
-      gcmn.xsiz = 11.0*aspratio;
-      gcmn.ysiz = 11.0;
-    } else {
-      gcmn.ysiz = 11.0/aspratio;
-      gcmn.xsiz = 11.0;
+      } else printf ("Unknown command line keyword: %s\n",argv[i]);
     }
   }
-  else {
-    gaprnt(1,"Warning: Aspect ratio must be between 0.2 and 5.0 -- defaulting to landscape mode\n");
+
+  if (txtcs > -2) gatxti(1,txtcs); /* turn on text colorizing */
+
+  if (ratioflg==1) printf ("Note: -a option was specified, but no aspect ratio was provided\n");
+  if (cmdflg==1)   printf ("Note: -c option was specified, but no command was provided\n");
+  if (geomflg==1)  printf ("Note: -g option was specified, but no geometry specification was provided\n");
+  if (metabuff==1) printf ("Note: -m option was specified, but no metafile buffer size was provided\n");
+
+  if (ipcflg) printf("\n<IPC>" );  /* delimit splash screen */
+
+  printf("\nGrid Analysis and Display System (GrADS) Version %s\n",gatxtl(GRADS_VERSION,0));
+  printf("Copyright (C) 1988-2017 by George Mason University\n");
+  printf("GrADS comes with ABSOLUTELY NO WARRANTY\n");
+  printf("See file COPYRIGHT for more information\n\n");
+
+  gacfg(0);
+
+#ifdef OPENGRADS
+  gaudi(&gcmn); /* Initialize OpenGrADS User Defined Extensions */
+#endif
+  if (!land && !port && aspratio<-990) {
+    nxtcmd (cmd,"Landscape mode? ('n' for portrait): ");
+    if (cmd[0]=='n') port = 1;
   }
-}
+  if (port) {
+    gcmn.xsiz = 8.5;
+    gcmn.ysiz = 11.0;
+  } else {
+    gcmn.xsiz = 11.0;
+    gcmn.ysiz = 8.5;
+  }
+  if (aspratio>-990) { /* user has specified aspect ratio */
+    if (aspratio>0.2 && aspratio < 5.0) {   /* range is limited here. */
+      if (aspratio < 1.0) {
+        gcmn.xsiz = 11.0*aspratio;
+        gcmn.ysiz = 11.0;
+      } else {
+        gcmn.ysiz = 11.0/aspratio;
+        gcmn.xsiz = 11.0;
+      }
+    }
+    else {
+      printf("Warning: Aspect ratio must be between 0.2 and 5.0 -- defaulting to landscape mode\n");
+    }
+  }
+  gainit();
+  mfcmn.cal365=-999;
+  mfcmn.warnflg=2;
+  mfcmn.winx=-999;      /* Window x  */
+  mfcmn.winy=-999;      /* Window y */
+  mfcmn.winw=0;         /* Window width */
+  mfcmn.winh=0;         /* Window height */
+  mfcmn.winb=0;         /* Window border width */
+  gcmn.pfi1 = NULL;     /* No data sets open      */
+  gcmn.pfid = NULL;
+  gcmn.fnum = 0;
+  gcmn.dfnum = 0;
+  gcmn.undef = -9.99e8; /* default undef value */
+  gcmn.fseq = 10;
+  gcmn.pdf1 = NULL;
+  gcmn.sdfwname = NULL;
+  gcmn.sdfwtype = 1;
+  gcmn.sdfwpad = 0;
+  gcmn.sdfrecdim = 0;
+  gcmn.sdfchunk = 0;
+  gcmn.sdfzip = 0;
+  gcmn.sdfprec = 8;
+  gcmn.ncwid = -999;
+  gcmn.xchunk = 0;
+  gcmn.ychunk = 0;
+  gcmn.zchunk = 0;
+  gcmn.tchunk = 0;
+  gcmn.echunk = 0;
+  gcmn.attr = NULL;
+  gcmn.ffile = NULL;
+  gcmn.sfile = NULL;
+  gcmn.fwname = NULL;
+  gcmn.gtifname = NULL;    /* for GeoTIFF output */
+  gcmn.tifname = NULL;     /* for KML output */
+  gcmn.kmlname = NULL;     /* for KML output */
+  gcmn.kmlflg = 1;         /* default KML output is an image file */
+  gcmn.shpfname = NULL;    /* for shapefile output */
+  gcmn.shptype = 2;        /* default shape type is line */
+  gcmn.fwenflg = BYTEORDER;
+  gcmn.fwsqflg = 0;        /* default is stream */
+  gcmn.fwexflg = 0;        /* default is not exact -- old bad way */
+  gcmn.gtifflg = 1;        /* default geotiff output format is float */
+  if (size) gcmn.hbufsz = size;
+  if (g2size) gcmn.g2bufsz = g2size;
+  gcmn.fillpoly = -1;      /* default is to not fill shapefile polygons */
+  gcmn.marktype = 3;       /* default is to draw points as closed circe */
+  gcmn.marksize = 0.05;    /* default mark size */
+  for (i=0; i<32; i++) {
+    gcmn.clct[i] = NULL;  /* initialize collection pointers */
+    gcmn.clctnm[i] = 0;
+  }
+  if (xgeom[0]!='\0')
+    snprintf(gcmn.xgeom,100,"%s",xgeom);    /* copy user-specified window geometry string   */
+  if (gxdopt[0]!='\0')
+    snprintf(gcmn.gxdopt,15,"%s",gxdopt);   /* copy user-specified GX display plug-in name  */
+  else
+    snprintf(gcmn.gxdopt,15,"Cairo");       /* ... if not specified, default is Cairo       */
+  if (gxpopt[0]!='\0')
+    snprintf(gcmn.gxpopt,15,"%s",gxpopt);   /* copy user-specified GX printing plug-in name */
+  else
+    snprintf(gcmn.gxpopt,15,"Cairo");       /* ... if not specified, default is Cairo       */
 
-if(xwideflg) gxwdln();
+  /* Read the user defined plug-in table */
+  gaudpdef();
 
-gainit();
-mfcmn.cal365=-999;
-mfcmn.warnflg=2;
-mfcmn.winx=-999;      /* Window x  */
-mfcmn.winy=-999;      /* Window y */
-mfcmn.winw=0;         /* Window width */
-mfcmn.winh=0;         /* Window height */
-mfcmn.winb=0;         /* Window border width */
-gcmn.pfi1 = NULL;                     /* No data sets open      */
-gcmn.pfid = NULL;
-gcmn.fnum = 0;
-gcmn.dfnum = 0;
-gcmn.undef = -9.99e8;         /* default undef value */
-gcmn.fseq = 10;
-gcmn.pdf1 = NULL;
-gcmn.sdfwname = NULL;
-gcmn.sdfwtype = 1;
-gcmn.sdfwpad = 0;
-gcmn.sdfrecdim = 0;
-gcmn.sdfchunk = 0;
-gcmn.sdfzip = 0;
-gcmn.sdfprec = 8;
-gcmn.ncwid = -999;
-gcmn.xchunk = 0;
-gcmn.ychunk = 0;
-gcmn.zchunk = 0;
-gcmn.tchunk = 0;
-gcmn.echunk = 0;
-gcmn.attr = NULL;
-gcmn.ffile = NULL;
-gcmn.sfile = NULL;
-gcmn.fwname = NULL;
-gcmn.gtifname = NULL;    /* for GeoTIFF output */
-gcmn.tifname = NULL;     /* for KML output */
-gcmn.kmlname = NULL;     /* for KML output */
-gcmn.kmlflg = 1;         /* default KML output is an image file */
-gcmn.shpfname = NULL;    /* for shapefile output */
-gcmn.shptype = 2;        /* default shape type is line */
-gcmn.fwenflg = BYTEORDER;
-gcmn.fwsqflg = 0;        /* default is stream */
-gcmn.fwexflg = 0;        /* default is not exact -- old bad way */
-gcmn.gtifflg = 1;        /* default geotiff output format is float */
-if (size) gcmn.hbufsz = size;
-if (g2size) gcmn.g2bufsz = g2size;
-gcmn.cachesf = 1.0;      /* global scale factor for netcdf4/hdf5 cache */
-gcmn.fillpoly = -1;      /* default is to not fill shapefile polygons */
-gcmn.marktype = 3;       /* default is to draw points as closed circe */
-gcmn.marksize = 0.05;    /* default mark size */
-for (i=0; i<32; i++) {
-  gcmn.clct[i] = NULL;  /* initialize collection pointers */
-  gcmn.clctnm[i] = 0;
-}
+  /* Give gafunc.c the anchor for chain of upb structures */
+  setupba (upba);
 
+  /* if graphics (subroutine gxstrt) failed to initialize, quit */
+  rc=gagx(&gcmn);
+  if (rc) exit(rc);
 
-gafdef();
-
-gagx(&gcmn);
+  /* Inform gaio.c what the global scale factor for netcdf4/hdf5 cache */
+  setcachesf(gcmn.cachesf);
 
 #if !defined(__CYGWIN32__) && !defined(__GO32__)
-  signal(CPULIMSIG, gasigcpu) ;  /* CPU time limit signal; just exit   -hoop */
+  signal(CPULIMSIG, gasigcpu) ;  /* CPU time limit signal; just exit */
 #endif
 
 #if READLINE == 1
-if (wrhstflg && logfile != NULL) {
-  printf("Command line history in %s\n",logfile);
-  history_truncate_file(logfile,256);
-  read_history(logfile); /* read last 256 cmd */
-}
+  if (wrhstflg && logfile != NULL) {
+    printf("Command line history in %s\n",logfile);
+    history_truncate_file(logfile,256);
+    read_history(logfile); /* read last 256 cmd */
+  }
 #endif
 
-if (icmd) rc = gacmd(icmd,&gcmn,0);
-else      rc = 0;
-signal(2,gasig);  /* Trap cntrl c */
+  if (icmd) rc = gacmd(icmd,&gcmn,0);   /* execute command given on startup */
+  else      rc = 0;                     /* set up for entering the main command line loop */
+
+  signal(2,gasig);                      /* Trap cntrl c */
 
 #if USEGUI == 1
-if (!ipcflg)
-  gagui_main (argc, argv);   /*ams Initializes GAGUI, and if the environment
-                               variable GAGUI is set it starts a GUI
-                               script. Otherwise, it just returns. ams*/
+  if (!ipcflg)
+    gagui_main (argc, argv);   /*ams Initializes GAGUI, and if the environment
+                                 variable GAGUI is set it starts a GUI
+                                 script. Otherwise, it just returns. ams*/
 #endif
-if (ipcflg) printf("\n<RC> %d </RC>\n</IPC>\n",rc);
+  if (ipcflg) printf("\n<RC> %d </RC>\n</IPC>\n",rc);
 
-/* Main command line loop */
-while (rc>-1) {
+/* This is for pygrads */
+#ifdef SHRDOBJ
+  gapysavpcm(&gcmn);
+  return(0);
+#endif
 
-  if (killflg) return(99);
+  /* Main command line loop */
+  while (rc>-1) {
+
+    if (killflg) return(99);
 
 #if READLINE == 1
 #if defined(MM_NEW_PROMPT)
-  char prompt[13];
-  if (hstflg) {
-    snprintf(prompt,12,"ga[%d]> ",history_length+1);
-    rc=nxrdln(&cmd[0],prompt);
-  }
+    char prompt[13];
+    if (hstflg) {
+      snprintf(prompt,12,"ga[%d]> ",history_length+1);
+      rc=nxrdln(&cmd[0],prompt);
+    }
 #else
-  if (hstflg) rc=nxrdln(&cmd[0],"ga-> ");
+    if (hstflg) rc=nxrdln(&cmd[0],"ga-> ");
 #endif
-  else rc=nxtcmd(&cmd[0],"ga> ");
+    else rc=nxtcmd(&cmd[0],"ga> ");
 #else
-  rc=nxtcmd(&cmd[0],"ga> ");
+    rc=nxtcmd(&cmd[0],"ga> ");
 #endif
 
-  if (rc < 0) {
-    strcpy(cmd,"quit");   /* on EOF, just quit */
-    printf("[EOF]\n");
+    if (rc < 0) {
+      strcpy(cmd,"quit");   /* on EOF, just quit */
+      printf("[EOF]\n");
+    }
+
+    if (ipcflg) printf("\n<IPC> %s", cmd );  /* echo command in IPC mode */
+
+    gcmn.sig = 0;
+    rc = gacmd(cmd,&gcmn,0);
+
+    if (ipcflg) printf("\n<RC> %d </RC>\n</IPC>\n",rc);
   }
 
-  if (ipcflg) printf("\n<IPC> %s", cmd );  /* echo command in IPC mode */
-
-  gcmn.sig = 0;
-  rc = gacmd(cmd,&gcmn,0);
-
-  if (ipcflg) printf("\n<RC> %d </RC>\n</IPC>\n",rc);
-}
-
-/* All done */
-gxend();
+  /* All done */
+  gxend();
 
 #if READLINE == 1
- if (wrhstflg) write_command_log(logfile);
+  if (wrhstflg) write_command_log(logfile);
 #endif
 
-exit(0);
+  exit(0);
 
-}
+}  /* end of main routine */
 
-/* query the global cache scale factor */
-gadouble qcachesf (void) {
-  return(gcmn.cachesf);
-}
-
-/* Initialize most gacmn values.  Values involving real page size,
-   and values involving open files, are not modified   */
-
+/* Initialize most gacmn values. Values involving real page size,
+   and values involving open files are not modified   */
 void gainit (void) {
 gaint i;
 
@@ -474,6 +501,7 @@ gaint i;
   gcmn.timelabflg = 1;
   gcmn.stnprintflg = 0;
   gcmn.fgcnt = 0;
+  gcmn.barbolin = 0;
   gcmn.barflg = 0;
   gcmn.bargap = 0;
   gcmn.barolin = 0;
@@ -541,12 +569,14 @@ gaint i;
   gcmn.prbnum = 1; gcmn.prudef = 0;
   gcmn.dwrnflg = 1;
   gcmn.xexflg = 0; gcmn.yexflg = 0;
-  gcmn.cachesf = 1.0;
+  gcmn.cachesf = 1;
   gcmn.dblen = 12;
   gcmn.dbprec = 6;
   gcmn.loopflg = 0;
   gcmn.aaflg = 1;
-
+  gcmn.xgeom[0] = '\0';
+  gcmn.gxdopt[0] = '\0';
+  gcmn.gxpopt[0] = '\0';
 }
 
 void gasig(gaint i) {
@@ -578,32 +608,175 @@ void write_command_log(char *logfile) {
 /* output command line options */
 
 void command_line_help (void) {
-printf("\nCommand line options for GrADS version " GRADS_VERSION ": \n\n");
-printf("    -help       Prints out this help message \n");
-printf("    -a ratio    Sets the aspect ratio of the real page \n");
-printf("    -b          Enables batch mode (graphics window is not opened) \n");
-printf("    -c cmd      Executes the command 'cmd' after startup \n");
-printf("    -C N        Enables colorization of text with color scheme N (default scheme is 0)\n");
-printf("    -E          Disables command line editing \n");
-printf("    -g WxH+X+Y  Sets size of graphics window \n");
-printf("    -H fname    Enables command line logging to file 'fname' (default fname is $HOME/.grads.log) \n");
-printf("    -l          Starts in landscape mode with real page size 11 x 8.5 \n");
-printf("    -p          Starts in portrait mode with real page size 8.5 x 11 \n");
-printf("    -m NNN      Sets metafile buffer size to NNN (must be an integer) \n");
-printf("    -u          Unbuffers stdout/stderr, disables command line editing \n");
-printf("    -W          Uses X server to draw wide lines (faster) instead of software (better) \n");
-printf("    -x          Causes GrADS to automatically quit after executing supplied command (used with -c) \n");
-printf("\n    Options that do not require arguments may be concatenated \n");
-printf("\nExamples:\n");
-printf("   grads -pb \n");
-printf("   grads -lbxc \"myscript.gs\" \n");
-printf("   grads -Ca 1.7778 \n");
-printf("   grads -C 2 -a 1.7778 \n");
-printf("   grads -pHm 5000000 -g 1100x850+70+0 \n");
-printf("   grads -pH mysession.log -m 5000000 -g 1100x850+70+0 \n\n");
+  printf("\nCommand line options for GrADS version " GRADS_VERSION ": \n\n");
+  printf("    -help       Prints out this help message \n");
+  printf("    -a ratio    Sets the aspect ratio of the real page \n");
+  printf("    -b          Enables batch mode (graphics window is not opened) \n");
+  printf("    -c cmd      Executes the command 'cmd' after startup \n");
+  printf("    -C N        Enables colorization of text with color scheme N (default scheme is 0)\n");
+  printf("    -d name     Name of the graphics display package, given in 'gxdisplay' entry of UDPT\n");
+  printf("    -E          Disables command line editing \n");
+  printf("    -g WxH+X+Y  Sets size of graphics window \n");
+  printf("    -H fname    Enables command line logging to file 'fname' (default fname is $HOME/.grads.log) \n");
+  printf("    -h name     Name of the graphics hardcopy printing package, given in 'gxprint' entry of UDPT\n");
+  printf("    -l          Starts in landscape mode with real page size 11 x 8.5 \n");
+  printf("    -p          Starts in portrait mode with real page size 8.5 x 11 \n");
+  printf("    -m NNN      Sets metafile buffer size to NNN (must be an integer) \n");
+  printf("    -u          Unbuffers stdout/stderr, disables command line editing \n");
+  printf("    -x          Causes GrADS to automatically quit after executing supplied command (used with -c) \n");
+  printf("\n    Options that do not require arguments may be concatenated \n");
+  printf("\nExamples:\n");
+  printf("   grads -pb \n");
+  printf("   grads -lbxc \"myscript.gs\" \n");
+  printf("   grads -Ca 1.7778 \n");
+  printf("   grads -C 2 -a 1.7778 \n");
+  printf("   grads -pHm 5000000 -g 1100x850+70+0 \n");
+  printf("   grads -pH mysession.log -m 5000000 -g 1100x850+70+0 \n\n");
 }
 
 /* For CPU time limit signal */
 void gasigcpu(gaint i) {
-    exit(1) ;
+  exit(1) ;
+}
+
+/* Routine to read the user defined plug-in table(s)
+   and build link list of plug-in definition blocks.
+   The table file name is pointed to by the GAUDPT environment variable
+   and/or a file called "udpt" in the GADDIR directory */
+
+void gaudpdef (void) {
+struct gaupb *upb, *oupb=NULL;
+char *cname=NULL;
+FILE *cfile;
+char *ch,ptype[16],rec[500];
+gaint i,sz,pass,line,err;
+
+  /* Make two passes:
+     1. Read user specified plug-in table (in GAUDPT),
+     2. Read system plug-in table (in GADDIR) */
+  pass = 0;
+  while (pass<2) {
+    if (pass==0) {
+      /* check if user has set the GAUDPT environment variable */
+      cname = getenv("GAUDPT");
+      if (cname==NULL) {
+        pass++;
+        continue;
+      }
+      cfile = fopen(cname,"r");
+      if (cfile==NULL) {
+        pass++;
+        continue;
+      }
+    }
+    /* check for a file called "udpt" in the GADDIR directory */
+     else {
+      cname = gxgnam("udpt");
+      cfile = fopen(cname,"r");
+      if (cfile==NULL) {
+        break;
+      }
+    }
+
+    /* Read the file. */
+    line=0;
+    while (1) {
+      /* Read a record from the file */
+      ch = fgets(rec,500,cfile);
+      if (ch==NULL) break;
+      ch = rec;
+      line++;
+      err=0;
+      if (*ch=='*' || *ch=='#') continue;            /* Check if this is a comment field */
+      /* allocate memory */
+      upb = (struct gaupb *)malloc(sizeof(struct gaupb));
+      if (upb==NULL) goto memerr;
+      while (*ch==' ') ch++;                                 /* move past leading blanks */
+      /* parse the plug-in type keyword*/
+      i = 0;
+      while (*ch!=' ' && *ch!='\0' && *ch!='\n') {
+        if (i<15) {
+          ptype[i] = *ch;
+          i++;
+        }
+        ch++;
+      }
+      ptype[i] = '\0';
+      lowcas(ptype);
+      upb->type=0;
+      if (!strncmp(ptype,"function",8))  upb->type=1;
+/*       if (!strncmp(ptype,"defop",5))     upb->type=2; */
+      if (!strncmp(ptype,"gxdisplay",9)) upb->type=3;
+      if (!strncmp(ptype,"gxprint",7))   upb->type=4;
+      if (upb->type==0) { err=1; goto fmterr; }
+      while (*ch==' ') ch++;                          /* move past any in-between blanks */
+      /* parse the plug-in name, must be 15 characters or less */
+      upb->name[0] = '\0';
+      i = 0;
+      while (*ch!=' ' && *ch!='\0' && *ch!='\n') {
+        if (i<15) {
+          upb->name[i] = *ch;
+          i++;
+        }
+        ch++;
+      }
+      upb->name[i] = '\0';
+      if (i==0) { err=2; goto fmterr; }
+      if (upb->type<=2) lowcas(upb->name);    /* gaexpr needs functions to be lower case */
+      while (*ch==' ') ch++;                          /* move past any in-between blanks */
+      /* parse the shared object filename */
+      upb->fname = NULL;
+      sz = 0;
+      while (*(ch+sz)!=' '&&*(ch+sz)!='\n'&&*(ch+sz)!='\0') sz++;   /* no spaces allowed */
+      if (sz==0) { err=3; goto fmterr; }
+
+    fmterr:
+      if (err) {
+        printf("Warning: Format error in line %d of %s\n",line,cname);
+        if (err==1) printf("  Plug-in type must be either 'function', 'gxdisplay', or 'gxprint'\n");
+        if (err==2) printf("  Plug-in name and shared object filename are missing\n");
+        if (err==3) printf("  Shared object filename is missing\n");
+        printf("  This record will be ignored\n");
+        if (upb!=NULL) free(upb);
+        continue;
+      }
+
+      /* Add this entry to the chain */
+      upb->fname = (char *)malloc(sz+2);
+      if (upb->fname==NULL) { free(upb); goto memerr; }
+      for (i=0; i<sz; i++) {
+        upb->fname[i] = *ch;
+        ch++;
+      }
+      upb->fname[sz] = '\0';
+      upb->pfunc = NULL;
+      upb->upb = NULL;
+      if (upba==NULL) upba = upb;
+      else oupb->upb = upb;
+      oupb = upb;
+    } /* matches while(1) */
+
+    fclose (cfile);
+    if (pass>0 && cname!=NULL) gree(cname,"f306");
+    pass++;
+  } /* matches while (pass<2) */
+
+  return;
+
+memerr:
+  printf("Memory allocation error when parsing user defined plug-in table\n");
+  return;
+}
+
+
+/* Search the contents of the chain of upb structures
+   If the name and type match, return the pointer to the fname */
+char * gaqupb (char *name, gaint type) {
+struct gaupb *upb;
+  upb = upba;
+  while (upb) {
+    if (cmpwrd(upb->name,name) && upb->type==type) return (upb->fname);
+    upb = upb->upb;
+  }
+  return (NULL);
 }

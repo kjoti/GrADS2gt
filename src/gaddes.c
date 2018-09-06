@@ -1,4 +1,4 @@
-/* Copyright (C) 1988-2016 by George Mason University. See file COPYRIGHT for more information. */
+/* Copyright (C) 1988-2017 by George Mason University. See file COPYRIGHT for more information. */
 
 /* Authored by B. Doty */
 
@@ -20,7 +20,7 @@
 #include "grads.h"
 
 extern struct gamfcmn mfcmn;
-static char pout[256];
+static char pout[1256];
 static FILE *pdfi;       /* File descriptor for pdef file */
 FILE *descr;             /* File descriptor pointer */
 
@@ -178,6 +178,19 @@ gaint gaddes (char *name, struct gafile *pfi, gaint mflag) {
           pfi->xyhdr = 0;
         } else {
           pfi->xyhdr = pfi->xyhdr/4;
+        }
+      }
+
+    } else if (cmpwrd("xytrailer",rec)) {
+      if ( (ch=nxtwrd(rec))==NULL ) {
+        gaprnt (1,"Description file warning: Missing xy grid trailer length\n");
+      } else {
+        ch = longprs(ch,&(pfi->xytrlr));
+        if (ch==NULL) {
+          gaprnt (1,"xy grid trailer length invalid\n");
+          pfi->xytrlr = 0;
+        } else {
+          pfi->xytrlr = pfi->xytrlr/4;
         }
       }
 
@@ -824,7 +837,7 @@ gaint gaddes (char *name, struct gafile *pfi, gaint mflag) {
         /* open the pdef file */
         pdfi = fopen(pdefnm,"rb");
         if (pdfi==NULL) {
-          snprintf(pout,255, "  Error opening pdef file:  %s\n",pdefnm);
+          snprintf(pout,1255, "  Error opening pdef file:  %s\n",pdefnm);
           gaprnt (0,pout);
           goto errm;
         }
@@ -845,7 +858,7 @@ gaint gaddes (char *name, struct gafile *pfi, gaint mflag) {
       if ( (ch = nxtwrd(rec)) == NULL) goto err1;
       if ( (pos = intprs(ch,&(pfi->dnum[0])))==NULL) goto err1;
       if (pfi->dnum[0]<1) {
-        snprintf(pout,255,"Warning: Invalid XDEF syntax in %s -- Changing size of X axis from %d to 1 \n",
+        snprintf(pout,1255,"Warning: Invalid XDEF syntax in %s -- Changing size of X axis from %d to 1 \n",
                 pfi->dnam,pfi->dnum[0]);
         gaprnt (1,pout);
         pfi->dnum[0] = 1;
@@ -874,7 +887,7 @@ gaint gaddes (char *name, struct gafile *pfi, gaint mflag) {
       if ( (ch = nxtwrd(rec)) == NULL) goto err1;
       if ( (pos = intprs(ch,&(pfi->dnum[1])))==NULL) goto err1;
       if (pfi->dnum[1]<1) {
-        snprintf(pout,255,"Warning: Invalid YDEF syntax in %s -- Changing size of Y axis from %d to 1 \n",
+        snprintf(pout,1255,"Warning: Invalid YDEF syntax in %s -- Changing size of Y axis from %d to 1 \n",
                 pfi->dnam,pfi->dnum[1]);
         gaprnt (1,pout);
         pfi->dnum[1] = 1;
@@ -951,7 +964,7 @@ gaint gaddes (char *name, struct gafile *pfi, gaint mflag) {
       if ( (ch = nxtwrd(rec)) == NULL) goto err1;
       if ( (pos = intprs(ch,&(pfi->dnum[2])))==NULL) goto err1;
       if (pfi->dnum[2]<1) {
-        snprintf(pout,255,"Warning: Invalid ZDEF syntax in %s -- Changing size of Z axis from %d to 1 \n",
+        snprintf(pout,1255,"Warning: Invalid ZDEF syntax in %s -- Changing size of Z axis from %d to 1 \n",
                 pfi->dnam,pfi->dnum[2]);
         gaprnt (1,pout);
         pfi->dnum[2] = 1;
@@ -974,7 +987,7 @@ gaint gaddes (char *name, struct gafile *pfi, gaint mflag) {
       if ( (ch = nxtwrd(rec)) == NULL) goto err1;
       if ( (pos = intprs(ch,&(pfi->dnum[3])))==NULL) goto err1;
       if (pfi->dnum[3]<1) {
-        snprintf(pout,255,"Warning: Invalid TDEF syntax in %s -- Changing size of T axis from %d to 1 \n",
+        snprintf(pout,1255,"Warning: Invalid TDEF syntax in %s -- Changing size of T axis from %d to 1 \n",
                 pfi->dnam,pfi->dnum[3]);
         gaprnt (1,pout);
         pfi->dnum[3] = 1;
@@ -1015,7 +1028,7 @@ gaint gaddes (char *name, struct gafile *pfi, gaint mflag) {
       if ((ch = nxtwrd(mrec)) == NULL) goto err1;
       if ((pos = intprs(ch,&(pfi->dnum[4])))==NULL) goto err1;
       if (pfi->dnum[4]<1) {
-        snprintf(pout,255,"Warning: Invalid EDEF syntax in %s -- Changing size of E axis from %d to 1 \n",
+        snprintf(pout,1255,"Warning: Invalid EDEF syntax in %s -- Changing size of E axis from %d to 1 \n",
                 pfi->dnam,pfi->dnum[4]);
         gaprnt (1,pout);
         pfi->dnum[4] = 1;
@@ -1110,7 +1123,7 @@ gaint gaddes (char *name, struct gafile *pfi, gaint mflag) {
           }
           if (cmpwrd("endedef",rec)) {
             gaprnt (0,"Open Error:  Unexpected ENDEDEF record\n");
-            snprintf(pout,255, "Was expecting %i records.  Found %i.\n", pfi->dnum[4], j);
+            snprintf(pout,1255, "Was expecting %i records.  Found %i.\n", pfi->dnum[4], j);
             gaprnt (2,pout);
             goto err9;
           }
@@ -1176,7 +1189,7 @@ gaint gaddes (char *name, struct gafile *pfi, gaint mflag) {
               if ((ddfattr(mrec,pfi)) == -1) goto retrn;
             }
           } else {
-            snprintf(pout,255,"Open Error:  Looking for \"ENDEDEF\", found \"%s\" instead.\n",mrec);
+            snprintf(pout,1255,"Open Error:  Looking for \"ENDEDEF\", found \"%s\" instead.\n",mrec);
             gaprnt (0,pout);
             goto err9;
           }
@@ -1240,7 +1253,7 @@ gaint gaddes (char *name, struct gafile *pfi, gaint mflag) {
         /* get the complete variable declaration */
         if (fgets(rec,512,descr)==NULL) {
           gaprnt (0,"Open Error:  Unexpected EOF reading variables\n");
-          snprintf(pout,255, "Was expecting %i records.  Found %i.\n", pfi->vnum, i);
+          snprintf(pout,1255, "Was expecting %i records.  Found %i.\n", pfi->vnum, i);
           gaprnt (2,pout);
           goto retrn;
         }
@@ -1261,6 +1274,7 @@ gaint gaddes (char *name, struct gafile *pfi, gaint mflag) {
         /* Keep mixed case and lower case versions of rec handy */
         strcpy (mrec,rec);
         lowcas(rec);
+
         /* Allow comments between VARS and ENDVARS */
         /* For hdf5 datasets, the varnames may begin with a "/", so along with the
            test for non-alpha-numeric characters, which normally indicate a comment,
@@ -1277,7 +1291,7 @@ gaint gaddes (char *name, struct gafile *pfi, gaint mflag) {
 
         if (cmpwrd("endvars",rec)) {
           gaprnt (0,"Open Error:  Unexpected ENDVARS record\n");
-          snprintf(pout,255, "Was expecting %i records.  Found %i.\n", pfi->vnum, i);
+          snprintf(pout,1255, "Was expecting %i records.  Found %i.\n", pfi->vnum, i);
           gaprnt (2,pout);
           goto err9;
         }
@@ -1363,7 +1377,7 @@ gaint gaddes (char *name, struct gafile *pfi, gaint mflag) {
         pvar->nh5vardims += pvar->nvardims;
 
         /* parse the variable description */
-        getstr (pvar->varnm,mrec+(ch-rec),140);
+        getstr (pvar->varnm,mrec+(ch-rec),160);
 
         /* var_t is for data files with dimension sequence: X, Y, Z, T, V */
         if ((pvar->units[0]==-1) &&
@@ -1412,7 +1426,7 @@ gaint gaddes (char *name, struct gafile *pfi, gaint mflag) {
           }
         }
         else {
-          snprintf(pout,255,"Open Error:  Looking for \"endvars\", found \"%s\" instead.\n",rec);
+          snprintf(pout,1255,"Open Error:  Looking for \"endvars\", found \"%s\" instead.\n",rec);
           gaprnt (0,pout);
           goto err9;
         }
@@ -1452,7 +1466,7 @@ gaint gaddes (char *name, struct gafile *pfi, gaint mflag) {
   err=0;
   for (i=0; i<7; i++) {
     if (flgs[i]) {
-      snprintf(pout,255,"Open Error:  missing %s record \n",errs[i]);
+      snprintf(pout,1255,"Open Error:  missing %s record \n",errs[i]);
       gaprnt (0,pout);
       err=1;
     }
@@ -1464,15 +1478,11 @@ gaint gaddes (char *name, struct gafile *pfi, gaint mflag) {
      Check if scanned stuff makes sense, and then set things up correctly */
 
   /* Set the default netcdf/hdf5 cache size to be big enough to contain
-     a global 2D grid of 8-byte data values times the global cache scale factor */
+     a global 2D grid of 8-byte data values */
   if (pfi->cachesize == (long)-1) {
-    sf = qcachesf();
-    sf = sf * 8 * pfi->dnum[0] * pfi->dnum[1];
+    sf = 8 * pfi->dnum[0] * pfi->dnum[1];
     pfi->cachesize = (long)floor(sf) ;
   }
-  /* set the netCDF-4 cache size */
-  sz = (size_t)pfi->cachesize;
-  set_nc_cache(sz);
 
   /* If no EDEF entry was found, set up the default values */
   if (pfi->ens1==NULL) {
@@ -1517,7 +1527,7 @@ gaint gaddes (char *name, struct gafile *pfi, gaint mflag) {
       ens->gt = t2gr(pfi->abvals[3],&(ens->tinit));
       /* make sure time axis spans all ensemble members */
       if (ens->gt - 1 + ens->length > pfi->dnum[3]) {
-        snprintf(pout,255,"Open Error:  ensemble %d (%s) extends beyond the time axis limits\n",j,ens->name);
+        snprintf(pout,1255,"Open Error:  ensemble %d (%s) extends beyond the time axis limits\n",j,ens->name);
         gaprnt(0,pout);
         goto retrn;
       }
@@ -1541,7 +1551,7 @@ gaint gaddes (char *name, struct gafile *pfi, gaint mflag) {
   if (pfi->idxflg && mflag) {
     mfile = fopen (pfi->mnam, "rb");
     if (mfile==NULL) {
-      snprintf(pout,255,"Open Error:  Can't open Station/Index map file %s \n",pfi->mnam);
+      snprintf(pout,1255,"Open Error:  Can't open Station/Index map file %s \n",pfi->mnam);
       gaprnt (0,pout); goto retrn;
     }
     if (mflag==2) goto skipread;
@@ -1605,7 +1615,7 @@ gaint gaddes (char *name, struct gafile *pfi, gaint mflag) {
             for (i=0; i<pindx->hinum; i++) {
               rc = fread(urec,sizeof(unsigned char),4,mfile);
               if (rc!=4) {
-                snprintf(pout,255,"Error reading integer %d from header of GRIB1 index file\n",i);
+                snprintf(pout,1255,"Error reading integer %d from header of GRIB1 index file\n",i);
                 gaprnt(0,pout); goto retrn;
               }
               idum = gagby(urec,0,4);
@@ -1627,7 +1637,7 @@ gaint gaddes (char *name, struct gafile *pfi, gaint mflag) {
             for (i=0; i<pindx->intnum; i++) {
               rc = fread(urec,sizeof(unsigned char),4,mfile);
               if (rc!=4) {
-                snprintf(pout,255,"Error reading integer %d from GRIB1 index file\n",i);
+                snprintf(pout,1255,"Error reading integer %d from GRIB1 index file\n",i);
                 gaprnt(0,pout); goto retrn;
               }
               idum = gagby(urec,0,4);
@@ -1641,7 +1651,7 @@ gaint gaddes (char *name, struct gafile *pfi, gaint mflag) {
             for (i=0; i<pindx->fltnum; i++) {
               rc = fread(urec,sizeof(unsigned char),4,mfile);
               if (rc!=4) {
-                snprintf(pout,255,"Error reading float %d from GRIB1 index file\n",i);
+                snprintf(pout,1255,"Error reading float %d from GRIB1 index file\n",i);
                 gaprnt(0,pout); goto retrn;
               }
               fdum = ibm2flt(urec);
@@ -1776,7 +1786,7 @@ gaint gaddes (char *name, struct gafile *pfi, gaint mflag) {
             if ((g2indx->g2intpnt = (gaint *)galloc(sz,"g2intpnt"))==NULL) goto err8;
             rc = fread(g2indx->g2intpnt,sizeof(gaint),g2indx->g2intnum,mfile);
             if (rc!=g2indx->g2intnum) {
-              snprintf(pout,255,"Error reading int array from GRIB2 index file, rc=%d\n",rc);
+              snprintf(pout,1255,"Error reading int array from GRIB2 index file, rc=%d\n",rc);
               gaprnt(0,pout); goto retrn;
             }
             if (swpflg) gabswp(g2indx->g2intpnt,g2indx->g2intnum);
@@ -1786,7 +1796,7 @@ gaint gaddes (char *name, struct gafile *pfi, gaint mflag) {
               if ((g2indx->g2bigpnt = (off_t *)galloc(sz,"g2bigpnt"))==NULL) goto err8;
               rc = fread(g2indx->g2bigpnt,sizeof(off_t),g2indx->g2intnum,mfile);
               if (rc!=g2indx->g2intnum) {
-                snprintf(pout,255,"Error reading off_t array from GRIB2 index file, rc=%d\n",rc);
+                snprintf(pout,1255,"Error reading off_t array from GRIB2 index file, rc=%d\n",rc);
                 gaprnt(0,pout); goto retrn;
               }
               if (swpflg) gabswp8(g2indx->g2bigpnt,g2indx->g2intnum);
@@ -1794,7 +1804,7 @@ gaint gaddes (char *name, struct gafile *pfi, gaint mflag) {
           }
         }
         else {
-          snprintf(pout,255,"Unknown GRIB2 index version number: %d\n",g2indx->version);
+          snprintf(pout,1255,"Unknown GRIB2 index version number: %d\n",g2indx->version);
           gaprnt(0,pout); goto retrn;
         }
         /* everything parsed OK, so hang the pindx off the gafile structure */
@@ -1927,7 +1937,7 @@ gaint gaddes (char *name, struct gafile *pfi, gaint mflag) {
               }
             }
             else {
-              snprintf(pout,255,"Warning: VECTORPAIRS variables %s,%s were not found \n",var1,var2);
+              snprintf(pout,1255,"Warning: VECTORPAIRS variables %s,%s were not found \n",var1,var2);
               gaprnt(1,pout);
             }
             break;
@@ -2027,9 +2037,9 @@ gaint gaddes (char *name, struct gafile *pfi, gaint mflag) {
       err=1;
     } else if (mcnt != pfi->dnum[3]) {
       gaprnt (0,"Open Error: Inconsistent time count\n");
-      snprintf(pout,255,"  Count in station map file = %i\n",mcnt);
+      snprintf(pout,1255,"  Count in station map file = %i\n",mcnt);
       gaprnt (0,pout);
-      snprintf(pout,255,"  Count in descriptor file = %i\n",pfi->dnum[3]);
+      snprintf(pout,1255,"  Count in descriptor file = %i\n",pfi->dnum[3]);
       gaprnt (0,pout);
       err=1;
     }
@@ -2065,7 +2075,7 @@ gaint gaddes (char *name, struct gafile *pfi, gaint mflag) {
   if (pfi->type==1) {
     pfi->gsiz = pfi->dnum[0] * pfi->dnum[1];
     if (pfi->ppflag) pfi->gsiz = pfi->ppisiz * pfi->ppjsiz;
-    /* add the XY header to gsiz */
+    /* add the XY header/trailer to gsiz */
     if (pfi->xyhdr) {
       if (pvar->dfrm == 1) {
         pfi->xyhdr = pfi->xyhdr*4/1;
@@ -2074,6 +2084,15 @@ gaint gaddes (char *name, struct gafile *pfi, gaint mflag) {
         pfi->xyhdr = pfi->xyhdr*4/2;
       }
       pfi->gsiz = pfi->gsiz + pfi->xyhdr;
+    }
+    if (pfi->xytrlr) {
+      if (pvar->dfrm == 1) {
+        pfi->xytrlr = pfi->xytrlr*4/1;
+      }
+      else if (pvar->dfrm ==  2 || pvar->dfrm == -2 ) {
+        pfi->xytrlr = pfi->xytrlr*4/2;
+      }
+      pfi->gsiz = pfi->gsiz + pfi->xytrlr;
     }
 
     /* adjust the size of hdrb and trlb for non-float data */
@@ -2286,7 +2305,7 @@ gaint gaddes (char *name, struct gafile *pfi, gaint mflag) {
       /* get filename for initial time of current ensemble member  */
       ch = gafndt(pfi->name,&tdefe,&tdefe,pfi->abvals[3],pfi->pchsub1,pfi->ens1,ens->gt,e,&flag);
       if (ch==NULL) {
-        snprintf(pout,255,"Open Error: couldn't determine data file name for e=%d t=%d\n",e,ens->gt);
+        snprintf(pout,1255,"Open Error: couldn't determine data file name for e=%d t=%d\n",e,ens->gt);
         gaprnt(0,pout);
         goto err8;
       }
@@ -2327,7 +2346,7 @@ gaint gaddes (char *name, struct gafile *pfi, gaint mflag) {
         gr2t(pfi->grvals[3],(gadouble)t,&tdef);
         pos = gafndt(pfi->name,&tdef,&tdefe,pfi->abvals[3],pfi->pchsub1,pfi->ens1,t,e,&flag);
         if (pos==NULL) {
-          snprintf(pout,255,"Open Error: couldn't determine data file name for e=%d t=%d\n",e,t);
+          snprintf(pout,1255,"Open Error: couldn't determine data file name for e=%d t=%d\n",e,t);
           gaprnt(0,pout);
           goto err8;
         }
@@ -2782,7 +2801,7 @@ struct gaattr *parseattr (char *ch) {
     }
   }
   else {
-    snprintf(pout,255,"Error: attribute data type not handled: nctype = %d \n",nctype);
+    snprintf(pout,1255,"Error: attribute data type not handled: nctype = %d \n",nctype);
     gaprnt(0,pout);
     goto err;
   }
@@ -2837,6 +2856,7 @@ size_t sz;
   pfi->h5id = -999;      /* No hdf5 file open */
   pfi->fhdr = 0;         /* Assume no file header */
   pfi->xyhdr=0;          /* Assume no xyheader */
+  pfi->xytrlr=0;         /* Assume no xytrailer */
   pfi->fseq = -999;      /* No sequence number assigned */
   pfi->dhandle = -999;   /* Assume not a gadods stn data set */
   pfi->packflg = 0;      /* Assume data are not packed */

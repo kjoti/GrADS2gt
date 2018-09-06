@@ -1,4 +1,4 @@
-/* Copyright (C) 1988-2016 by George Mason University. See file COPYRIGHT for more information. */
+/* Copyright (C) 1988-2017 by George Mason University. See file COPYRIGHT for more information. */
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -26,7 +26,7 @@
    malloc are tracked, and checked when free is called.  Also,
    an extra 8 bytes are allocated at the end of each malloc and
    filled with character A's; these are checked when gree is called
-   to see if an overlay ocurred.   galloc requires an additional
+   to see if an overlay occurred.   galloc requires an additional
    argument which is a short identifier "tag" of the memory being called.
    So, if you were calling malloc like this:
 
