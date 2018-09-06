@@ -1,4 +1,4 @@
-/* Copyright (C) 1988-2017 by George Mason University. See file COPYRIGHT for more information. */
+/* Copyright (C) 1988-2018 by George Mason University. See file COPYRIGHT for more information. */
 
 #include <stdlib.h>
 
@@ -175,6 +175,7 @@ struct gxdbquery {
 /* Structure that contains the function pointers to the printing subroutines */
 struct gxpsubs {
   void (*gxpcfg) (void);
+  gaint (*gxpckfont) (void);
   void (*gxpbgn) (gadouble,gadouble);
   void (*gxpinit) (gadouble ,gadouble);
   void (*gxpend) (void);
@@ -197,6 +198,7 @@ struct gxpsubs {
 /* Structure that contains the function pointers to the display subroutines */
 struct gxdsubs {
   void (*gxdcfg) (void);
+  gaint (*gxdckfont) (void);
   void (*gxdbb) (char*);
   void (*gxdfb) (char*);
   gaint (*gxdacol) (gaint,gaint,gaint,gaint,gaint);

@@ -1,4 +1,4 @@
-/* Copyright (C) 1988-2017 by George Mason University. See file COPYRIGHT for more information. */
+/* Copyright (C) 1988-2018 by George Mason University. See file COPYRIGHT for more information. */
 
 /* Routines related to hardcopy (metafile) output. */
 
@@ -677,11 +677,11 @@ gaint mbufget (void) {
 struct gxmbuf *pmbuf;
 
   if (mbufanch==NULL) {
-    pmbuf = (struct gxmbuf *)galloc(sizeof(struct gxmbuf),"gxmbuf");
+    pmbuf = (struct gxmbuf *)galloc(sizeof(struct gxmbuf),"mbufanch");
     if (pmbuf==NULL) return (1);
     mbufanch = pmbuf;                  /* set the new buffer structure as the anchor */
     mbuflast = pmbuf;                  /* ... and also as the last one */
-    pmbuf->buff = (float *)galloc(sizeof(float)*BWORKSZ,"mbufbuff");  /* allocate a buffer */
+    pmbuf->buff = (float *)galloc(sizeof(float)*BWORKSZ,"anchbuff");  /* allocate a buffer */
     if (pmbuf->buff==NULL) return(1);
     pmbuf->len = BWORKSZ;              /* set the buffer length */
     pmbuf->used = 0;                   /* initialize the buffer as unused */
@@ -689,11 +689,11 @@ struct gxmbuf *pmbuf;
   }
   else {
     if (mbuflast->fpmbuf==NULL) {      /* no more buffers in the chain */
-      pmbuf = (struct gxmbuf *)galloc(sizeof(struct gxmbuf),"gxmbuf");
+      pmbuf = (struct gxmbuf *)galloc(sizeof(struct gxmbuf),"mbufnew");
       if (pmbuf==NULL) return (1);
       mbuflast->fpmbuf = pmbuf;        /* add the new buffer structure to the chain */
       mbuflast = pmbuf;                /* reset mbuflast to the newest buffer structure in the chain */
-      pmbuf->buff = (float *)galloc(sizeof(float)*BWORKSZ,"mbufbuff");  /* allocate a buffer */
+      pmbuf->buff = (float *)galloc(sizeof(float)*BWORKSZ,"newbuff");  /* allocate a buffer */
       if (pmbuf->buff==NULL) return(1);
       pmbuf->len = BWORKSZ;            /* set the buffer length */
       pmbuf->used = 0;                 /* initialize the buffer as unused */
@@ -708,9 +708,10 @@ struct gxmbuf *pmbuf;
   return (0);
 }
 
-/* Free buffer chain.  If flag is 1, leave the first buffer,
-   if there is at least one buffer already chained.
-   If flag is zero, free all buffers.  */
+/* Free buffer chain.
+   If flag is 1, leave allocated buffers alone and mark the anchor as unused
+   If flag is 0, free all buffers, including the anchor
+*/
 
 void mbufrel (gaint flag) {
 struct gxmbuf *pmbuf,*pmbuf2;

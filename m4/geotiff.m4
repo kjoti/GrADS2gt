@@ -2,6 +2,7 @@ dnl AC_CHECK_GEOTIFF : Check for geotiff
 dnl args :             action-if-yes, action-if-no
 AC_DEFUN([AC_CHECK_GEOTIFF],
 [
+# set up help strings and parse user-provided paths
   AC_ARG_WITH([geotiff],
             [AS_HELP_STRING([--with-geotiff=ARG],[geotiff directory])],
             [GEOTIFF_PATH=$withval], 
@@ -17,9 +18,7 @@ AC_DEFUN([AC_CHECK_GEOTIFF],
             [GEOTIFF_PATH_LIBDIR=$withval], 
             [GEOTIFF_PATH_LIBDIR=""])
 
-  dnl This is a very common location for the geotiff code. jhrg 10/11/05
-dnl  AS_IF([test -d /usr/local/libgeotiff], [GEOTIFF_PATH="/usr/local/libgeotiff"])
-      
+# add /lib and /include to user-provided path      
   AS_IF([test "z$GEOTIFF_PATH" != "z"],
   [
     AS_IF([test "z$GEOTIFF_PATH_LIBDIR" = "z"],
@@ -28,10 +27,12 @@ dnl  AS_IF([test -d /usr/local/libgeotiff], [GEOTIFF_PATH="/usr/local/libgeotiff
       [GEOTIFF_PATH_INC="$GEOTIFF_PATH/include"])  
   ])
   
-  
+# initialize, save existing $LDFLAGS  
   ac_geotiff_lib_ok='no'
   ac_geotiff_save_LDFLAGS=$LDFLAGS
   GEOTIFF_LIBS=
+
+# if the lib directory exists, call function to look for geotiff library
   AS_IF([test -d "$GEOTIFF_PATH_LIBDIR"],
     [
       GEOTIFF_LDFLAGS="-L$GEOTIFF_PATH_LIBDIR"
@@ -39,7 +40,7 @@ dnl  AS_IF([test -d /usr/local/libgeotiff], [GEOTIFF_PATH="/usr/local/libgeotiff
       AC_CHECK_GEOTIFF_LIB([ac_geotiff_lib_ok='yes'])
     ],
     [
-      for ac_geotiff_libdir in "" /usr/geotiff/lib64 /usr/local/lib64/geotiff \
+      for ac_geotiff_libdir in "" /usr/lib64 /usr/geotiff/lib64 /usr/local/lib64/geotiff \
        /usr/libgeotiff/lib64 /usr/local/lib64/libgeotiff \
        /opt/lib64/geotiff /opt/lib64/libgeotiff \
        /opt/geotiff/lib64 /usr/lib64/geotiff /usr/local/geotiff/lib64 \
@@ -102,6 +103,7 @@ dnl  AS_IF([test -d /usr/local/libgeotiff], [GEOTIFF_PATH="/usr/local/libgeotiff
   AC_SUBST([GEOTIFF_LDFLAGS])
 ])
 
+# the subroutine to check for 'main' in libtiff and libgeotiff
 AC_DEFUN([AC_CHECK_GEOTIFF_LIB],
 [
   GEOTIFF_LIBS=

@@ -8,14 +8,20 @@
 ## Targets that will built by "make all"
 ##   The "bin_" and "lib_" prefixes indicate the installation locations
 bin_PROGRAMS = grads gribmap stnmap gribscan grib2scan bufrscan
-lib_LTLIBRARIES = libgxpGD.la libgxdX11.la libgxpCairo.la libgxdCairo.la \
-                  libgxdummy.la
-#libgradspy.la
+
+if USEGD
+lt_gd = libgxpGD.la
+endif
+if USECAIRO
+lt_cairo = libgxpCairo.la libgxdCairo.la
+endif
+
+lib_LTLIBRARIES = $(lt_gd) $(lt_cairo) libgxdX11.la libgxdummy.la libgradspy.la
 
 ## Convenience targets
 utils: gribmap stnmap gribscan grib2scan bufrscan
-libs: libgxpGD.la libgxdX11.la libgxpCairo.la libgxdCairo.la libgxdummy.la
-#gradspy: libgradspy.la
+gxlibs: $(lt_gd) $(lt_cairo) libgxdX11.la libgxdummy.la libgradspy.la
+gradspy: libgradspy.la
 
 
 ##---Source files---------------------------------------------------------------------
@@ -30,19 +36,24 @@ if USEGUI
 src_gui = gagui.c gsgui.c
 endif
 
-## Source files to be compiled
+if USECAIRO
+libgxpCairo_la_SOURCES = gxprint.c gxC.c
+libgxdCairo_la_SOURCES = gxX.c gxC.c
+endif
+
+if USEGD
+libgxpGD_la_SOURCES    = gxprintGD.c gxGD.c
+endif
+
+libgxdummy_la_SOURCES  = gxdummy.c
+libgxdX11_la_SOURCES   = gxX11.c gxdxwd.c
+
+## GrADS source files to be compiled
 grads_SOURCES =	grads.c  gxsubs.c gxmeta.c  gxchpl.c gxcntr.c gxstrm.c gxdb.c \
 		gxwmap.c gxshad.c gxshad2.c gaexpr.c gafunc.c gautil.c gagx.c \
 		gscrpt.c gamach.c gatxt.c   galloc.c gaddes.c gacfg.c  gaio.c \
                 gauser.c gasdf.c  bufrstn.c gabufr.c gabufrtbl.c \
                 $(src_gui) $(src_gadap)
-
-libgxpGD_la_SOURCES    = gxprintGD.c gxGD.c
-libgxdX11_la_SOURCES   = gxX11.c gxdxwd.c
-libgxpCairo_la_SOURCES = gxprint.c gxC.c
-libgxdCairo_la_SOURCES = gxX.c gxC.c
-libgxdummy_la_SOURCES  = gxdummy.c
-
 
 ## These may not always be compiled but must be listed in order to go in the distribution
 EXTRA_grads_SOURCES = gagmap.c gagui.c gsgui.c dodstn.c \
@@ -70,63 +81,74 @@ DISTCLEANFILES = buildinfo.h config.h
 
 
 ## Paths to external headers and libraries
+
 supp_include_dir	= $(SUPPLIBS)/include
 supp_lib_dir		= $(SUPPLIBS)/lib
-LDADD			= -L$(supp_lib_dir)
+LDADD			= -L$(supp_lib_dir) $(geotiff_ldflags) $(gd_ldflags)
 
 common_ldadd            = $(LDADD) $(host_ldadd)
 X11_ldadd               = $(X_LIBS) $(X_PRE_LIBS) -lX11 -lXext $(X_EXTRA_LIBS)
 
 
-AM_CPPFLAGS		= $(gui_inc) $(nc_inc) \
+AM_CPPFLAGS		= -I. -I$(supp_include_dir) $(gui_inc) $(nc_inc) \
 			  $(hdf_inc) $(hdf5_inc) $(geotiff_inc) $(shp_inc) $(gadap_inc) \
                           $(X_CFLAGS) $(XAW_CFLAGS) $(HDF4_CFLAGS)
 
 ## libraries needed
 grads_LDADD	      = $(common_ldadd) $(readline_libs) $(grib2_libs) \
 			$(hdf_libs) $(hdf5_libs) $(nc_libs) $(geotiff_libs) \
-			$(shp_libs) $(gadap_libs) $(gui_libs)
+			$(shp_libs) $(gadap_libs) $(gui_libs) -ldl
 
 # print with GD
+if USEGD
 libgxpGD_la_CPPFLAGS = -I. -I$(SUPPLIBS)/include
-libgxpGD_la_LIBADD = $(LDADD) $(gd_dynlibs)
+libgxpGD_la_LIBADD = $(LDADD) $(gd_libs)
+libgxpGD_la_LDFLAGS = -version-info $(LIBGX_VERSION)
+endif
 
 # display X11
-
 libgxdX11_la_CPPFLAGS = -I. -I$(SUPPLIBS)/include
 libgxdX11_la_LIBADD = $(X11_ldadd)
+libgxdX11_la_LDFLAGS = -version-info $(LIBGX_VERSION)
 
 # print with Cairo
-libgxpCairo_la_CPPFLAGS = -I. -I$(SUPPLIBS)/include -I$(SUPPLIBS)/include/cairo -I$(SUPPLIBS)/include/freetype2
-libgxpCairo_la_LIBADD = $(LDADD) $(cairo_dynlibs)
+libgxpCairo_la_CPPFLAGS = -I. $(cairo_inc)
+#-I$(SUPPLIBS)/include -I$(SUPPLIBS)/include/cairo -I$(SUPPLIBS)/include/freetype2
+libgxpCairo_la_LIBADD = $(LDADD) $(cairo_libs)
+libgxpCairo_la_LDFLAGS = -version-info $(LIBGX_VERSION)
 
 ## display X11 with Cairo
-libgxdCairo_la_CPPFLAGS = -I. -I$(SUPPLIBS)/include -I$(SUPPLIBS)/include/cairo -I$(SUPPLIBS)/include/freetype2
-libgxdCairo_la_LIBADD = $(X11_ldadd) $(LDADD) $(cairo_dynlibs)
+libgxdCairo_la_CPPFLAGS = -I. $(cairo_inc)
+#-I$(SUPPLIBS)/include -I$(SUPPLIBS)/include/cairo -I$(SUPPLIBS)/include/freetype2
+libgxdCairo_la_LIBADD = $(X11_ldadd) $(LDADD) $(cairo_libs)
+libgxdCairo_la_LDFLAGS = -version-info $(LIBGX_VERSION)
 
 ## dummy (for display and print)
 libgxdummy_la_CPPFLAGS = -I.
 
 
-##---------------------------------------------------------------------
-## GradsPy -- not ready for 2.2.0 release, commented out for now
 
-#libgradspy_la_SOURCES  = grads.c gxsubs.c gxmeta.c  gxchpl.c gxcntr.c gxstrm.c gxdb.c \
+##---------------------------------------------------------------------
+## GradsPy
+
+libgradspy_la_SOURCES  = grads.c gxsubs.c gxmeta.c  gxchpl.c gxcntr.c gxstrm.c gxdb.c \
 		gxwmap.c gxshad.c gxshad2.c gaexpr.c gafunc.c gautil.c gagx.c \
 		gscrpt.c gamach.c gatxt.c   galloc.c gaddes.c gacfg.c  gaio.c \
                 gauser.c gasdf.c  bufrstn.c gabufr.c gabufrtbl.c \
                 $(src_gui) $(src_gadap)
 
 ## this object file needs to be recompiled for gradspy with the SHRDOBJ flag set
-#libgradspy_la-grads.o: $(srcdir)/grads.c
-#	$(COMPILE) -DSHRDOBJ -o libgradspy_la-grads.lo -c $(srcdir)/grads.c
+libgradspy_la-grads.o: $(srcdir)/grads.c
+	$(COMPILE) -DSHRDOBJ -o libgradspy_la-grads.lo -c $(srcdir)/grads.c
 
-#libgradspy_la_CFLAGS   = -DSHRDOBJ
-#libgradspy_la_CPPFLAGS = $(gui_inc) $(X_CFLAGS) $(XAW_CFLAGS)
-#libgradspy_la_LIBADD   = $(common_ldadd) $(readline_dynlibs) $(grib2_dynlibs) \
-			 $(hdf_dynlibs) $(hdf5_dynlibs) $(nc_dynlibs) $(geotiff_dynlibs) \
-			 $(shp_dynlibs) $(gadap_dynlibs) $(gui_dynlibs)
-
+libgradspy_la_CFLAGS   = -DSHRDOBJ
+libgradspy_la_CPPFLAGS = -I. -I$(SUPPLIBS)/include $(gui_inc) $(geotiff_inc) \
+                         $(nc_inc) $(hdf_inc) $(hdf5_inc) \
+                         $(shp_inc) $(gadap_inc) $(X_CFLAGS) $(XAW_CFLAGS)
+libgradspy_la_LIBADD   = $(common_ldadd) $(readline_libs) $(grib2_libs) \
+			 $(hdf_libs) $(hdf5_libs) $(nc_libs) $(geotiff_libs) \
+			 $(shp_libs) $(gadap_libs) $(gui_libs)
+libgradspy_la_LDFLAGS  = -version-info $(LIBGX_VERSION)
 
 
 
@@ -135,7 +157,7 @@ libgxdummy_la_CPPFLAGS = -I.
 if USEGADAP
 grads_LINK          = $(CXX) $(AM_CFLAGS) $(CFLAGS) $(AM_LDFLAGS) $(LDFLAGS) -o $@
 else
-grads_LINK          = $(CC) $(AM_CFLAGS) $(CFLAGS) $(AM_LDFLAGS) $(LDFLAGS) -o $@
+grads_LINK          = $(CC)  $(AM_CFLAGS) $(CFLAGS) $(AM_LDFLAGS) $(LDFLAGS) -o $@
 endif
 
 

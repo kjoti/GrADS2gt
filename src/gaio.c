@@ -1,4 +1,4 @@
-/* Copyright (C) 1988-2017 by George Mason University. See file COPYRIGHT for more information. */
+/* Copyright (C) 1988-2018 by George Mason University. See file COPYRIGHT for more information. */
 
 /* Authored by B. Doty and Jennifer Adams */
 
@@ -3685,7 +3685,7 @@ gafloat *fval;
     gaprnt(0,"HDF5 Error: unable to retrieve data class\n");
     return (1);
   }
-  if ((datasize = H5Tget_size(datatype))<0) {
+  if ((datasize = H5Tget_size(datatype))==0) {
     gaprnt(0,"HDF5 Error: unable to retrieve data size\n");
     return (1);
   }
@@ -3940,7 +3940,7 @@ gadouble dval;
   /* get the attribute type, class, and size */
   if ((atype  = H5Aget_type(aid))<0) { gaprnt(2,"H5Aget_type failed\n"); return (1); }
   if ((aclass = H5Tget_class(atype))<0) { gaprnt(2,"H5Tget_class failed\n"); return (1); }
-  if ((asize  = H5Tget_size(atype))<0) { gaprnt(2,"H5Tget_size failed\n"); return (1); }
+  if ((asize  = H5Tget_size(atype))==0) { gaprnt(2,"H5Tget_size failed\n"); return (1); }
 
   if (aclass == H5T_FLOAT) {
     if (asize == 4) {
@@ -4207,10 +4207,11 @@ gafloat  *fattr_val;
 long   *iattr_val;
 short  *sattr_val;
 char   *cattr_val;
+char  **strattr_val;
 char   *battr_val;
 char attr_name[MAX_NC_NAME];
 nc_type attr_dtype;
-gaint error=0, aindx=-999, rc, i, varid, n_atts;
+gaint error=0, aindx=-999, rc, i, j, varid, n_atts;
 size_t sz,asize;
 
 /* Get the variable id and number of attributes */
@@ -4287,6 +4288,29 @@ size_t sz,asize;
               }
               else {
                 cattr_val[asize]='\0';
+                gaprnt(2,abbrv);
+                gaprnt(2," String ");
+                gaprnt(2,attr_name);
+                gaprnt(2," ");
+                prntwrap(abbrv, attr_name, cattr_val);
+              }
+              gree(cattr_val,"f140");
+              break;
+            case (NC_STRING):
+              /* NC_STRING attribute is an array (size asize) of pointers to variable length strings. */
+              strattr_val = (char **) galloc(asize*sizeof(char*),"strattrval1");
+              if (nc_get_att_string(ncid, varid, attr_name, strattr_val) == -1) {
+                gaprnt(2,"nc_get_att_string failed for type NC_STRING\n");
+              }
+              else {
+              /*  We only look at the first one, strattr_val[0], and don't check if asize>1.
+                  We get the length of the first string, copy it into cval, then free the array */
+                sz = 1 + strlen(strattr_val[0]);
+                cattr_val = (char *) galloc(sz*sizeof(char),"cattrval1");
+                for (j=0; j<sz; j++) cattr_val[j] = strattr_val[0][j];
+                cattr_val[sz]='\0';
+                nc_free_string(asize, strattr_val);
+                gree(strattr_val);
                 gaprnt(2,abbrv);
                 gaprnt(2," String ");
                 gaprnt(2,attr_name);
@@ -4693,7 +4717,7 @@ gadouble *dval=NULL;
     ai = (hsize_t)aindex;
     aid = H5Aopen_by_idx(vid,".",H5_INDEX_CRT_ORDER,H5_ITER_INC,ai,H5P_DEFAULT,H5P_DEFAULT); if (aid<0) err=1;
     /* get the attribute name */
-    if (!err) len    = H5Aget_name(aid,0,NULL); if (len<0) err=1;
+    if (!err) len    = H5Aget_name(aid,0,NULL); if (len<=0) err=1;
     sz = (len+1)*sizeof(char);
     if (!err) aname  = (char*)galloc(sz,"aname"); if (aname==NULL) err=1;
     if (!err) rc     = H5Aget_name(aid,len+1,aname); if (rc<0) err=1;
@@ -4703,7 +4727,7 @@ gadouble *dval=NULL;
     /* get the attribute type, class, and size */
     if (!err) atype  = H5Aget_type(aid); if (atype<0) err=1;
     if (!err) aclass = H5Tget_class(atype); if (aclass<0) err=1;
-    if (!err) asize  = H5Tget_size(atype); if (asize<0) err=1;
+    if (!err) asize  = H5Tget_size(atype); if (asize==0) err=1;
     if (err) {
       snprintf(pout,1255,"Unable to retrieve required info for attribute number %d for variable %s \n",aindex,abbrv);
       gaprnt(2,pout);
@@ -4875,7 +4899,7 @@ gadouble *dval=NULL;
         }
       }
       else if (aclass == H5T_STRING) {
-        if ((stosize = H5Aget_storage_size(aid))>=0) {
+        if ((stosize = H5Aget_storage_size(aid))==0) {
           if ((string = (char*)malloc((stosize+1)*sizeof(char)))!=NULL) {
             if ((rc = H5Aread(aid,atype,(void*)string))>=0) {
               string[stosize]='\0';

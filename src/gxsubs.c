@@ -1,4 +1,4 @@
-/* Copyright (C) 1988-2017 by George Mason University. See file COPYRIGHT for more information. */
+/* Copyright (C) 1988-2018 by George Mason University. See file COPYRIGHT for more information. */
 
 /* Authored by B. Doty */
 
@@ -72,8 +72,8 @@ gaint gxstrt (gadouble xmx, gadouble ymx, gaint batch, gaint hbufsz, char *gxdop
 
   printf ("GX Package Initialization: Size = %g %g \n",xmx,ymx);
   if (batch) printf ("Running in Batch mode\n");
-  gxdbinit();                                 /* Initialize the graphics data base */
   intflg = !batch;                            /* Set batch/interactive flag */
+  gxdbinit();                                 /* Initialize the graphics data base */
   rc = gxload(gxdopt,gxpopt);                 /* Load the graphics routines from a shared library */
   if (rc) {
     printf("GX Package Terminated \n");
@@ -93,7 +93,7 @@ gaint gxstrt (gadouble xmx, gadouble ymx, gaint batch, gaint hbufsz, char *gxdop
   clminx=0; clmaxx=xmx;                       /* Set clipping area       */
   clminy=0; clmaxy=ymx;
   xsave=0.0; ysave=0.0;
-  lstyle=0; lwide = 3;
+  lstyle=0; lwide=3;
   oldx=0.0; oldy=0.0;
   fconv=NULL;                                 /* No projection set up    */
   gconv=NULL;                                 /* No grid scaling set up  */
@@ -199,6 +199,8 @@ gaint gxload(char *gxdopt, char *gxpopt) {
   dlerror();
   psubs.gxpcfg   = dlsym(phandle,"gxpcfg");
   if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(1);}
+  psubs.gxpckfont= dlsym(phandle,"gxpckfont");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(1);}
   psubs.gxpbgn   = dlsym(phandle,"gxpbgn");
   if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(1);}
   psubs.gxpinit  = dlsym(phandle,"gxpinit");
@@ -236,6 +238,8 @@ gaint gxload(char *gxdopt, char *gxpopt) {
 
   /* get pointers to the display (hardware) subroutines, some are needed even in batch mode */
   dsubs.gxdcfg   = dlsym(dhandle,"gxdcfg");
+  if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(1);}
+  dsubs.gxdckfont= dlsym(dhandle,"gxdckfont");
   if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(1);}
   dsubs.gxdbb    = dlsym(dhandle,"gxdbb");
   if ((err=dlerror())!=NULL) {printf("Error in gxload: %s\n",err); return(2);}

@@ -77,9 +77,9 @@ AC_DEFUN([GA_LIB_READLINE], [
     fi
   ])
 
+
   if test "$vl_cv_lib_readline" != "no"; then
-    AC_DEFINE(HAVE_LIBREADLINE, 1,
-              [Define if you have a readline compatible library])
+    AC_DEFINE(HAVE_LIBREADLINE, 1, [Define if you have readline library])
     AC_CHECK_HEADERS(readline.h readline/readline.h)
     AC_CACHE_CHECK([whether readline supports history],
                    vl_cv_lib_readline_history, [
@@ -87,13 +87,17 @@ AC_DEFUN([GA_LIB_READLINE], [
       AC_TRY_LINK_FUNC(add_history, vl_cv_lib_readline_history="yes")
     ])
     if test "$vl_cv_lib_readline_history" = "yes"; then
-      AC_DEFINE(HAVE_READLINE_HISTORY, 1,
-                [Define if your readline library has \`add_history'])
+      AC_DEFINE(HAVE_READLINE_HISTORY, 1, [Define if readline library has add_history])
       AC_CHECK_HEADERS(history.h readline/history.h)
       m4_if([$1], [], [:], [$1])
     else
       m4_if([$2], [], [:], [$2])
     fi
   fi
+  READLINE_LIBS=$TRY_LIB
+  LIBS="$ORIG_LIBS"
+
+
+
 ])
 

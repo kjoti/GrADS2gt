@@ -1,4 +1,4 @@
-/* Copyright (C) 1988-2017 by George Mason University. See file COPYRIGHT for more information. */
+/* Copyright (C) 1988-2018 by George Mason University. See file COPYRIGHT for more information. */
 
 /* Authored by B. Doty */
 
@@ -2842,6 +2842,7 @@ size_t sz;
   pfi = (struct gafile *)galloc(sz,"pfi");
   if (pfi==NULL) return (NULL);
 
+  pfi->name[0]='\0';     /* dset name is null  */
   pfi->type = 1;         /* Assume grid unless told otherwise */
   pfi->tlpflg = 0;       /* Assume file not circular */
   pfi->bswap = 0;        /* Assume no byte swapping needed */

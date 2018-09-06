@@ -1,4 +1,4 @@
-/* Copyright (C) 1988-2017 by George Mason University. See file COPYRIGHT for more information. */
+/* Copyright (C) 1988-2018 by George Mason University. See file COPYRIGHT for more information. */
 
 /* This program creates a station map file given the name of a control
    file for a station data set.  It reads the control file, then
@@ -389,7 +389,7 @@ gaint rc;
   rc = fseeko(dfile, fpos, 0);
   if (rc!=0) {
     printf ("  Low Level I/O Error:  Seek error on data file \n");
-    printf ("  Error occurred when seeking to byte %ld \n",fpos);
+    printf ("  Error occurred when seeking to byte %lld \n",fpos);
     printf ("  Possible cause:  Fewer times than expected\n");
     if (pfi->seqflg) printf ("  Possible cause:  Invalid sequential format\n");
     if (pfi->tmplat) printf("  File name = %s\n",fn);
@@ -403,7 +403,7 @@ gaint rc;
   rc = fread (rec, 1, siz, dfile);
   if (rc<siz) {
     printf ("  Low Level I/O Error:  Read error on data file \n");
-    printf ("  Error reading %i bytes at location %ld \n", siz, fpos);
+    printf ("  Error reading %i bytes at location %lld \n", siz, fpos);
     printf ("  Possible cause: Premature EOF\n");
     if (pfi->seqflg) printf ("  Possible cause: Invalid sequential data\n");
     if (pfi->tmplat) printf("  File name = %s\n",fn);

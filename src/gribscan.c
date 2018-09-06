@@ -1,4 +1,4 @@
-/* Copyright (C) 1988-2017 by George Mason University. See file COPYRIGHT for more information. */
+/* Copyright (C) 1988-2018 by George Mason University. See file COPYRIGHT for more information. */
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -384,7 +384,7 @@ gaint main (gaint argc, char *argv[]) {
      printf ("->%c%c%c%c%c%c<-\n",*uch,*(uch+1),*(uch+2),*(uch+3),*(uch+4),*(uch+5));
      return (99);
    } else {
-     if (verb) printf("the header is %ld bytes long\n",fpos);
+     if (verb) printf("the header is %lld bytes long\n",fpos);
    }
 
  } else if (skip > -1) {
@@ -997,12 +997,12 @@ if(!silent) {
   if( bdsout && !silent ) {
     if ( !qout) {
       if( delim ) {
-        printf(",BDS,%d,%10g,%d,%ld,%d",ghdr->bnum,ghdr->ref,npts,cposis,ghdr->len);
+        printf(",BDS,%d,%10g,%d,%lld,%d",ghdr->bnum,ghdr->ref,npts,cposis,ghdr->len);
       } else {
-        printf(" BDS % 3d %10g % 10d % 10ld % 10d",ghdr->bnum,ghdr->ref,npts,cposis,ghdr->len);
+        printf(" BDS % 3d %10g % 10d % 10lld % 10d",ghdr->bnum,ghdr->ref,npts,cposis,ghdr->len);
       }
     } else {
-      printf(", B ,%2d,%g,%d,%ld,%d",ghdr->bnum,ghdr->ref,npts,cposis,ghdr->len);
+      printf(", B ,%2d,%g,%d,%lld,%d",ghdr->bnum,ghdr->ref,npts,cposis,ghdr->len);
     }
     printf("\n");
   }

@@ -39,10 +39,11 @@ dnl  AS_IF([test -d /usr/local/hdf], [HDF4_PATH="/usr/local/hdf"])
       AC_CHECK_HDF4_LIB([ac_hdf4_lib_ok='yes'])
     ],
     [
-      for ac_hdf4_libdir in "" /usr/local/hdf4.2r1/lib64 /opt/hdf4.2r1/lib64 \ 
+      for ac_hdf4_libdir in "" /usr/lib64/hdf /usr/lib64 \
+       /usr/local/hdf4.2r1/lib64 /opt/hdf4.2r1/lib64 \ 
        /usr/hdf4.2r1/lib64 /usr/local/lib64/hdf4.2r1 /opt/lib64/hdf4.2r1 \
        /usr/lib64/hdf4.2r1 /usr/local/hdf/lib64/ /opt/hdf/lib64 /usr/hdf/lib64 \
-       /usr/local/lib64/hdf /opt/lib64/hdf /usr/lib64/hdf \
+       /usr/local/lib64/hdf /opt/lib64/hdf \
        /usr/local/hdf4.2r1/lib /opt/hdf4.2r1/lib \ 
        /usr/hdf4.2r1/lib /usr/local/lib/hdf4.2r1 /opt/lib/hdf4.2r1 \
        /usr/lib/hdf4.2r1 /usr/local/hdf/lib/ /opt/hdf/lib /usr/hdf/lib \
@@ -71,11 +72,12 @@ dnl  AS_IF([test -d /usr/local/hdf], [HDF4_PATH="/usr/local/hdf"])
        AC_CHECK_HEADER_NOCACHE_HDF4([mfhdf.h],[ac_hdf4_h='yes'])
     ],
     [
-      for ac_hdf4_incdir in "" /usr/local/hdf4.2r1/include /opt/hdf4.2r1/include \ 
+      for ac_hdf4_incdir in "" /usr/include/hdf \
+       /usr/local/hdf4.2r1/include /opt/hdf4.2r1/include \ 
        /usr/hdf4.2r1/include /usr/local/include/hdf4.2r1 \
        /opt/include/hdf4.2r1 /usr/include/hdf4.2r1 /usr/local/hdf/include \
        /opt/hdf/include /usr/hdf/include /usr/local/include/hdf \
-       /opt/include/hdf /usr/include/hdf ; do
+       /opt/include/hdf ; do
         AS_IF([test "z$ac_hdf4_incdir" = 'z'],
            [HDF4_CFLAGS=],
            [

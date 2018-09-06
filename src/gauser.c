@@ -1,4 +1,4 @@
-/* Copyright (C) 1988-2017 by George Mason University. See file COPYRIGHT for more information. */
+/* Copyright (C) 1988-2018 by George Mason University. See file COPYRIGHT for more information. */
 
 /* Authored by B. Doty */
 
@@ -53,7 +53,7 @@ static struct gacmn *savpcm;
 static struct gxdsubs *dsubs=NULL; /* function pointers for display  */
 static struct gxpsubs *psubs=NULL; /* function pointers for printing */
 
-void gapysavpcm(struct gacmn *);   /* for gradspy */
+void gapysavpcm(struct gacmn *);   /* function prototype, used by gradspy */
 
 /*  Variables to handle message buffering for the script language */
 static gaint msgflg = 0;
@@ -1606,7 +1606,7 @@ char shparg[4096];
 
             lnfact += 360.0;
           }
-        }
+        } /* end of loop over numparts */
       }
       /* The only type that should get trapped here is a MultiPatch (value 31) */
       else {
@@ -1907,7 +1907,8 @@ char cc[256], *ch;
   return (rc);
 }
 
-/* (For gradspy) Save a pointer to the gacmn structure */
+/* For gradspy -- called in grads.c when SHRDOBJ==1 */
+/* Saves a pointer to the gacmn structure */
 void gapysavpcm(struct gacmn *pcm) {
   savpcm = pcm;
 }
@@ -3261,7 +3262,7 @@ gadouble minvals[4], maxvals[4],dval;
       printf(" units: "); for (i=0;i<16;i++) printf("%-4g ",pvar->units[i]); printf("\n");
       printf(" vecpair=%d \n", pvar->vecpair);
       printf(" isu=%d \n", pvar->isu);
-      printf(" offset=%ld \n",pvar->offset);
+      printf(" offset=%lld \n",pvar->offset);
       printf(" recoff=%d \n",pvar->recoff);
       printf(" dfrm=%d \n",pvar->dfrm);
       printf(" var_t=%d \n",pvar->var_t);
@@ -5158,9 +5159,23 @@ static char *kwds[130] = {"X","Y","Z","T","LON","LAT","LEV","TIME",
     kwrd = 85;
     if ((cmd = nxtwrd (cmd)) == NULL) goto err;
     if (intprs(cmd,&itt) == NULL ) goto err;
-    if (itt<0 || itt>99) {
-      gaprnt(0,"SET FONT Error: font must be 0 to 99\n");
-      return(1);
+    /* check if graphics backend supports fonts */
+    if (dsubs->gxdckfont()==0 || psubs->gxpckfont()==0) {
+      if (itt<0 || itt>9) {
+        if (dsubs->gxdckfont()==0 && psubs->gxpckfont()==0)
+          gaprnt(0,"SET FONT Error: Graphics plug-ins only support fonts between 0 and 9\n");
+        if (dsubs->gxdckfont()==0 && psubs->gxpckfont()==1)
+          gaprnt(0,"SET FONT Error: Graphics display plug-in only supports fonts between 0 and 9\n");
+        if (dsubs->gxdckfont()==1 && psubs->gxpckfont()==0)
+          gaprnt(0,"SET FONT Error: Graphics printing plug-in only supports fonts between 0 and 9\n");
+        return(1);
+      }
+    }
+    else {
+      if (itt<0 || itt>99) {
+        gaprnt(0,"SET FONT Error: font must be 0 to 99\n");
+        return(1);
+      }
     }
     gxchdf(itt);  /* change the default font in gxchpl.c */
     if ((cmd = nxtwrd (cmd)) != NULL) {
@@ -5200,8 +5215,20 @@ static char *kwds[130] = {"X","Y","Z","T","LON","LAT","LEV","TIME",
   else if (cmpwrd("hershey",cmd)) {
     kwrd = 126;
     if ((cmd = nxtwrd (cmd)) == NULL) goto err;
-    if (cmpwrd("on",cmd))       gxdbsethersh(0);  /* 0, use hershey fonts */
-    else if (cmpwrd("off",cmd)) gxdbsethersh(1);  /* 1, use emulation */
+    if (cmpwrd("on",cmd)) gxdbsethersh(0);  /* 0, use hershey fonts */
+    else if (cmpwrd("off",cmd)) {
+      /* check if graphics backend supports fonts */
+      if (dsubs->gxdckfont()==0 || psubs->gxpckfont()==0) {
+        if (dsubs->gxdckfont()==0 && psubs->gxpckfont()==0)
+          gaprnt(0,"SET Error: Graphics plug-ins do not support non-Hershey fonts\n");
+        if (dsubs->gxdckfont()==0 && psubs->gxpckfont()==1)
+          gaprnt(0,"SET Error: Graphics display plug-in does not support non-Hershey fonts\n");
+        if (dsubs->gxdckfont()==1 && psubs->gxpckfont()==0)
+          gaprnt(0,"SET Error: Graphics printing plug-in does not support non-Hershey fonts\n");
+        return(1);
+      }
+      else gxdbsethersh(1);  /* 1, use emulation */
+    }
     else goto err;
   }
   else if (cmpwrd("antialias",cmd)) {
@@ -6851,15 +6878,22 @@ static char *kwds[130] = {"X","Y","Z","T","LON","LAT","LEV","TIME",
     else goto err;
     if ((cmd = nxtwrd (cmd)) == NULL) goto err;
     if (intprs(cmd,&id) == NULL ) goto err;
-    for (i1=0; i1<id-1; i1++) {
-      pfi = pfi->pforw;
-      if (pfi==NULL) {
-        snprintf(pout,1255,"SET MISSWARN error:  file %i not open\n",id);
-        gaprnt (0,pout);
-        return(1);
-      }
+    if (pfi==NULL) {
+      snprintf(pout,1255,"SET MISSWARN error:  no open files\n");
+      gaprnt (0,pout);
+      return(1);
     }
-    pfi->errflg = itt;
+    else {
+      for (i1=0; i1<id-1; i1++) {
+        pfi = pfi->pforw;
+        if (pfi==NULL) {
+          snprintf(pout,1255,"SET MISSWARN error:  file %i not open\n",id);
+          gaprnt (0,pout);
+          return(1);
+        }
+      }
+      pfi->errflg = itt;
+    }
   }
   else if (cmpwrd("undef",cmd)) {
     kwrd = 117;
@@ -8758,107 +8792,241 @@ struct dbfld *parsedbfld (char *ch) {
 }
 #endif
 
-/* (For gradspy) The hooks for python to get data from grads */
+/* Invoked by gradspy.c, these routines are for passing data from GrADS to Python */
 
 /* Notes:
-   --gadoexpr is called to evaluate an expression and get the
-     result back hung off a "pygagrid" structure.  The caller
-     owns this structure!
-   --The prototype for the pygagrid structure is below.  The caller
-     will need this in that code as well.  To avoid an additional
-     include file, it will be necessary to reflect any changes to
-     the pygagrid structure prototype in both places, and recompile.
-     It may be better to have an include file, and that may yet happen.
-   --After the caller is done copying the data, the caller is
-     responsible to then call gapyfre so we can free up all the
-     grads storage.
-   --Maximum of two varying dimensions.  No station data.
-   --On error (non-zero return code from gadoexpr), the caller
-     does not need to call gapyfre.
+
+   gadoexpr() is called by the "result" gradspy method to evaluate an expression and
+   return the result and other metadata, which is hung off a "pygagrid" structure.
+   The caller (gradspy.c) owns this structure. After copying the data from the
+   pygagrid structure, the caller then invokes gapyfre() to free up all the grads storage.
+
+   Because this routine calls gaexpr(), there is a maximum of two varying dimensions.
+
+   Station data expressions are not supported.
+
 */
 
-struct pygagrid {
-  double *grid;
-  int isiz,jsiz;
-  void *gastatptr;
-};
+#include "gradspy.h"
 
 /* function prototypes */
 int gadoexpr (char *, struct pygagrid *);
 void gapyfre (struct pygagrid *);
 
 int gadoexpr (char *expr, struct pygagrid *pypgr) {
-struct gastat *pst;
-struct gafile *pfi;
-struct gacmn *pcm;
-struct gagrid *pgr;
-int rc;
-gadouble (*iconv) (gadouble *, gadouble);
-gadouble (*jconv) (gadouble *, gadouble);
-gadouble *ivals, *jvals, y1, abs, mynan;
-int ccc,i,j,vcnt;
-char *ch;
+  struct gastat *pst;
+  struct gafile *pfi;
+  struct gacmn *pcm;
+  struct gagrid *pgr;
+  struct dt dtim;
+  gadouble (*conv) (gadouble *, gadouble);
+  gadouble (*iconv) (gadouble *, gadouble);
+  gadouble (*jconv) (gadouble *, gadouble);
+  gadouble *ivals, *jvals, *g, *s, abs, mynan;
+  int rc,ccc,i,j,vcnt,nvals,verb=1;
+  char *ch,*u;
 
-  pypgr->grid=NULL;
+  /* Initialize */
+  mynan = strtod("nan",&ch);
+  pypgr->gastatptr = NULL;
+  pypgr->grid = NULL;
+  pypgr->isiz = 0;
+  pypgr->jsiz = 0;
+  pypgr->idim = -1;
+  pypgr->jdim = -1;
+  pypgr->xsz = 1;
+  pypgr->ysz = 1;
+  pypgr->zsz = 1;
+  pypgr->tsz = 1;
+  pypgr->esz = 1;
+  pypgr->xstrt = mynan;
+  pypgr->ystrt = mynan;
+  pypgr->zstrt = mynan;
+  pypgr->xincr = mynan;
+  pypgr->yincr = mynan;
+  pypgr->zincr = mynan;
+  pypgr->syr = 0;
+  pypgr->smo = 0;
+  pypgr->sdy = 0;
+  pypgr->shr = 0;
+  pypgr->smn = 0;
+  pypgr->tincr = 0;
+  pypgr->ttyp = 0;
+  pypgr->tcal = 0;
+  pypgr->estrt = 0;
+  pypgr->xvals = NULL;
+  pypgr->yvals = NULL;
+  pypgr->zvals = NULL;
 
   pcm = savpcm;
   pst = NULL;
+  pfi = NULL;
 
+  /* make sure a file is open */
+  if (pcm->pfid==NULL) {
+    printf("Error in gadoexpr: no file open\n"); goto reterr;
+  }
+
+  /* restrict grids to having no more than two varying dimensions */
   vcnt = 0;
   for (i=0; i<5; i++) if (pcm->vdim[i]) vcnt++;
   if (vcnt>2) {
-    goto reterr;
+    printf("Error in gadoexpr: number of varying dimensions may not exceed two\n"); goto reterr;
   }
-
-  garemb (expr);
 
   pst = getpst(pcm);
-  if (pst==NULL) goto reterr;
+  if (pst==NULL) { printf("Error in gadoexpr: getpst failed\n"); goto reterr; }
 
+  /* evaluate the expression */
+  garemb (expr);
   rc = gaexpr (expr, pst);
-  if (rc) goto reterr;
+  if (rc) { printf("Error in gadoexpr: gaexpr failed\n"); goto reterr; }
 
+  /* result must be a grid, not a station data type */
   if (pst->type != 1) {
-    gafree(pst);
-    goto reterr;
-  }
+    printf("Error in gadoexpr: result is not a gridded data type\n"); goto reterr; }
 
+  /* Update elements in the pypgr structure */
   pypgr->gastatptr = (void *)pst;
   pgr = pst->result.pgr;
-
-  pypgr->grid = pgr->grid;
   pypgr->isiz = pgr->isiz;
   pypgr->jsiz = pgr->jsiz;
+  pypgr->idim = pgr->idim;
+  pypgr->jdim = pgr->jdim;
 
-  iconv = pgr->igrab;
-  jconv = pgr->jgrab;
-  ivals = pgr->ivals;
-  jvals = pgr->jvals;
-  ccc = 0;
-
-  mynan = strtod("nan",&ch);
-  y1 = mynan;
-  printf ("qqqq y1 = %g\n",y1);
-
-/*
-  for (j=0; j<pgr->jsiz; j++) {
-    y1 = (gado./guble)(j+pgr->dimmin[1]);
-    abs = jconv(jvals, y1);
-    printf ("%g %i ",y1,(int)(abs));
-    ccc++;
-    if (ccc>10) {
-      printf ("\n");
-      ccc = 0;
-    }
+  /* update sizes of the varying dimensions */
+  if (pgr->idim>=0) {
+    /* idim is varying */
+    if (pgr->idim==0) pypgr->xsz = pgr->isiz;
+    if (pgr->idim==1) pypgr->ysz = pgr->isiz;
+    if (pgr->idim==2) pypgr->zsz = pgr->isiz;
+    if (pgr->idim==3) pypgr->tsz = pgr->isiz;
+    if (pgr->idim==4) pypgr->esz = pgr->isiz;
+  }
+  if (pgr->jdim>=0) {
+    /* jdim is varying */
+    if (pgr->jdim==0) pypgr->xsz = pgr->jsiz;
+    if (pgr->jdim==1) pypgr->ysz = pgr->jsiz;
+    if (pgr->jdim==2) pypgr->zsz = pgr->jsiz;
+    if (pgr->jdim==3) pypgr->tsz = pgr->jsiz;
+    if (pgr->jdim==4) pypgr->esz = pgr->jsiz;
   }
 
-*/
-  return (0);
+  /* populate missing data values with NaN */
+  u = pgr->umask;
+  g = pgr->grid;
+  for (i=0; i<pgr->isiz*pgr->jsiz; i++) if (*(u+i)==0) *(g+i) = mynan;
+
+  /* set the grid pointer in the pypgr structure */
+  pypgr->grid = pgr->grid;
+
+  /* Get a suitable gafile structure so we can populate metadata in pypgr structure.
+     pgr->pfile is set to NULL for functions tloop, eloop, s2g2d, and those that
+     call gagrvl (aave, mnmx, scorr), so we use the default file instead */
+  if (pgr->pfile != NULL)
+    pfi = pgr->pfile;
+  else
+    pfi = pst->pfid;
+
+  /* Longitude */
+  conv = pfi->gr2ab[0];
+  pypgr->xstrt = conv(pfi->grvals[0],pgr->dimmin[0]); /* initial world coordinate value */
+  if (pfi->linear[0])
+    pypgr->xincr = *(pfi->grvals[0]);                 /* valid grid increment */
+  else
+    pypgr->xincr = -1;                                /* negative grid increment */
+  /* allocate memory for X coordinate values */
+  nvals = 1;
+  if (pypgr->xsz > 1) nvals = pypgr->xsz;
+  pypgr->xvals = (double *)malloc(nvals*sizeof(double));
+  if (pypgr->xvals==NULL) {
+    printf("Error in gadoexpr: memory allocation failed for xvals\n"); goto reterr; }
+  /* write world coordinate values, use NaN if dimension isn't varying */
+  s = pypgr->xvals;
+  if (pypgr->xsz > 1) {
+    for (i=pgr->dimmin[0]; i<=pgr->dimmax[0]; i++) {
+      *s = conv(pfi->grvals[0],(gadouble)i);
+      s++;
+    }
+  }
+  else *s = mynan;
+
+  /* Latitude */
+  conv = pfi->gr2ab[1];
+  pypgr->ystrt = conv(pfi->grvals[1],pgr->dimmin[1]); /* initial world coordinate value */
+  if (pfi->linear[1])
+    pypgr->yincr = *(pfi->grvals[1]);                 /* valid grid increment */
+  else
+    pypgr->yincr = -1;                                /* negative grid increment */
+  /* allocate memory for Y coordinate values */
+  nvals = 1;
+  if (pypgr->ysz > 1) nvals = pypgr->ysz;
+  pypgr->yvals = (double *)malloc(nvals*sizeof(double));
+  if (pypgr->yvals==NULL) {
+    printf("Error in gadoexpr: memory allocation failed for yvals\n"); goto reterr; }
+  /* write world coordinate values, use NaN if dimension isn't varying  */
+  s = pypgr->yvals;
+  if (pypgr->ysz > 1) {
+    for (i=pgr->dimmin[1]; i<=pgr->dimmax[1]; i++) {
+      *s = conv(pfi->grvals[1],(gadouble)i);
+      s++;
+    }
+  }
+  else *s = mynan;
+
+  /* Level */
+  conv = pfi->gr2ab[2];
+  pypgr->zstrt = conv(pfi->grvals[2],pgr->dimmin[2]); /* initial world coordinate value */
+  if (pfi->linear[2])
+    pypgr->zincr = *(pfi->grvals[2]);                 /* valid grid increment */
+  else
+    pypgr->zincr = -1;                                /* negative grid increment */
+  /* allocate memory for Z coordinate values */
+  nvals = 1;
+  if (pypgr->zsz > 1) nvals = pypgr->zsz;
+  pypgr->zvals = (double *)malloc(nvals*sizeof(double));
+  if (pypgr->zvals==NULL) {
+    printf("Error in gadoexpr: memory allocation failed for zvals\n"); goto reterr; }
+  /* write world coordinate values, use NaN if dimension isn't varying */
+  s = pypgr->zvals;
+  if (pypgr->zsz > 1) {
+    for (i=pgr->dimmin[2]; i<=pgr->dimmax[2]; i++) {
+      *s = conv(pfi->grvals[2],(gadouble)i);
+      s++;
+    }
+  }
+  else *s = mynan;
+
+  /* Time */
+  gr2t (pfi->grvals[3],pgr->dimmin[3],&dtim);    /* get the initial time metadata */
+  pypgr->syr = dtim.yr;
+  pypgr->smo = dtim.mo;
+  pypgr->sdy = dtim.dy;
+  pypgr->shr = dtim.hr;
+  pypgr->smn = dtim.mn;
+  pypgr->tcal = pfi->calendar;
+  if (*(pfi->grvals[3]+5)!=0)
+    pypgr->ttyp = 0; /* increment is months  */
+  else
+    pypgr->ttyp = 1; /* increment is minutes */
+
+  /* Ensemble */
+  pypgr->estrt = pgr->dimmin[4];
+
+  /* everything is ok, return code is the number of varying dimensions */
+  return (vcnt);
 
 reterr:
-  if (pst) gree(pst,"f104");
+  /* In case of error, memory is released here; caller does not need to call gapyfre. */
+  if (pypgr->xvals != NULL) { free(pypgr->xvals); pypgr->xvals=NULL; }
+  if (pypgr->yvals != NULL) { free(pypgr->yvals); pypgr->yvals=NULL; }
+  if (pypgr->zvals != NULL) { free(pypgr->zvals); pypgr->zvals=NULL; }
+  if (pst) {
+    gafree(pst);
+    gree(pst,"f104");
+  }
   pypgr->gastatptr = NULL;
-  return(1);
+  return(-999);
 
 }
 
@@ -8867,9 +9035,15 @@ reterr:
 
 void gapyfre (struct pygagrid *pypgr) {
 struct gastat *pst;
-    pst = (struct gastat *)pypgr->gastatptr;
-    if (pst) {
-      gafree(pst);
-      gree(pst,"f104");
-    }
+
+  if (pypgr->xvals != NULL) { free(pypgr->xvals); pypgr->xvals=NULL; }
+  if (pypgr->yvals != NULL) { free(pypgr->yvals); pypgr->yvals=NULL; }
+  if (pypgr->zvals != NULL) { free(pypgr->zvals); pypgr->zvals=NULL; }
+
+  pst = (struct gastat *)pypgr->gastatptr;
+  if (pst) {
+    gafree(pst);
+    gree(pst,"f104");
+    pst=NULL;
+  }
 }

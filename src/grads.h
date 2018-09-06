@@ -1,4 +1,4 @@
-/* Copyright (C) 1988-2017 by George Mason University. See file COPYRIGHT for more information. */
+/* Copyright (C) 1988-2018 by George Mason University. See file COPYRIGHT for more information. */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -727,11 +727,12 @@ struct gaudpinfo {
 
 /* Structure that describes a user defined plug-in */
 struct gaupb {
-  struct gaupb *upb;           /* Forward pointer                      */
-  char name[16];               /* Function name                        */
-  char *fname;                 /* Name of user executable              */
+  struct gaupb *upb;           /* Forward pointer                        */
+  char name[16];               /* Function name to use in GrADS          */
+  char alias[513];             /* Actual function name in plug-in code   */
+  char *fname;                 /* Name of user executable/shared object  */
   gaint type;                  /* 1==function,  2==defop (not in use)
-                                  3==gxdisplay, 4==gxprint             */
+                                  3==gxdisplay, 4==gxprint               */
   gaint (*pfunc)(struct gafunc *, struct gastat *, struct gaudpinfo *);  /* Function pointer */
 };
 

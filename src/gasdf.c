@@ -1,4 +1,4 @@
-/* Copyright (C) 1988-2017 by George Mason University. See file COPYRIGHT for more information. */
+/* Copyright (C) 1988-2018 by George Mason University. See file COPYRIGHT for more information. */
 
 /*
    Reads the metadata from a Self-Describing File
@@ -2223,7 +2223,7 @@ char sdsname[H4_MAX_NC_NAME+1];
 char dimname[H4_MAX_NC_NAME+1];
 #endif
 
-  if ((pfi->name == NULL) || (strlen (pfi->name) == 0)) return Failure;
+ if (strlen (pfi->name) == 0) return Failure;
 
   /* Open the file */
   if (pfi->tmplat) {
@@ -2856,8 +2856,9 @@ long   *ival=NULL;
 short  *sval=NULL;
 char   *bval=NULL;
 char   *cval=NULL;
+char  **strval=NULL;
 char   *attname,*varname=NULL;
-gaint   i,len,status,gotatt;
+gaint   i,j,len,status,gotatt;
 size_t  sz,attlen;
 nc_type type;
 
@@ -2938,6 +2939,29 @@ nc_type type;
               else {
                 gotatt=1;
                 cval[attlen-1]='\0';
+              }
+              break;
+            case (NC_STRING):
+              strval = (char**)galloc(attlen * sizeof(char*),"strval");
+              memset(strval, 0, attlen * sizeof(char*));  /* fill with zeros as in nc doc example */
+              status = nc_get_att_string(cdfid, varid, attname, strval);
+              if (status != NC_NOERR) {
+                gree(strval,"f24b"); strval = NULL;
+                handle_error(status);
+                snprintf(pout,1255,"read_ncatts: failed to get %s attribute %d type STRING\n",varname,i);
+                gaprnt(2,pout);
+              }
+              else {
+                gotatt=1;
+                /* NC_STRING attribute is an array (size attlen) of pointers to variable length strings.
+                   We only look at the first one, strval[0], and don't check if attlen>1.
+                   We get the length of the first string, copy it into cval, then free the array */
+                sz = 1 + (int)strlen(strval[0]);
+                cval = (char *)galloc(sz*sizeof(char),"cval");
+                for (j=0; j<sz; j++) cval[j] = strval[0][j];
+                cval[sz]='\0';
+                nc_free_string(attlen, strval);
+                gree(strval);
               }
               break;
             case (NC_SHORT):
@@ -3037,6 +3061,7 @@ nc_type type;
               newattrib->nctype = (gaint)type;
               if      (type == NC_BYTE)   newattrib->value = bval;
               else if (type == NC_CHAR)   newattrib->value = cval;
+              else if (type == NC_STRING) newattrib->value = cval;
               else if (type == NC_SHORT)  newattrib->value = sval;
               else if (type == NC_LONG)   newattrib->value = ival;
               else if (type == NC_FLOAT)  newattrib->value = fval;

@@ -1,4 +1,4 @@
-/* Copyright (C) 1988-2017 by George Mason University. See file COPYRIGHT for more information. */
+/* Copyright (C) 1988-2018 by George Mason University. See file COPYRIGHT for more information. */
 
 /* Authored by B. Doty */
 
@@ -3661,7 +3661,7 @@ struct dbfld *fld=NULL,*newfld=NULL,*nextfld;
   else {
     len = strlen(pcm->shpfname);
     fnroot = (char *)galloc(len+1,"shpfn");
-    snprintf(fnroot,len+1,pcm->shpfname);
+    snprintf(fnroot,len+1,"%s",pcm->shpfname);
   }
   if ((dbfid = DBFCreate(fnroot))==NULL) {
     gaprnt(0,"Error in gashpwrt: Unable to create data base file\n");

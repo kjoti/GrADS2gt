@@ -1,4 +1,4 @@
-/* Copyright (C) 1988-2017 by George Mason University. See file COPYRIGHT for more information. */
+/* Copyright (C) 1988-2018 by George Mason University. See file COPYRIGHT for more information. */
 
 /* Main program for GrADS (Grid Analysis and Display System).
    This program loops on commands from the user, and calls the
@@ -206,7 +206,7 @@ int main (int argc, char *argv[])  {
   if (ipcflg) printf("\n<IPC>" );  /* delimit splash screen */
 
   printf("\nGrid Analysis and Display System (GrADS) Version %s\n",gatxtl(GRADS_VERSION,0));
-  printf("Copyright (C) 1988-2017 by George Mason University\n");
+  printf("Copyright (C) 1988-2018 by George Mason University\n");
   printf("GrADS comes with ABSOLUTELY NO WARRANTY\n");
   printf("See file COPYRIGHT for more information\n\n");
 
@@ -648,8 +648,10 @@ void gaudpdef (void) {
 struct gaupb *upb, *oupb=NULL;
 char *cname=NULL;
 FILE *cfile;
-char *ch,ptype[16],rec[500];
+char *ch,ptype[16],rec[2000];
 gaint i,sz,pass,line,err;
+char newname[1000];
+gaint len;
 
   /* Make two passes:
      1. Read user specified plug-in table (in GAUDPT),
@@ -670,7 +672,7 @@ gaint i,sz,pass,line,err;
       }
     }
     /* check for a file called "udpt" in the GADDIR directory */
-     else {
+    else {
       cname = gxgnam("udpt");
       cfile = fopen(cname,"r");
       if (cfile==NULL) {
@@ -682,7 +684,7 @@ gaint i,sz,pass,line,err;
     line=0;
     while (1) {
       /* Read a record from the file */
-      ch = fgets(rec,500,cfile);
+      ch = fgets(rec,2000,cfile);
       if (ch==NULL) break;
       ch = rec;
       line++;
@@ -692,6 +694,7 @@ gaint i,sz,pass,line,err;
       upb = (struct gaupb *)malloc(sizeof(struct gaupb));
       if (upb==NULL) goto memerr;
       while (*ch==' ') ch++;                                 /* move past leading blanks */
+
       /* parse the plug-in type keyword*/
       i = 0;
       while (*ch!=' ' && *ch!='\0' && *ch!='\n') {
@@ -705,11 +708,12 @@ gaint i,sz,pass,line,err;
       lowcas(ptype);
       upb->type=0;
       if (!strncmp(ptype,"function",8))  upb->type=1;
-/*       if (!strncmp(ptype,"defop",5))     upb->type=2; */
+      /* if (!strncmp(ptype,"defop",5))     upb->type=2; */
       if (!strncmp(ptype,"gxdisplay",9)) upb->type=3;
       if (!strncmp(ptype,"gxprint",7))   upb->type=4;
       if (upb->type==0) { err=1; goto fmterr; }
       while (*ch==' ') ch++;                          /* move past any in-between blanks */
+
       /* parse the plug-in name, must be 15 characters or less */
       upb->name[0] = '\0';
       i = 0;
@@ -724,8 +728,9 @@ gaint i,sz,pass,line,err;
       if (i==0) { err=2; goto fmterr; }
       if (upb->type<=2) lowcas(upb->name);    /* gaexpr needs functions to be lower case */
       while (*ch==' ') ch++;                          /* move past any in-between blanks */
-      /* parse the shared object filename */
-      upb->fname = NULL;
+
+
+      /* check for the shared object filename */
       sz = 0;
       while (*(ch+sz)!=' '&&*(ch+sz)!='\n'&&*(ch+sz)!='\0') sz++;   /* no spaces allowed */
       if (sz==0) { err=3; goto fmterr; }
@@ -741,14 +746,46 @@ gaint i,sz,pass,line,err;
         continue;
       }
 
-      /* Add this entry to the chain */
-      upb->fname = (char *)malloc(sz+2);
+      /* look for ^ or $ at beginning of the shared object filename */
+      if (*ch=='^' || *ch=='$')
+        fnmexp (newname,ch,cname);
+      else
+        getwrd (newname,ch,1000);
+      len = strlen(newname);
+
+      /* allocate memory for shared object filename, copy it */
+      upb->fname = NULL;
+      upb->fname = (char *)malloc(len+2);
       if (upb->fname==NULL) { free(upb); goto memerr; }
-      for (i=0; i<sz; i++) {
-        upb->fname[i] = *ch;
-        ch++;
+      for (i=0; i<len; i++) upb->fname[i] = newname[i];
+      upb->fname[len] = '\0';
+
+      for (i=0; i<sz; i++) ch++;          /* move past the shared object file name */
+      while (*ch==' ') ch++;              /* move past any in-between blanks */
+
+      if (upb->type<=2) {
+      /* Look for an optional alias that is the actual function name
+         in the plug-in source code, which may not meet the requirements
+         for GrADS function names. The alias size is hardcoded
+         to be no more than 512 characters (that ought to be big enough) */
+        upb->alias[0] = '\0';
+        i = 0;
+        while (*ch!=' ' && *ch!='\0' && *ch!='\n') {
+          if (i<512) {
+            upb->alias[i] = *ch;
+            i++;
+          }
+          ch++;
+        }
+        upb->alias[i] = '\0';
+
+        if (i==0) {
+          /* user did not provide an alias, so we'll just copy the name */
+          for (i=0; i<16; i++) upb->alias[i] = upb->name[i];
+        }
       }
-      upb->fname[sz] = '\0';
+
+      /* Add this entry to the chain */
       upb->pfunc = NULL;
       upb->upb = NULL;
       if (upba==NULL) upba = upb;

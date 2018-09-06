@@ -94,14 +94,15 @@ AC_DEFUN([AC_CHECK_HDF5_LIB],
 [
   HDF5_LIBS=
   ac_hdf5_save_LIBS=$LIBS
-  AC_CHECK_LIB_NOCACHE_HDF5([sz], [main],
-  [
-      LIBS="$LIBS -lsz"
-      HDF5_LIBS='-lsz'
-  ])
 
 dnl -lsz is not required because due to licencing it may not be present
-dnl nor required everywhere
+dnl nor required everywhere. GrADS will do without szip.
+dnl  AC_CHECK_LIB_NOCACHE_HDF5([sz], [main],
+dnl  [
+dnl      LIBS="$LIBS -lsz"
+dnl      HDF5_LIBS='-lsz'
+dnl  ])
+
   ac_hdf5_lib='no'
   AC_CHECK_LIB_NOCACHE_HDF5([z],[compress],
   [ AC_CHECK_LIB_NOCACHE_HDF5([jpeg],[main],
@@ -118,6 +119,7 @@ dnl nor required everywhere
   [m4_if([$2], [], [:], [$2])])
 ])
 
+dnl lib check 
 AC_DEFUN([AC_CHECK_LIB_NOCACHE_HDF5],
 [
   AS_TR_SH([ac_check_lib_nocache_ok_$1_$2])='no'
@@ -137,6 +139,7 @@ AC_DEFUN([AC_CHECK_LIB_NOCACHE_HDF5],
   [m4_if([$4], [], [:], [$4])])
 ])
  
+dnl header check
 AC_DEFUN([AC_CHECK_HEADER_NOCACHE_HDF5],
 [
   AS_TR_SH([ac_check_header_nocache_compile_$1])='no'

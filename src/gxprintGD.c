@@ -1,4 +1,4 @@
-/* Copyright (C) 1988-2017 by George Mason University. See file COPYRIGHT for more information. */
+/* Copyright (C) 1988-2018 by George Mason University. See file COPYRIGHT for more information. */
 
 /* Routines to print the graphics with calls to the GD library, needs gxGD.c */
 
@@ -17,6 +17,11 @@ static gaint rc=0;
 /* Report on configuration */
 void gxpcfg (void) {
   gxGDcfg();
+}
+
+/* Check to see if this printing backend supports fonts */
+gaint gxpckfont (void) {
+  return (0);
 }
 
 /* Keep a local copy of real page size.

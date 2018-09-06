@@ -1,4 +1,4 @@
-/* Copyright (C) 1988-2017 by George Mason University. See file COPYRIGHT for more information. */
+/* Copyright (C) 1988-2018 by George Mason University. See file COPYRIGHT for more information. */
 
 /*  Originally authored by B. Doty.
     Some functions provided by others. */
@@ -4907,6 +4907,10 @@ size_t sz;
     /* 2nd arg is station expression */
     stn2 = pst->result.stn;
     rpt = stn2->rpt;
+    if (rpt == NULL) {
+      printf("Error in GR2STN: 2nd arg returned a null result \n");
+      return(1);
+    }
     lat = rpt->lat;
     lon = rpt->lon;
     /* Check for nearest neighbor flag in 3rd arg */
@@ -7215,9 +7219,9 @@ gaint (*pfunc)(struct gafunc *, struct gastat *, struct gaudpinfo *);
       return (1);
     }
     dlerror();
-    pfunc = dlsym(handle,upb->name);
+    pfunc = dlsym(handle,upb->alias);
     if ((error=dlerror()) != NULL) {
-      snprintf (pout,1255,"Error: dlsym failed to load %s \n%s \n",upb->name,error);
+      snprintf (pout,1255,"Error: dlsym failed to load %s \n%s \n",upb->alias,error);
       gaprnt (0,pout);
       return (1);
     }
@@ -7240,7 +7244,12 @@ void gaprntupb (void) {
 struct gaupb *upb;
   upb = upba;
   while (upb) {
-    if (upb->type==1) sprintf (pout,"function   %-15s  %s\n",upb->name, upb->fname);
+    if (upb->type==1) {
+      if (!strcmp(upb->name,upb->alias))
+        sprintf (pout,"function   %-15s  %s\n",upb->name, upb->fname);
+      else
+        sprintf (pout,"function   %-15s  %s  %s\n",upb->name, upb->fname, upb->alias);
+    }
     if (upb->type==2) sprintf (pout,"defop      %-15s  %s\n",upb->name, upb->fname);
     if (upb->type==3) sprintf (pout,"gxdisplay  %-15s  %s\n",upb->name, upb->fname);
     if (upb->type==4) sprintf (pout,"gxprint    %-15s  %s\n",upb->name, upb->fname);

@@ -1,4 +1,4 @@
-/* Copyright (C) 1988-2017 by George Mason University. See file COPYRIGHT for more information. */
+/* Copyright (C) 1988-2018 by George Mason University. See file COPYRIGHT for more information. */
 
 /* Routines to print the graphics with calls to the Cairo library, needs gxC.c */
 
@@ -19,8 +19,12 @@ void gxpcfg (void) {
   gxCcfg();
 }
 
-/* Keep a local copy of real page size */
+/* Check to see if this printing backend supports fonts */
+gaint gxpckfont (void) {
+  return (1);
+}
 
+/* Keep a local copy of real page size */
 void gxpbgn (gadouble xsz, gadouble ysz) {
   xsize = xsz;
   ysize = ysz;

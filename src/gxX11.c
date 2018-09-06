@@ -1,4 +1,4 @@
-/* Copyright (C) 1988-2017 by George Mason University. See file COPYRIGHT for more information. */
+/* Copyright (C) 1988-2018 by George Mason University. See file COPYRIGHT for more information. */
 
 /* Include ./configure's header file */
 #ifdef HAVE_CONFIG_H
@@ -2084,17 +2084,20 @@ GC gcp;
   pch = (char *)malloc(512);
   if (pch==NULL) {
     printf ("Memory Allocation Error: Dialog Box\n");
-    return ('\0');
+    *(rch+0)='\0';
+    return (rch);
   }
   tch = (char *)malloc(512);
   if (tch==NULL) {
     printf ("Memory Allocation Error: Dialog Box\n");
-    return ('\0');
+    *(rch+0)='\0';
+    return (rch);
   }
   rch = (char *)malloc(512);
   if (rch==NULL) {
     printf ("Memory Allocation Error: Dialog Box\n");
-    return ('\0');
+    *(rch+0)='\0';
+    return (rch);
   }
   plen = 0;
   rlen = 0;
@@ -3141,4 +3144,8 @@ void gxdclip (gadouble xlo, gadouble xhi, gadouble ylo, gadouble yhi) {
 }
 void gxdcfg (void) {
   printf("X%d.%d ",X_PROTOCOL,X_PROTOCOL_REVISION);
+}
+/* Check to see if this display backend supports fonts */
+gaint gxdckfont (void) {
+  return (0);
 }

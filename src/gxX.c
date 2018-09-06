@@ -1,4 +1,4 @@
-/* Copyright (C) 1988-2017 by George Mason University. See file COPYRIGHT for more information. */
+/* Copyright (C) 1988-2018 by George Mason University. See file COPYRIGHT for more information. */
 
 /* Simplified X interface for Cairo -- no widgets, buttons, X-based pattern fill, etc. */
 
@@ -612,4 +612,9 @@ void gxdclip (gadouble xlo, gadouble xhi, gadouble ylo, gadouble yhi) {
 void gxdcfg (void) {
   printf("X%d.%d ",X_PROTOCOL,X_PROTOCOL_REVISION);
   gxCcfg();
+}
+
+/* Check to see if this display backend supports fonts */
+gaint gxdckfont (void) {
+  return (1);
 }
