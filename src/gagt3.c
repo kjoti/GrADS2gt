@@ -902,8 +902,11 @@ set_mask(char *mask, const FLOAT *data, FLOAT miss, size_t size)
 {
     int i;
 
+    /*
+     * Cast into "float" is needed to emulate GTOOL3 behavior.
+     */
     for (i = 0; i < size; i++)
-        mask[i] = (data[i] == miss) ? 0 : 1;
+        mask[i] = ((float)data[i] == (float)miss) ? 0 : 1;
 }
 
 
@@ -1196,7 +1199,7 @@ gaggt3(struct gagrid *pgr, FLOAT *gr, char *mask, const int d[])
      */
     if (pgr->idim == -1) {
         *gr = gaggt3_value(pgr, pos);
-        *mask = (*gr  == pfi->undef) ? 0 : 1;
+        set_mask(mask, gr, pfi->undef, 1);
         return 0;
     }
 
@@ -1227,7 +1230,8 @@ gaggt3(struct gagrid *pgr, FLOAT *gr, char *mask, const int d[])
                     return 1;
 
             *gr = gaggt3_value(pgr, pos);
-            *mask++ = (*gr  == pfi->undef) ? 0 : 1;
+            set_mask(mask, gr, pfi->undef, 1);
+            mask++;
             gr++;
         }
         if (pgr->jdim >= 0)
