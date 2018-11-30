@@ -75,6 +75,14 @@ timdif(const struct dt *dtim1, const struct dt *dtim2)
 }
 
 
+/* returns in months */
+int
+timdif_in_month(const struct dt *dtim1, const struct dt *dtim2)
+{
+    return 12 * (dtim2->yr - dtim1->yr) + dtim2->mo - dtim1->mo;
+}
+
+
 gadouble
 t2gr(const gadouble *vals, const struct dt *dtim)
 {

@@ -1,13 +1,11 @@
-/*  Copyright (C) 1988-2011 by Brian Doty and the
-    Institute of Global Environment and Society (IGES).
-    See file COPYRIGHT for more information.   */
+/* Copyright (C) 1988-2018 by George Mason University. See file COPYRIGHT for more information. */
 
 /* Routines related to hardcopy (metafile) output. */
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 
-/* If autoconfed, only include malloc.h when it's presen */
+/* If autoconfed, only include malloc.h when it's present */
 #ifdef HAVE_MALLOC_H
 #include <malloc.h>
 #endif
@@ -24,523 +22,415 @@
 #include "gatypes.h"
 #include "gx.h"
 
-static gaint bopt=BUFOPT;                   /* Buffering option   */
-static long buffsz;                         /* metafile buffer size, formerly known as HBUFSZ */
-static gaint bflag;                         /* Buffering disabled */
-static gaint hflag;                         /* File output enabled*/
-static gaint herr;                          /* Fatal error        */
-static gaint hferr;                         /* File I/O error     */
-static gaint hpflg;                         /* User printed frame */
-static short *hbuff, *hpnt, *hend;          /* Current buffer ptrs*/
-static FILE *hfile;                         /* meta file pointer  */
-static gaint hpos;                          /* Frame pos in metafi*/
-static short *bufs[250];                    /* Buffer stuff       */
-static short *bufs2[250];                   /* Enough for 50MB    */
-static gaint lens[250],lens2[250];
-static gaint pnt,pnt2,pntf;
-static gaint dbmode;                        /* Double Buffer mode */
-static gadouble xrsize,yrsize;
+void *galloc(size_t,char *);
 
-void xycnv (short, short, gadouble *, gadouble *);
+/* Struct to form linked list for the meta buffer */
+/* The buffer area is allocated as float, to insure at least four bytes
+   per element.  In some cases, ints and chars will get stuffed into a
+   float (via pointer casting).  */
 
-/* Specify on startup what sort of buffering we want.
-   We can do memory buffering (the default on UNIX machines)
-   or file buffering, done only when print is enabled */
+/* Don't use gafloat or gaint for meta buffer stuffing.  */
 
-void gxhopt (gaint flag) {
-  bopt = flag;
-}
+struct gxmbuf {
+  struct gxmbuf *fpmbuf;         /* Forward pointer */
+  float *buff;                   /* Buffer area */
+  gaint len;                     /* Length of Buffer area */
+  gaint used;                    /* Amount of buffer used */
+};
+
+/* Buffer chain anchor here; also a convenience pointer to the last buffer
+   in the chain.  Times 2, for double buffering.  mbufanch and mbuflast
+   always point to the buffer currently being added to.  In double buffering
+   mode, that will be the background buffer (and mbufanch2 points to the
+   buffer representing the currently display image). */
+
+static struct gxmbuf *mbufanch=NULL;  /* Buffer Anchor */
+static struct gxmbuf *mbuflast=NULL;  /* Last struct in chain */
+
+static struct gxmbuf *mbufanch2=NULL;  /* Buffer Anchor */
+static struct gxmbuf *mbuflast2=NULL;  /* Last struct in chain */
+
+static gaint dbmode;                   /* double buffering flag */
+static struct gxpsubs *psubs=NULL;     /* function pointers for printing */
+static struct gxdsubs *dsubs=NULL;     /* function pointers for display */
+
+#define BWORKSZ 250000
+
+static gaint mbuferror = 0;    /* Indicate an error state; suspends buffering */
 
 /* Initialize any buffering, etc. when GrADS starts up */
 
 void gxhnew (gadouble xsiz, gadouble ysiz, gaint hbufsz) {
-  buffsz = hbufsz;
-  xrsize = xsiz;
-  yrsize = ysiz;
-  hflag = 0;
-  herr = 0;
-  hferr = 0;
-  hpflg = 0;
-  dbmode = 0;
-  if (bopt) bflag = 1;
-  else {
-    hbuff = (short *)malloc(sizeof(short)*buffsz);
-    if (hbuff==NULL) {
-      printf ("Unable to allocate memory for metafile operations.\n");
-      herr = 1;
-      bufs[0] = NULL;
-    } else {
-      bflag = 0;
-      pnt = 1;
-      bufs[0] = hbuff;
-      hpnt = hbuff;
-      hend = hbuff+(buffsz-10L);
-    }
+gaint rc;
+  mbufanch = NULL;
+  mbuflast = NULL;
+  mbuferror = 0;
+  if (sizeof(int) > sizeof(float)) {
+    printf ("Error in gx initialization: Incompatable int and float sizes\n");
+    mbuferror = 99;
+    return;
   }
-  pnt2 = 0;
+  rc = mbufget();
+  if (rc) {
+    printf ("Error in gx initialization: Unable to allocate meta buffer\n");
+    mbuferror = 99;
+  }
 }
 
-/* Enable hardcopy (metafile) output.   */
 
-gaint gxhbgn (char *fname) {
-gaint xx,rc;
-short bb[3];
-
-  if (hferr) {
-    printf ("Metafile error state is positive.\n");
-    printf ("Disable Print before attempting an Enable Print.\n");
-    return (0);
-  }
-
-  /* Open metafile if not already open.  */
-
-  if (hflag) {
-    printf ("Metafile already open\n");
-    return(0);
-  }
-
-  hfile = fopen(fname,"wb");
-  if (hfile==NULL) {
-    printf ("Error opening meta file %s \n", fname);
-    return (1);
-  }
-
-  /* Allocate the memory buffer if we are doing file buffering.  */
-
-  if (bopt) {
-    hbuff = (short *)malloc(sizeof(short)*buffsz);
-    if (hbuff==NULL) {
-      printf ("Unable to allocate memory for metafile operations.\n");
-      fclose(hfile);
-      return (1);
-    }
-    hpnt = hbuff;
-    hend = hbuff+(buffsz-10L);
-    bflag = 0;
-  }
-
-  /* Write physical page size to output metafile */
-
-  bb[0] = -1;
-  xx = (gaint)(xrsize*1000.0+0.5);
-  if (xx<0) xx=0;
-  if (xx>32760) xx=32760;
-  bb[1] = xx;
-  xx = (gaint)(yrsize*1000.0+0.5);
-  if (xx<0) xx=0;
-  if (xx>32760) xx=32760;
-  bb[2] = xx;
-  rc = gxhwri(bb, 3);
-  if (rc) return (1);
-  hpos = ftell(hfile);
-  herr = 0;
-  hpflg = 0;
-  hferr = 0;
-  hflag = 1;
-  if (bopt) {
-    printf ("File buffering enabled. ");
-    printf ("Issue CLEAR command to start buffering.\n");
-  }
-  return (0);
-}
-
-/* Metafile output, command with 0 args */
+/* Add command with 0 args to metafile buffer */
 
 void hout0 (gaint cmd) {
-  if (bflag||herr) return;
-  *hpnt = cmd;
-  hpnt++;
-  if (hpnt>hend) hfull();
+gaint rc;
+signed char *ch;
+  if (mbuferror) return;
+  if (mbuflast->len - mbuflast->used <3) {
+    rc = mbufget();
+    if (rc) {
+      gxmbuferr();
+      return;
+    }
+  }
+  ch = (signed char *)(mbuflast->buff+mbuflast->used);
+  *ch = (signed char)99;
+  *(ch+1) = (signed char)cmd;
+  mbuflast->used++;
 }
 
-/* Metafile output, command plus one integer argument */
+/* Add a command with one small integer argument to the metafile buffer.
+   The argument is assumed to fit into a signed char (-127 to 128).  */
+
+void hout1c (gaint cmd, gaint opt) {
+gaint rc;
+signed char *ch;
+  if (mbuferror) return;
+  if (mbuflast->len - mbuflast->used <4) {
+    rc = mbufget();
+    if (rc) {
+      gxmbuferr();
+      return;
+    }
+  }
+  ch = (signed char *)(mbuflast->buff+mbuflast->used);
+  *ch = (signed char)99;
+  *(ch+1) = (signed char)cmd;
+  mbuflast->used++;
+  *(ch+2) = (signed char)opt;
+  mbuflast->used++;
+}
+
+/* Add command with one integer argument to metafile buffer */
 
 void hout1 (gaint cmd, gaint opt) {
-  if (bflag||herr) return;
-  *hpnt = cmd;
-  hpnt++;
-  *hpnt = opt;
-  hpnt++;
-  if (hpnt>hend) hfull();
+gaint rc;
+signed char *ch;
+int *iii;
+  if (mbuferror) return;
+  if (mbuflast->len - mbuflast->used <4) {
+    rc = mbufget();
+    if (rc) {
+      gxmbuferr();
+      return;
+    }
+  }
+  ch = (signed char *)(mbuflast->buff+mbuflast->used);
+  *ch = (signed char)99;
+  *(ch+1) = (signed char)cmd;
+  mbuflast->used++;
+  iii = (int *)(mbuflast->buff+mbuflast->used);
+  *iii = (int)opt;
+  mbuflast->used++;
 }
 
-/* Metafile output, command plus two double args */
+/* Metafile buffer, command plus two double args */
 
 void hout2 (gaint cmd, gadouble x, gadouble y) {
-gaint xx,yy;
-  if (bflag||herr) return;
-  *hpnt = cmd;
-  hpnt++;
-  xx = (gaint)(x*1000.0+0.5);
-  if (xx<0) xx=0;
-  if (xx>32760) xx=32760;
-  *hpnt = xx;
-  hpnt++;
-  yy = (gaint)(y*1000.0+0.5);
-  if (yy<0) yy=0;
-  if (yy>32760) yy=32760;
-  *hpnt = yy;
-  hpnt++;
-  if (hpnt>hend) hfull();
+gaint rc;
+signed char *ch;
+  if (mbuferror) return;
+  if (mbuflast->len - mbuflast->used <5) {
+    rc = mbufget();
+    if (rc) {
+      gxmbuferr();
+      return;
+    }
+  }
+  ch = (signed char *)(mbuflast->buff+mbuflast->used);
+  *ch = (signed char)99;
+  *(ch+1) = (signed char)cmd;
+  mbuflast->used++;
+  *(mbuflast->buff+mbuflast->used) = (float)x;
+  mbuflast->used++;
+  *(mbuflast->buff+mbuflast->used) = (float)y;
+  mbuflast->used++;
 }
 
-/* Metafile output, command plus two integer args */
+/* Metafile buffer, command plus two integer args */
 
 void hout2i (gaint cmd, gaint i1, gaint i2) {
-
-  if (bflag||herr) return;
-  *hpnt = cmd;
-  hpnt++;
-  *hpnt = i1;
-  hpnt++;
-  *hpnt = i2;
-  hpnt++;
-  if (hpnt>hend) hfull();
+gaint rc;
+signed char *ch;
+int *iii;
+  if (mbuferror) return;
+  if (mbuflast->len - mbuflast->used <5) {
+    rc = mbufget();
+    if (rc) {
+      gxmbuferr();
+      return;
+    }
+  }
+  ch = (signed char *)(mbuflast->buff+mbuflast->used);
+  *ch = (signed char)99;
+  *(ch+1) = (signed char)cmd;
+  mbuflast->used++;
+  iii = (int *)(mbuflast->buff+mbuflast->used);
+  *iii = (int)i1;
+  mbuflast->used++;
+  iii = (int *)(mbuflast->buff+mbuflast->used);
+  *iii = (int)i2;
+  mbuflast->used++;
 }
 
-/* Metafile output, command plus three integer args */
+/* Metafile buffer, command plus three integer args */
 
 void hout3i (gaint cmd, gaint i1, gaint i2, gaint i3) {
-
-  if (bflag||herr) return;
-  *hpnt = cmd;
-  hpnt++;
-  *hpnt = i1;
-  hpnt++;
-  *hpnt = i2;
-  hpnt++;
-  *hpnt = i3;
-  hpnt++;
-  if (hpnt>hend) hfull();
+gaint rc;
+signed char *ch;
+int *iii;
+  if (mbuferror) return;
+  if (mbuflast->len - mbuflast->used <6) {
+    rc = mbufget();
+    if (rc) {
+      gxmbuferr();
+      return;
+    }
+  }
+  ch = (signed char *)(mbuflast->buff+mbuflast->used);
+  *ch = (signed char)99;
+  *(ch+1) = (signed char)cmd;
+  mbuflast->used++;
+  iii = (int *)(mbuflast->buff+mbuflast->used);
+  *iii = (int)i1;
+  mbuflast->used++;
+  iii = (int *)(mbuflast->buff+mbuflast->used);
+  *iii = (int)i2;
+  mbuflast->used++;
+  iii = (int *)(mbuflast->buff+mbuflast->used);
+  *iii = (int)i3;
+  mbuflast->used++;
 }
 
-/* Metafile output, command plus four integer args */
+/* Metafile buffer, command plus four integer args */
 
-void hout4i (gaint cmd, gaint i1, gaint i2, gaint i3, gaint i4) {
-
-  if (bflag||herr) return;
-  *hpnt = cmd;
-  hpnt++;
-  *hpnt = i1;
-  hpnt++;
-  *hpnt = i2;
-  hpnt++;
-  *hpnt = i3;
-  hpnt++;
-  *hpnt = i4;
-  hpnt++;
-  if (hpnt>hend) hfull();
+void hout5i (gaint cmd, gaint i1, gaint i2, gaint i3, gaint i4, gaint i5) {
+gaint rc;
+signed char *ch;
+int *iii;
+  if (mbuferror) return;
+  if (mbuflast->len - mbuflast->used <8) {
+    rc = mbufget();
+    if (rc) {
+      gxmbuferr();
+      return;
+    }
+  }
+  ch = (signed char *)(mbuflast->buff+mbuflast->used);
+  *ch = (signed char)99;
+  *(ch+1) = (signed char)cmd;
+  mbuflast->used++;
+  iii = (int *)(mbuflast->buff+mbuflast->used);
+  *iii = (int)i1;
+  mbuflast->used++;
+  iii = (int *)(mbuflast->buff+mbuflast->used);
+  *iii = (int)i2;
+  mbuflast->used++;
+  iii = (int *)(mbuflast->buff+mbuflast->used);
+  *iii = (int)i3;
+  mbuflast->used++;
+  iii = (int *)(mbuflast->buff+mbuflast->used);
+  *iii = (int)i4;
+  mbuflast->used++;
+  iii = (int *)(mbuflast->buff+mbuflast->used);
+  *iii = (int)i5;
+  mbuflast->used++;
 }
 
-/* Metafile output, command plus four double args */
+/* Metafile buffer, command plus four double args */
 
 void hout4 (gaint cmd, gadouble xl, gadouble xh, gadouble yl, gadouble yh) {
-gaint vv;
-  if (bflag||herr) return;
-  *hpnt = cmd;
-  hpnt++;
-  vv = (gaint)(xl*1000.0+0.5);
-  if (vv<0) vv=0;
-  if (vv>32760) vv=32760;
-  *hpnt = vv;
-  hpnt++;
-  vv = (gaint)(xh*1000.0+0.5);
-  if (vv<0) vv=0;
-  if (vv>32760) vv=32760;
-  *hpnt = vv;
-  hpnt++;
-  vv = (gaint)(yl*1000.0+0.5);
-  if (vv<0) vv=0;
-  if (vv>32760) vv=32760;
-  *hpnt = vv;
-  hpnt++;
-  vv = (gaint)(yh*1000.0+0.5);
-  if (vv<0) vv=0;
-  if (vv>32760) vv=32760;
-  *hpnt = vv;
-  hpnt++;
-  if (hpnt>hend) hfull();
-}
-
-/* Handle situation where memory buffer is full.  Either output
-   to the temporary file buffer, or disable additional input
-   into the memory buffer. */
-
-void hfull (void) {
-gaint len,rc;
-
-  if (bopt) {
-    len = hpnt - hbuff;
-    rc = gxhwri(hbuff, len);
-    if (rc) return;
-    else hpnt = hbuff;
-  } else {
-    if (dbmode && pntf==1) {
-      lens2[pnt2-1] = hpnt-hbuff;
-      if (pnt2>249) {
-        printf ("Out of buffer space\n");
-        herr=1;
-        return;
-      }
-      hbuff = (short *)malloc(sizeof(short)*buffsz);
-      if (hbuff==NULL) {
-        printf ("Memory allocation error for metafile buffers.\n");
-        herr = 1;
-      } else {
-        bufs2[pnt2] = hbuff;
-        hpnt = hbuff;
-        hend = hbuff+(buffsz-10L);
-        pnt2++;
-      }
-    } else {
-      if (pnt>249) {
-        printf ("Out of buffer space\n");
-        herr=1;
-        return;
-      }
-      lens[pnt-1] = hpnt-hbuff;
-      hbuff = (short *)malloc(sizeof(short)*buffsz);
-      if (hbuff==NULL) {
-        printf ("Memory allocation error for metafile buffers.\n");
-        herr = 1;
-      } else {
-        bufs[pnt] = hbuff;
-        hpnt = hbuff;
-        hend = hbuff+(buffsz-10L);
-        pnt++;
-      }
+gaint rc;
+signed char *ch;
+  if (mbuferror) return;
+  if (mbuflast->len - mbuflast->used <7) {
+    rc = mbufget();
+    if (rc) {
+      gxmbuferr();
+      return;
     }
   }
+  ch = (signed char *)(mbuflast->buff+mbuflast->used);
+  *ch = (signed char)99;
+  *(ch+1) = (signed char)cmd;
+  mbuflast->used++;
+  *(mbuflast->buff+mbuflast->used) = (float)xl;
+  mbuflast->used++;
+  *(mbuflast->buff+mbuflast->used) = (float)xh;
+  mbuflast->used++;
+  *(mbuflast->buff+mbuflast->used) = (float)yl;
+  mbuflast->used++;
+  *(mbuflast->buff+mbuflast->used) = (float)yh;
+  mbuflast->used++;
 }
 
-/* Output the current frame to the metafile.   Empty the metafile
-   buffer, and set things so that the frame will be marked on a
-   frame action.
+/* Add a single character to the metafile buffer, along with the font number (less
+   than 100), location (x,y), and size/rotation specs (4 floats).  Uses -21 as a
+   cmd value.   */
 
-   If no metafile is open, write an EPS file by calling gxheps.
+void houtch (char ch, gaint fn, gadouble x, gadouble y,
+         gadouble w, gadouble h, gadouble ang) {
+gaint rc;
+signed char *ccc;
+char *ucc;
+  if (mbuferror) return;
+  if (mbuflast->len - mbuflast->used <8) {
+    rc = mbufget();
+    if (rc) {
+      gxmbuferr();
+      return;
+    }
+  }
+  ccc = (signed char *)(mbuflast->buff+mbuflast->used);
+  ucc = (char *)(ccc+2);
+  *ccc = (signed char)99;
+  *(ccc+1) = (signed char)(-21);
+  *ucc = ch;
+  *(ccc+3) = (signed char)fn;
+  mbuflast->used++;
+  *(mbuflast->buff+mbuflast->used) = (float)x;
+  mbuflast->used++;
+  *(mbuflast->buff+mbuflast->used) = (float)y;
+  mbuflast->used++;
+  *(mbuflast->buff+mbuflast->used) = (float)w;
+  mbuflast->used++;
+  *(mbuflast->buff+mbuflast->used) = (float)h;
+  mbuflast->used++;
+  *(mbuflast->buff+mbuflast->used) = (float)ang;
+  mbuflast->used++;
+}
+
+/* User has issued a clear.
+   This may also indicate the start or end of double buffering.
+   If we are not double buffering, just free up the memory buffer and return.
+   If we are starting up double buffering, we need another buffer chain.
+   If we are ending double buffering, all memory needs to be released.
+   If we are in the midst of double buffering, do a "swap" and free the foreground buffer.
+
+   Values for action are:
+      0 -- new frame (clear display), wait before clearing.
+      1 -- new frame, no wait.
+      2 -- New frame in double buffer mode.  If not supported
+           has same result as action=1.  Usage involves multiple
+           calls with action=2 to obtain an animation effect.
+      7 -- new frame, but just clear graphics.  Do not clear
+           event queue; redraw buttons.
+      8 -- clear only the event queue.
+      9 -- clear only the X request buffer
 */
 
-void gxhprt (char *cmd) {
-gaint len,i,rc;
-
-  if (bopt && dbmode) {
-    printf ("Cannot print while in double-buffer mode ");
-    printf ("when using file buffering\n");
-    return;
-  }
-#ifndef STNDALN
-  if(!hflag) { /* No metafile open write a EPS file using gxeps */
-    gxheps(cmd);
-    return;
-  }
-#endif
-  if (herr||hferr) {
-    printf ("Error status on print metafile is positive.\n");
-    printf ("Cannot print current frame.\n");
-    return;
-  }
-  if (!hflag) {
-    printf ("Metafile not currently open\n");
-    return;
-  }
-  if (bopt) {
-    len = hpnt - hbuff;
-    rc = gxhwri(hbuff,len);
-    if (rc) return;
-    else hpnt = hbuff;
-  } else {
-    if (dbmode && pntf==0) {
-      i = 0;
-      while (i<pnt2) {
-        rc = gxhwri(bufs2[i],lens2[i]);
-        if (rc) return;
-        i++;
-      }
-    } else {
-      if (!dbmode) lens[pnt-1] = hpnt-hbuff;
-      i = 0;
-      while (i<pnt) {
-        rc = gxhwri(bufs[i],lens[i]);
-        if (rc) return;
-        i++;
-      }
-    }
-  }
-  hpflg = 1;
-  hpos = ftell(hfile);
-  return;
-}
-
-/* Write to output metafile */
-
-gaint gxhwri (void *buf, gaint len) {
-/* kk 020624 --- s */
-/*  if (len>0) fwrite (buf, sizeof(short), len, hfile); */
-  if (len>0) fwrite (buf, sizeof(short)*len, 1, hfile);
-/* kk 020624 --- e */
-  if (ferror(hfile)) {
-    printf ("I/O Error writing to print metafile.\n");
-    fclose(hfile);
-    hferr = 1;
-    hflag = 0;
-    hpflg = 0;
-    if (bopt) {
-      free(hbuff);
-      herr = 1;
-      bflag = 1;
-    }
-    return (1);
-  }
-  return (0);
-}
-
-/* Close the metafile output file without further output */
-
-void gxhend (void) {
-short bb[2];
-gaint rc;
-  if (hferr) {
-    printf ("Resetting print metafile error status.\n");
-    hferr = 0;
-    if (bopt) herr = 0;
-    return;
-  }
-  if (!hflag) {
-    printf ("No hardcopy metafile open\n");
-    return;
-  }
-  fseek(hfile,hpos,0L);
-  if (hpflg) {
-    bb[0] = -2;
-    bb[1] = -9;
-    rc = gxhwri(bb,2);
-  } else {
-    bb[0] = -9;
-    rc = gxhwri(bb,1);
-  }
-  if (!rc) {
-    fclose(hfile);
-    printf ("Hardcopy output file is closed \n");
-    hflag = 0;
-    if (bopt) {
-      free(hbuff);
-      bflag = 1;
-    }
-  }
-}
-
-/* User has issued a clear.  Mark an end of frame if needed in
-   the output file; free buffers if we are in memory buffering
-   mode */
-
 void gxhfrm (gaint iact) {
-short bb;
-gaint rc,i;
+struct gxmbuf *pmbuf, *pmbufl;
 
-  if (hflag) {
-    fseek(hfile,hpos,0L);
-    if (hpflg) {
-      bb = -2;
-      rc = gxhwri(&bb, 1);
-      hpflg = 0;
-      if (!rc) hpos = ftell(hfile);
-    }
-  }
+  /* Start up double buffering */
   if (iact==2 && dbmode==0) {
+    mbufrel(1);
+    if (mbufanch==NULL) mbufget();
+    mbufanch2 = mbufanch;
+    mbuflast2 = mbuflast;
+    mbufanch = NULL;
+    mbuflast = NULL;
+    mbufget();
     dbmode = 1;
-    if (bopt==0) {
-      hbuff = (short *)malloc(sizeof(short)*buffsz);
-      if (hbuff==NULL) {
-        printf ("Memory allocation error for metafile buffers.\n");
-        herr = 1;
-        pnt2 = 0;
-        bufs2[0] = NULL;
-      } else {
-        pnt2 = 1;
-        pntf = 1;
-        bufs2[0] = hbuff;
-      }
-    }
   }
+
+  /* End of double buffering */
   if (iact!=2 && dbmode==1) {
+    mbufrel(0);
+    mbufanch = mbufanch2;
+    mbufrel(1);
     dbmode = 0;
-    if (bopt==0) {
-      for (i=0; i<pnt2; i++) free(bufs2[i]);
-      pnt2 = 0;
-    }
+    mbuferror = 0;
+    return;
   }
-  if (bopt==0) {
-    if (dbmode) {
-      if (pntf==0) {
-        lens[pnt-1] = hpnt-hbuff;
-        for (i=1; i<pnt2; i++) free(bufs2[i]);
-        pntf = 1;
-        pnt2 = 1;
-        hbuff = bufs2[0];
-        hpnt = hbuff;
-        hend = hbuff+(buffsz-10L);
-      } else {
-        lens2[pnt2-1] = hpnt-hbuff;
-        for (i=1; i<pnt; i++) free(bufs[i]);
-        pntf = 0;
-        pnt = 1;
-        hbuff = bufs[0];
-        hpnt = hbuff;
-        hend = hbuff+(buffsz-10L);
-      }
-    } else {
-      for (i=1; i<pnt; i++) {
-        free(bufs[i]);
-      }
-      pnt = 1;
-      hbuff = bufs[0];
-      hpnt = hbuff;
-      hend = hbuff+(buffsz-10L);
-    }
-    if (herr && bufs[0] && !dbmode) herr = 0;
-  } else hpnt = hbuff;
+
+  /* If double buffering, swap buffers */
+  if (dbmode) {
+    pmbuf = mbufanch;     /* Save pointer to background buffer */
+    pmbufl = mbuflast;
+    mbufanch = mbufanch2;
+    mbufrel(1);           /* Get rid of former foreground buffer */
+    mbufanch2 = pmbuf;    /* Set foreground to former background */
+    mbuflast2 = pmbufl;
+  }
+  else {
+    /* Not double buffering, so just free buffers */
+    mbufrel(1);
+  }
+  if (!dbmode) mbuferror = 0;        /* Reset error state on clear command */
 }
 
-/* Redraw based on contents of current buffers */
 
-void gxhdrw (gaint dbflg) {
-short *poi,*pend;
-gaint cmd, i, cnt, flag, ii, siz;
-gaint lcolor,fflag,xyc=0;
-gadouble xlo,xhi,ylo,yhi,xpos,ypos,*xybuf=NULL;
+/* Redraw based on contents of current buffers.  Items that persist from plot
+   to plot ARE NOT IN THE META BUFFER; these items are set in the hardware attribute
+   database and are queried by the backend.
+
+   This routine is called from gxX (ie, a lower level of the backend rendering),
+   and this routine calls back into gxX.  This is not, however, implemented as
+   true recursion -- events are disabled in gxX during this redraw, so addtional
+   levels of recursion are not allowed.
+
+   If dbflg, draw from the background buffer.  Otherwise draw from the
+   foreground buffer. */
+
+void gxhdrw (gaint dbflg, gaint pflg) {
+struct gxmbuf *pmbuf;
+float *buff;
+int *iii;
+gadouble r,s,x,y,w,h,ang;
+gadouble *xybuf;
+gaint ppp,cmd,op1,op2,op3,op4,op5,fflag,xyc=0,fn,sig;
+signed char *ch;
+char ccc,*uch;
 
   if (dbflg && !dbmode) {
     printf ("Logic error 0 in Redraw.  Contact Developer.\n");
     return;
   }
 
-  if (dbmode && pntf==1) {
-    lens2[pnt2-1] = hpnt-hbuff;
-    cnt = pnt2; flag = 1;
-    if (dbflg) {cnt = pnt; flag = 0;}
-  } else {
-    lens[pnt-1] = hpnt-hbuff;
-    cnt = pnt; flag = 0;
-    if (dbflg) {cnt = pnt2; flag = 1;}
-  }
+  if (psubs==NULL) psubs = getpsubs();  /* get ptrs to the graphics printing functions */
+  if (dsubs==NULL) dsubs = getdsubs();  /* get ptrs to the graphics display functions */
 
-  gxsfrm ();
+  if (dbflg) pmbuf = mbufanch2;
+  else pmbuf = mbufanch;
+
   fflag = 0;
+  xybuf = NULL;
 
-  for (ii=0; ii<cnt; ii++) {
-    if (flag) {
-      poi = bufs2[ii];
-      pend = poi + lens2[ii];
-    } else {
-      poi = bufs[ii];
-      pend = poi + lens[ii];
-    }
-
-    while (poi<pend) {
+  while (pmbuf) {
+    ppp = 0;
+    while (ppp < pmbuf->used) {
 
       /* Get message type */
 
-      cmd = *poi;
+      ch = (signed char *)(pmbuf->buff + ppp);
+      cmd = (gaint)(*ch);
+      if (cmd != 99) {
+        printf ("Metafile buffer is corrupted\n");
+        printf ("Unable to complete redraw and/or print operation\n");
+        return;
+      }
+      cmd = (gaint)(*(ch+1));
+      ppp++;
+
 
       /* Handle various message types */
       /* -9 is end of file.  Should not happen. */
@@ -550,14 +440,14 @@ gadouble xlo,xhi,ylo,yhi,xpos,ypos,*xybuf=NULL;
         return;
       }
 
-      /*  -1 indicates start of file.  Should not ocurr. */
+      /*  -1 indicates start of file.  Should not occur. */
 
       else if (cmd==-1) {
         printf ("Logic Error 8 in Redraw.  Notify Developer\n");
         return;
       }
 
-      /* -2 indicates new frame.  Also should not ocurr */
+      /* -2 indicates new frame.  Also should not occur */
 
       else if (cmd==-2) {
         printf ("Logic Error 12 in Redraw.  Notify Developer\n");
@@ -567,120 +457,289 @@ gadouble xlo,xhi,ylo,yhi,xpos,ypos,*xybuf=NULL;
       /* -3 indicates new color.  One arg; color number.  */
 
       else if (cmd==-3) {
-        lcolor = *(poi+1);
-        gxdcol (lcolor);
-        poi += 2;
+        iii = (int *)(pmbuf->buff + ppp);
+        op1 = (gaint)(*iii);
+        if (pflg)
+          psubs->gxpcol (op1);          /* for printing */
+        else
+          dsubs->gxdcol (op1);          /* for hardware */
+        ppp++;
       }
 
       /* -4 indicates new line thickness.  It has two arguments */
 
       else if (cmd==-4) {
-        i = *(poi+2);
-        gxdwid(i);
-        poi += 3;
+        iii = (int *)(pmbuf->buff + ppp);
+        op1 = (gaint)(*iii);
+        if (pflg)
+          psubs->gxpwid (op1);          /* for printing */
+        else
+          dsubs->gxdwid (op1);          /* for hardware */
+        ppp += 2;
       }
 
-      /*  -5 defines a new color, in rgb.  It has four int args */
+      /*  -5 defines a new color, in rgb.  It has five int args */
 
       else if (cmd==-5){
-        gxdacl ((gaint)*(poi+1),(gaint)*(poi+2),(gaint)*(poi+3),(gaint)*(poi+4));
-        poi += 5;
+        iii = (int *)(pmbuf->buff + ppp);
+        op1 = (gaint)(*iii);
+        iii = (int *)(pmbuf->buff + ppp + 1);
+        op2 = (gaint)(*iii);
+        iii = (int *)(pmbuf->buff + ppp + 2);
+        op3 = (gaint)(*iii);
+        iii = (int *)(pmbuf->buff + ppp + 3);
+        op4 = (gaint)(*iii);
+        iii = (int *)(pmbuf->buff + ppp + 4);
+        op5 = (gaint)(*iii);
+        gxdbacol (op1,op2,op3,op4,op5);   /* update the data base */
+        if (pflg)
+          psubs->gxpacol (op1);                 /* for printing (no-op for cairo) */
+        else
+          dsubs->gxdacol (op1,op2,op3,op4,op5); /* for hardware (no-op for cairo) */
+        ppp += 5;
       }
 
       /* -6 is for a filled rectangle.  It has four args. */
 
       else if (cmd==-6){
-        xycnv (*(poi+1),*(poi+3),&xlo,&ylo);
-        xycnv (*(poi+2),*(poi+4),&xhi,&yhi);
-        gxdrec(xlo,xhi,ylo,yhi);
-        poi += 5;
+        buff = pmbuf->buff + ppp;
+        r = (gadouble)(*buff);
+        s = (gadouble)(*(buff+1));
+        x = (gadouble)(*(buff+2));
+        y = (gadouble)(*(buff+3));
+        if (pflg)
+          psubs->gxprec(r,s,x,y);          /* for printing */
+        else
+          dsubs->gxdrec(r,s,x,y);          /* for hardware */
+        ppp += 4;
       }
 
-      /* -7 indicates the start of a polygon fill.  It has one arg. */
+      /* -7 indicates the start of a polygon fill.  It has one arg,
+         the length of the polygon.  We allocate an array for the entire
+         polygon, so we can present it to the hardware backend in
+         on piece. */
 
-      else if (cmd==-7){
-        siz = *(poi+1);
-        xybuf = (gadouble *)malloc(sizeof(gadouble)*siz*2);
+      else if (cmd==-7) {
+        iii = (int *)(pmbuf->buff + ppp);
+        op1 = (gaint)(*iii);
+        xybuf = (gadouble *)galloc(sizeof(gadouble)*op1*2,"gxybuf");
         if (xybuf==NULL) {
           printf ("Memory allocation error: Redraw\n");
           return;
         }
-        fflag = 1;
         xyc = 0;
-        poi += 2;
+        fflag = 1;
+        ppp += 1;
+        /* tell printing layer about new polygon. */
+        if (pflg) psubs->gxpbpoly();
       }
 
       /* -8 is to terminate polygon fill.  It has no args */
 
-      else if (cmd==-8){
-        gxdfil (xybuf,xyc);
+      else if (cmd==-8) {
         if (xybuf==NULL) {
           printf ("Logic Error 16 in Redraw.  Notify Developer\n");
           return;
-        } else free (xybuf);
+        }
+        if (pflg)
+          psubs->gxpepoly (xybuf,xyc);  /* for printing */
+        else
+          dsubs->gxdfil (xybuf,xyc);    /* for hardware */
+        gree (xybuf,"gxybuf");
+        xybuf = NULL;
         fflag = 0;
-        poi += 1;
       }
 
       /* -10 is a move to instruction.  It has two double args */
 
-      else if (cmd==-10){
-        xycnv (*(poi+1),*(poi+2),&xpos,&ypos);
+      else if (cmd==-10) {
+        buff = pmbuf->buff + ppp;
+        x = (gadouble)(*buff);
+        y = (gadouble)(*(buff+1));
         if (fflag) {
-          *(xybuf+xyc*2) = xpos;
-          *(xybuf+xyc*2+1) = ypos;
+          xybuf[xyc*2] = x;
+          xybuf[xyc*2+1] = y;
           xyc++;
-        } else gxdmov(xpos,ypos);
-        poi += 3;
+        }
+        if (pflg)
+          psubs->gxpmov(x,y);            /* for printing */
+        else
+          dsubs->gxdmov(x,y);            /* for hardware */
+        ppp += 2;
       }
 
       /*  -11 is draw to.  It has two double args. */
 
-      else if (cmd==-11){
-        xycnv (*(poi+1),*(poi+2),&xpos,&ypos);
+      else if (cmd==-11) {
+        buff = pmbuf->buff + ppp;
+        x = (gadouble)(*buff);
+        y = (gadouble)(*(buff+1));
         if (fflag) {
-          xybuf[xyc*2] = xpos;
-          xybuf[xyc*2+1] = ypos;
+          xybuf[xyc*2] = x;
+          xybuf[xyc*2+1] = y;
           xyc++;
-        } else gxddrw(xpos,ypos);
-        poi += 3;
+        }
+        if (pflg)
+          psubs->gxpdrw(x,y);            /* for printing */
+        else
+          dsubs->gxddrw(x,y);            /* for hardware */
+        ppp += 2;
       }
 
       /* -12 indicates new fill pattern.  It has three arguments. */
 
       else if (cmd==-12) {
-        gxdptn ((gaint)*(poi+1),(gaint)*(poi+2),(gaint)*(poi+3));
-        poi += 4;
+        /* This is a no-op for cairo; X-based pattern drawing */
+        buff = pmbuf->buff + ppp;
+        dsubs->gxdptn ((gaint)*(buff+0),(gaint)*(buff+1),(gaint)*(buff+2));
+        if (pflg)
+          psubs->gxpflush();
+        ppp += 3;
       }
 
       /* -20 is a draw widget.  We will redraw it in current state. */
 
       else if (cmd==-20) {
-        gxdpbn ((gaint)*(poi+1),NULL,1,0,-1);
-        poi += 2;
+        /* This is a no-op for cairo; X-based buttonwidget drawing */
+        buff = pmbuf->buff + ppp;
+        dsubs->gxdpbn ((gaint)*(buff+0),NULL,1,0,-1);
+        if (pflg)
+          psubs->gxpflush();
+        ppp += 1;
+      }
+
+      /* -21 is for drawing a single character in the indicated font and size */
+
+      else if (cmd==-21) {
+        ch = (signed char *)(pmbuf->buff + ppp - 1);
+        fn = (gaint)(*(ch+3));
+        uch = (char *)(pmbuf->buff + ppp - 1);
+        ccc = *(uch+2);
+        buff = pmbuf->buff + ppp;
+        x = (gadouble)(*buff);
+        y = (gadouble)(*(buff+1));
+        w = (gadouble)(*(buff+2));
+        h = (gadouble)(*(buff+3));
+        ang = (gadouble)(*(buff+4));
+        if (pflg)
+          r = psubs->gxpch (ccc,fn,x,y,w,h,ang);     /* print a character */
+        else
+          r = dsubs->gxdch (ccc,fn,x,y,w,h,ang);     /* draw a character */
+        ppp += 5;
+      }
+
+      /* -22 is for a signal. It has one signed character argument */
+
+      else if (cmd==-22) {
+        ch = (signed char *)(pmbuf->buff + ppp - 1);
+        sig = (gaint)(*(ch+2));
+        if (pflg)
+          psubs->gxpsignal(sig);
+        else
+          dsubs->gxdsignal(sig);
+        ppp++;
+      }
+
+      /* -23 is for the clipping area. It has four args. */
+
+      else if (cmd==-23){
+        buff = pmbuf->buff + ppp;
+        r = (gadouble)(*buff);
+        s = (gadouble)(*(buff+1));
+        x = (gadouble)(*(buff+2));
+        y = (gadouble)(*(buff+3));
+        if (pflg)
+          psubs->gxpclip(r,s,x,y);          /* for printing */
+        else
+          dsubs->gxdclip(r,s,x,y);          /* for hardware */
+        ppp += 4;
       }
 
       /* Any other command would be invalid */
 
       else {
-        printf ("Logic Error 20 in Redraw.  Notify Developer\n");
+         printf ("Logic Error 20 in Redraw.  Notify Developer\n");
         return;
       }
     }
+    if (pmbuf == mbuflast) break;
+    pmbuf = pmbuf->fpmbuf;
   }
+  /* tell hardware and printing layer we are finished */
+  if (pflg) psubs->gxpflush();
+  dsubs->gxdopt(4);
 }
 
-void xycnv (short ix, short iy, gadouble *x, gadouble *y) {
 
-  *x = ((gadouble)ix)/1000.0;
-  *y = ((gadouble)iy)/1000.0;
+/* Allocate and chain another buffer area */
+
+gaint mbufget (void) {
+struct gxmbuf *pmbuf;
+
+  if (mbufanch==NULL) {
+    pmbuf = (struct gxmbuf *)galloc(sizeof(struct gxmbuf),"mbufanch");
+    if (pmbuf==NULL) return (1);
+    mbufanch = pmbuf;                  /* set the new buffer structure as the anchor */
+    mbuflast = pmbuf;                  /* ... and also as the last one */
+    pmbuf->buff = (float *)galloc(sizeof(float)*BWORKSZ,"anchbuff");  /* allocate a buffer */
+    if (pmbuf->buff==NULL) return(1);
+    pmbuf->len = BWORKSZ;              /* set the buffer length */
+    pmbuf->used = 0;                   /* initialize the buffer as unused */
+    pmbuf->fpmbuf = NULL;              /* terminate the chain */
+  }
+  else {
+    if (mbuflast->fpmbuf==NULL) {      /* no more buffers in the chain */
+      pmbuf = (struct gxmbuf *)galloc(sizeof(struct gxmbuf),"mbufnew");
+      if (pmbuf==NULL) return (1);
+      mbuflast->fpmbuf = pmbuf;        /* add the new buffer structure to the chain */
+      mbuflast = pmbuf;                /* reset mbuflast to the newest buffer structure in the chain */
+      pmbuf->buff = (float *)galloc(sizeof(float)*BWORKSZ,"newbuff");  /* allocate a buffer */
+      if (pmbuf->buff==NULL) return(1);
+      pmbuf->len = BWORKSZ;            /* set the buffer length */
+      pmbuf->used = 0;                 /* initialize the buffer as unused */
+      pmbuf->fpmbuf = NULL;            /* terminate the chain */
+    }
+    else {                             /* we'll just re-use what's already been chained up */
+      pmbuf = mbuflast->fpmbuf;        /* get the next buffer in the chain */
+      pmbuf->used = 0;                 /* reset this buffer to unused */
+      mbuflast = pmbuf;                /* set mbuflast to point to this buffer */
+    }
+  }
+  return (0);
 }
 
-#if GXPNG==1
-#include "gxhpng.c"
-#endif
+/* Free buffer chain.
+   If flag is 1, leave allocated buffers alone and mark the anchor as unused
+   If flag is 0, free all buffers, including the anchor
+*/
 
-#ifndef STNDALN
-#  define GXHEPS
-#  include "gxeps.c"
-#endif
+void mbufrel (gaint flag) {
+struct gxmbuf *pmbuf,*pmbuf2;
+gaint i;
+
+  i = flag;
+  pmbuf = mbufanch;                /* point at the anchor */
+  while (pmbuf) {
+    pmbuf2 = pmbuf->fpmbuf;        /* get next link in chain */
+    if (!i) {                      /* this part only gets executed when flag is 0 */
+      if (pmbuf->buff) gree (pmbuf->buff,"gxmbuf");
+      gree (pmbuf,"mbufbuff");     /* free the pmbuf link */
+      i = 0;
+    }
+    pmbuf = pmbuf2;                /* move up the chain */
+  }
+  if (!flag) {
+    mbufanch = NULL;               /* no more metabuffer */
+  }
+  else {
+    if (mbufanch) mbufanch->used = 0;
+  }
+  mbuflast = mbufanch;
+}
+
+void gxmbuferr() {
+  printf ("Error in gxmeta: Unable to allocate meta buffer\n");
+  printf ("                 Buffering for the current plot is disabled\n");
+  mbuferror = 1;
+  mbufrel(0);
+}

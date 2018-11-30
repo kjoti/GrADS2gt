@@ -66,7 +66,6 @@ extern struct gacmn gcmn;
 #include "gagui.h"
 
 static char default_var[128];         /* default variable for display */
-
 static char last_path_open[512];      /* remember last path names */
 static char last_path_sdfopen[512];
 static char last_path_exec[512];

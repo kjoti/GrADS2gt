@@ -8,13 +8,17 @@ AC_DEFUN([GA_CHECK_LIB_GD],
   GD_CFLAGS=
   GD_LDFLAGS=
 
-  ga_pkgconfig_gd=yes
-  PKG_CHECK_MODULES([GD],[gdlib],,[ga_pkgconfig_gd=no])
   ac_save_LIBS="$LIBS"
   ac_save_CPPFLAGS="$CPPFLAGS"
   ac_save_LDFLAGS="$LDFLAGS"
 
+  ga_pkgconfig_gd=no
   ga_config_gd=no
+
+dnl Check for pkg-config 
+  PKG_CHECK_MODULES([GD],[gdlib],[ga_pkgconfig_gd=yes])
+
+dnl If pkg-config not found, look for gdlib-config
   if test $ga_pkgconfig_gd != 'yes'; then
     AC_PATH_PROG([GD_CONFIG],[gdlib-config],[no])
     if test "$GD_CONFIG" != "no"; then
@@ -25,14 +29,13 @@ AC_DEFUN([GA_CHECK_LIB_GD],
     fi
   fi
   
+dnl We found something; check for the header gd.h, gdImageCreate
   if test $ga_pkgconfig_gd = 'yes' -o $ga_config_gd = 'yes'; then
      LDFLAGS="$LDFLAGS $GD_LDFLAGS"
      LIBS="$LIBS $GD_LIBS"
      AC_CHECK_HEADER([gd.h],
      [  AC_CHECK_LIB([gd], [gdImageCreate],
         [  ga_check_gd=yes
-           GD_LIBS="-lgd $GD_LIBS"
-           AC_CHECK_FUNCS([gdCompareInt])
         ],
         [
            GD_LDFLAGS=
@@ -46,19 +49,6 @@ AC_DEFUN([GA_CHECK_LIB_GD],
        CPPFLAGS="$ac_save_CPPFLAGS"
      ])
   fi
-  if test $ga_check_gd = 'no'; then
-     AC_CHECK_HEADER([gd.h],
-      [ AC_CHECK_LIB([z], [compress],
-        [ AC_CHECK_LIB([png], [main],
-          [ AC_CHECK_LIB([gd], [gdImageCreate],
-            [ ga_check_gd=yes
-              AC_CHECK_FUNCS([gdCompareInt])
-              GD_LIBS='-lgd -lpng -lz'
-            ])
-          ])
-        ])
-     ])
-  fi
 
   LIBS="$ac_save_LIBS"
   CPPFLAGS="$ac_save_CPPFLAGS"
@@ -70,7 +60,7 @@ AC_DEFUN([GA_CHECK_LIB_GD],
      m4_if([$2], [], [:], [$2])
   fi
 
-  AC_SUBST([GD_LIBS])
-  AC_SUBST([GD_LDFLAGS])
-  AC_SUBST([GD_CFLAGS])
+#  AC_SUBST([GD_LIBS])
+#  AC_SUBST([GD_LDFLAGS])
+#  AC_SUBST([GD_CFLAGS])
 ])

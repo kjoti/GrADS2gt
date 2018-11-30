@@ -1,6 +1,4 @@
-/*  Copyright (C) 1988-2011 by Brian Doty and the
-    Institute of Global Environment and Society (IGES).
-    See file COPYRIGHT for more information.   */
+/* Copyright (C) 1988-2018 by George Mason University. See file COPYRIGHT for more information. */
 
 /* This program creates a station map file given the name of a control
    file for a station data set.  It reads the control file, then
@@ -442,10 +440,4 @@ printf("   stnmap -0 -M100 -i station_data.ctl ;  do not read the data \n\n");
 
 char *gxgsym(char *ch) {
   return (getenv(ch));
-}
-void set_nc_cache(size_t arg) {
-  return;
-}
-gadouble qcachesf(void) {
-  return(1.0);
 }

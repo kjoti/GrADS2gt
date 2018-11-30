@@ -1,6 +1,4 @@
-/*  Copyright (C) 1988-2011 by Brian Doty and the
-    Institute of Global Environment and Society (IGES).
-    See file COPYRIGHT for more information.   */
+/* Copyright (C) 1988-2018 by George Mason University. See file COPYRIGHT for more information. */
 
 /* qqq resolve gxdraw vs gxsdrw issue for cterp off */
 /* qqq clip labels and masking outside of parea */
@@ -26,7 +24,7 @@ void *galloc(size_t,char *);
 void gree();
 char *intprs (char *, gaint *);
 char *getdbl (char *, gadouble *);
-gaint gxclvert (FILE *);
+/* gaint gxclvert (FILE *); */
 gaint dequal(gadouble, gadouble, gadouble);
 
 /* For buffering contour lines, when label masking is in use */
@@ -143,7 +141,7 @@ if (lwksiz<iw*jw*2) {                  /* If storage inadaquate then */
   if (fwksiz<500) fwksiz=500;          /* Insure big enough for small grids */
   sz = fwksiz*sizeof(gadouble);
   fwk = (gadouble *)galloc(sz,"fwk");    /* Allocate fwk   */
-  if (lwk==NULL) {
+  if (fwk==NULL) {
     printf ("Error in GXCLEV: Unable to allocate storage \n");
     gree (lwk,"c3");
     lwk = NULL;
@@ -733,63 +731,58 @@ void gxclab (gadouble csize, gaint flag, gaint colflg) {
 gadouble x,y,xy[10],xd1,xd2,yd1,yd2,w,h,buff;
 gaint i,lablen,colr,bcol,fcol;
 
-if (!flag) { gxlabn=0; return; }
-colr = gxqclr();
-for (i=0; i<gxlabn; i++ ) {
-  lablen=strlen(gxlabv[i]);
-  bcol = gxqbck();
-  h = csize*1.2;                     /* set label height */
-  w = 0.2;
-  gxchln (gxlabv[i],lablen,csize,&w);  /* get label width */
-  if (gxlabs[i]==0.0) {              /* contour label is not rotated */
-    x = gxlabx[i] - (w/2.0);         /* adjust reference point */
-    y = gxlaby[i] - (h/2.0);
-    gxcolr (bcol);
-    buff=h*0.2;     /* add a buffer above and below the string, already padded in X */
-    gxrecf (x, x+w, y-buff, y+h+buff);   /* draw the background rectangle,  */
-    if (colflg>-1) fcol = colflg;
-    else fcol = gxlabc[i];
-    if (fcol==gxqbck()) {
-      if (gxqbck()==0) gxcolr(1);
-      else gxcolr(0);
-    }
-    else gxcolr (fcol);
-    gxchpl (gxlabv[i],lablen,x,y,h,csize,0.0);  /* draw the label */
-  } else {                           /* contour label is rotated */
-    xd1 = (h/2.0)*sin(gxlabs[i]);
-    xd2 = (w/2.0)*cos(gxlabs[i]);
-    yd1 = (h/2.0)*cos(gxlabs[i]);
-    yd2 = (w/2.0)*sin(gxlabs[i]);
-    x = gxlabx[i] - xd2 + xd1;       /* adjust reference point */
-    y = gxlaby[i] - yd2 - yd1;
-    xd1 = (h/2.0*1.6)*sin(gxlabs[i]);
-    xd2 = 1.1*(w/2.0)*cos(gxlabs[i]);
-    yd1 = (h/2.0*1.6)*cos(gxlabs[i]);
-    yd2 = 1.1*(w/2.0)*sin(gxlabs[i]);
-    xy[0] = gxlabx[i] - xd2 + xd1;   /* rotated background rectangle => polygon */
-    xy[1] = gxlaby[i] - yd2 - yd1;
-    xy[2] = gxlabx[i] - xd2 - xd1;
-    xy[3] = gxlaby[i] - yd2 + yd1;
-    xy[4] = gxlabx[i] + xd2 - xd1;
-    xy[5] = gxlaby[i] + yd2 + yd1;
-    xy[6] = gxlabx[i] + xd2 + xd1;
-    xy[7] = gxlaby[i] + yd2 - yd1;
-    xy[8] = xy[0];
-    xy[9] = xy[1];
-    gxcolr (bcol);
-    gxfill (xy,5);
-    if (colflg>-1) fcol = colflg;
-    else fcol = gxlabc[i];
-    if (fcol==gxqbck()) {
-      if (gxqbck()==0) gxcolr(1);
-      else gxcolr(0);
-    }
-    else gxcolr (fcol);
-    gxchpl (gxlabv[i],lablen,x,y,h,csize,gxlabs[i]*180/M_PI)  /* draw the label */;
-  }
-}
-gxcolr (colr);
-gxlabn=0;
+ if (!flag) { gxlabn=0; return; }
+ colr = gxqclr();
+ for (i=0; i<gxlabn; i++ ) {
+   lablen=strlen(gxlabv[i]);
+   bcol = gxdbkq();
+   if (bcol<2) bcol=0;  /* If bcol is neither black nor white, leave it alone. Otherwise, set to 0 for 'background' */
+   h = csize*1.2;                       /* set label height */
+   w = 0.2;
+   gxchln (gxlabv[i],lablen,csize,&w);  /* get label width */
+   if (gxlabs[i]==0.0) {                /* contour label is not rotated */
+     x = gxlabx[i] - (w/2.0);           /* adjust reference point */
+     y = gxlaby[i] - (h/2.0);
+     gxcolr (bcol);
+     buff=h*0.2;                        /* add a buffer above and below the string, already padded in X */
+     gxrecf (x, x+w, y-buff, y+h+buff); /* draw the background rectangle,  */
+     if (colflg>-1) fcol = colflg;
+     else fcol = gxlabc[i];
+     if (fcol==bcol) gxcolr(1);         /* if label color is same as background, use foreground */
+     else gxcolr (fcol);
+     gxchpl (gxlabv[i],lablen,x,y,h,csize,0.0);  /* draw the label */
+   } else {                             /* contour label is rotated */
+     xd1 = (h/2.0)*sin(gxlabs[i]);
+     xd2 = (w/2.0)*cos(gxlabs[i]);
+     yd1 = (h/2.0)*cos(gxlabs[i]);
+     yd2 = (w/2.0)*sin(gxlabs[i]);
+     x = gxlabx[i] - xd2 + xd1;         /* adjust reference point */
+     y = gxlaby[i] - yd2 - yd1;
+     xd1 = (h/2.0*1.6)*sin(gxlabs[i]);
+     xd2 = 1.1*(w/2.0)*cos(gxlabs[i]);
+     yd1 = (h/2.0*1.6)*cos(gxlabs[i]);
+     yd2 = 1.1*(w/2.0)*sin(gxlabs[i]);
+     xy[0] = gxlabx[i] - xd2 + xd1;     /* rotated background rectangle => polygon */
+     xy[1] = gxlaby[i] - yd2 - yd1;
+     xy[2] = gxlabx[i] - xd2 - xd1;
+     xy[3] = gxlaby[i] - yd2 + yd1;
+     xy[4] = gxlabx[i] + xd2 - xd1;
+     xy[5] = gxlaby[i] + yd2 + yd1;
+     xy[6] = gxlabx[i] + xd2 + xd1;
+     xy[7] = gxlaby[i] + yd2 - yd1;
+     xy[8] = xy[0];
+     xy[9] = xy[1];
+     gxcolr (bcol);
+     gxfill (xy,5);
+     if (colflg>-1) fcol = colflg;
+     else fcol = gxlabc[i];
+     if (fcol==bcol) gxcolr(1);         /* if label color is same as background, use foreground */
+     else gxcolr (fcol);
+     gxchpl (gxlabv[i],lablen,x,y,h,csize,gxlabs[i]*180/M_PI); /* draw the label */
+   }
+ }
+ gxcolr (colr);
+ gxlabn=0;
 }
 
 /* When label masking is in use, this routine is called to plot all the
@@ -801,43 +794,43 @@ gaint i,rc;
 struct gxclbuf *pclbuf, *p2;
 struct gxcntr lcntr;
 
-  /* Set up gxcntr struct appropriately -- most values are dummy */
-  lcntr.labsiz = 0.5;
-  lcntr.ltype = 0;
-  lcntr.mask = 1;
-  lcntr.labcol = 1;
-  lcntr.ccol = 1;
-  lcntr.label = NULL;
+ /* Set up gxcntr struct appropriately -- most values are dummy */
+ lcntr.labsiz = 0.5;
+ lcntr.ltype = 0;
+ lcntr.mask = 1;
+ lcntr.labcol = 1;
+ lcntr.ccol = 1;
+ lcntr.label = NULL;
 
-  /* Copy the lines into fwk, dump the lines,
-     release storage, return.  fwk should be guaranteed big enough for the
-     largest line we have, and shouldn't have been release via gxcrel at
-     this point. */
+ /* Copy the lines into fwk, dump the lines,
+    release storage, return.  fwk should be guaranteed big enough for the
+    largest line we have, and shouldn't have been release via gxcrel at
+    this point. */
 
-  pclbuf = clbufanch;
-  while (pclbuf) {
-    if (pclbuf->lxy) {
-      xystrt = fwk+2;
-      xyend = xystrt + 2*(pclbuf->len-1);
-      for (i=0; i<2*pclbuf->len; i++) *(xystrt+i) = *(pclbuf->lxy+i);
-      gxcolr (pclbuf->color);
-      gxstyl (pclbuf->style);
-      gxwide (pclbuf->width);
-      lcntr.spline = pclbuf->sfit;
-      rc = gxcspl(1,&lcntr);
-    }
-    pclbuf = pclbuf->fpclbuf;
-  }
-  pclbuf = clbufanch;
-  while (pclbuf) {
-    p2 = pclbuf->fpclbuf;
-    if (pclbuf->lxy) gree (pclbuf->lxy,"c5");
-    gree (pclbuf,"c6");
-    pclbuf = p2;
-  }
-  clbufanch = NULL;
-  clbuflast = NULL;
-  return;
+ pclbuf = clbufanch;
+ while (pclbuf) {
+   if (pclbuf->lxy) {
+     xystrt = fwk+2;
+     xyend = xystrt + 2*(pclbuf->len-1);
+     for (i=0; i<2*pclbuf->len; i++) *(xystrt+i) = *(pclbuf->lxy+i);
+     gxcolr (pclbuf->color);
+     gxstyl (pclbuf->style);
+     gxwide (pclbuf->width);
+     lcntr.spline = pclbuf->sfit;
+     rc = gxcspl(1,&lcntr);
+   }
+   pclbuf = pclbuf->fpclbuf;
+ }
+ pclbuf = clbufanch;
+ while (pclbuf) {
+   p2 = pclbuf->fpclbuf;
+   if (pclbuf->lxy) gree (pclbuf->lxy,"c5");
+   gree (pclbuf,"c6");
+   pclbuf = p2;
+ }
+ clbufanch = NULL;
+ clbuflast = NULL;
+ return;
 }
 
 /* When gxout shape is in use, this routine is called to dump all the
@@ -865,8 +858,7 @@ gadouble x,y,*lons=NULL,*lats=NULL,*vals=NULL,lon,lat,val,dval;
  shpid=0;
  pclbuf = clbufanch;
  if (pclbuf==NULL) {
-   snprintf(pout,511,"Error in gxshplin: contour buffer is empty\n");
-   gaprnt(0,pout);
+   printf("Error in gxshplin: contour buffer is empty\n");
    rc = -1;
    goto cleanup;
  }
@@ -874,20 +866,17 @@ gadouble x,y,*lons=NULL,*lats=NULL,*vals=NULL,lon,lat,val,dval;
    if (pclbuf->lxy) {
      /* allocate memory for lons and lats of the vertices in contour line */
      if ((lons = (gadouble*)galloc (pclbuf->len*sizeof(gadouble),"shplons"))==NULL) {
-       snprintf(pout,511,"Error in gxshplin: unable to allocate memory for lon array\n");
-       gaprnt(0,pout);
+       printf("Error in gxshplin: unable to allocate memory for lon array\n");
        rc = -1;
        goto cleanup;
      }
      if ((lats = (gadouble*)galloc (pclbuf->len*sizeof(gadouble),"shplats"))==NULL) {
-       snprintf(pout,511,"Error in gxshplin: unable to allocate memory for lat array\n");
-       gaprnt(0,pout);
+       printf("Error in gxshplin: unable to allocate memory for lat array\n");
        rc = -1;
        goto cleanup;
      }
      if ((vals = (gadouble*)galloc (pclbuf->len*sizeof(gadouble),"shpvals"))==NULL) {
-       snprintf(pout,511,"Error in gxshplin: unable to allocate memory for val array\n");
-       gaprnt(0,pout);
+       printf("Error in gxshplin: unable to allocate memory for val array\n");
        rc = -1;
        goto cleanup;
      }
@@ -905,8 +894,7 @@ gadouble x,y,*lons=NULL,*lats=NULL,*vals=NULL,lon,lat,val,dval;
      i = SHPWriteObject(sfid,-1,shp);
      SHPDestroyObject(shp);
      if (i!=shpid) {
-       snprintf(pout,511,"Error in gxshplin: SHPWriteObject returned %d, shpid=%d\n",i,shpid);
-       gaprnt(0,pout);
+       printf("Error in gxshplin: SHPWriteObject returned %d, shpid=%d\n",i,shpid);
        rc = -1;
        goto cleanup;
      }
@@ -1044,7 +1032,8 @@ void gxpclab (gadouble xpos, gadouble ypos, gadouble rot, gaint ccol, struct gxc
 
   csize = pcntr->labsiz;
   lablen = strlen(clabel);
-  bcol = gxqbck();
+  bcol = gxdbkq();
+  if (bcol<2) bcol=0;  /* If bcol is neither black nor white, leave it alone. Otherwise, set to 0 for 'background' */
   h = csize*1.2;                          /* set label height */
   w = 0.2;
   gxchln (clabel,lablen,csize,&w);        /* get label width */
@@ -1063,7 +1052,8 @@ void gxpclab (gadouble xpos, gadouble ypos, gadouble rot, gaint ccol, struct gxc
   if (pcntr->labwid > -1) gxwide(pcntr->labwid);
   if (pcntr->labwid == -999) {
     /* invoke settings for fat background label */
-     gxwide(12); gxcolr(bcol);
+     gxwide(12);
+     gxcolr(bcol);
   }
   /* draw the label */
   gxchpl (clabel,lablen,x,y,h,csize,0.0);
@@ -1072,7 +1062,9 @@ void gxpclab (gadouble xpos, gadouble ypos, gadouble rot, gaint ccol, struct gxc
     gxwide(1); gxcolr(fcol);
     gxchpl (clabel,lablen,x,y,h,csize,0.0);
   }
+  /* update the mask where this label is positioned */
   gxmaskrec (x-buff, x+w+buff, y-buff, y+h+buff);
+
   gxcolr (scol);
   gxwide (swid);
 }

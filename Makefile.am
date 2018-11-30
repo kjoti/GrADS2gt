@@ -2,11 +2,12 @@
 AUTOMAKE_OPTIONS = foreign
 ACLOCAL_AMFLAGS = -I m4
 
-##############################################################
-#
+#---------------------------------------------------------------------
 # Subdirectories with Makefiles
-#
 
+
+# SUBDIRS lists all directories that make should recurse into
+#   before processing the current directory
 SUBDIRS=src
 
 EXTRA_DIST=COPYRIGHT INSTALL
@@ -29,7 +30,8 @@ bin-dist: all-am
 	  cp -pR $$file $(distdir)/ ; \
 	done; \
 	rm -rf `find $(distdir) -name CVS`; \
-	$(AMTAR) chof - $(distdir) | GZIP=$(GZIP_ENV) gzip -c >$(distdir)-bin-$(host_triplet).tar.gz; \
+	$(AMTAR) chof - $(distdir) | GZIP=$(GZIP_ENV) \
+	gzip -c >$(distdir)-bin-$(host_triplet).tar.gz; \
 	$(am__remove_distdir)
 
 data-dist:
@@ -38,7 +40,8 @@ data-dist:
 	  cp -pR $$file $(distdir)/ ; \
 	done; \
 	rm -rf `find $(distdir) -name CVS`; \
-	$(AMTAR) chof - $(distdir) | GZIP=$(GZIP_ENV) gzip -c >$(distdir)-data.tar.gz; \
+	$(AMTAR) chof - $(distdir) | GZIP=$(GZIP_ENV) \
+	gzip -c >$(distdir)-data.tar.gz; \
 	$(am__remove_distdir)
 
 doc-dist:
@@ -47,12 +50,14 @@ doc-dist:
 	  cp -pR $$file $(distdir)/ ; \
 	done; \
 	rm -rf `find $(distdir) -name CVS`
-	$(AMTAR) chof - $(distdir) | GZIP=$(GZIP_ENV) gzip -c >$(distdir)-doc.tar.gz; \
+	$(AMTAR) chof - $(distdir) | GZIP=$(GZIP_ENV) \
+	gzip -c >$(distdir)-doc.tar.gz; \
 	$(am__remove_distdir)
 
 snapshot: distdir
 	date_str=`date '+%Y%m%d-%H%M'`; \
-	$(AMTAR) chof - $(distdir) | GZIP=$(GZIP_ENV) gzip -c >$(distdir)-snapshot-$${date_str}.tar.gz; \
+	$(AMTAR) chof - $(distdir) | GZIP=$(GZIP_ENV) \
+	gzip -c >$(distdir)-snapshot-$${date_str}.tar.gz; \
 	$(am__remove_distdir)
 
 bin-snapshot: all-am
@@ -62,5 +67,6 @@ bin-snapshot: all-am
 	done; \
 	rm -rf `find $(distdir) -name CVS`; \
 	date_str=`date '+%Y%m%d-%H%M'`; \
-	$(AMTAR) chof - $(distdir) | GZIP=$(GZIP_ENV) gzip -c >$(distdir)-bin-snapshot-$${date_str}.tar.gz; \
+	$(AMTAR) chof - $(distdir) | GZIP=$(GZIP_ENV) \
+gzip -c >$(distdir)-bin-snapshot-$${date_str}.tar.gz; \
 	$(am__remove_distdir)

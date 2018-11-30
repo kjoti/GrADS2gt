@@ -1,18 +1,16 @@
     The Grid Analysis and Display System (GrADS) 
-
-    Copyright (C) 1988-2010 by Brian Doty and the 
-    Institute of Global Environment and Society (IGES).  
+    Copyright (C) 1988-2018 by George Mason University 
 
     The Center for Ocean-Land-Atmosphere Studies (COLA) is the center
-    within IGES where GrADS is developed and maintained.
+    within George Mason University where GrADS is developed and maintained.
 
-    The copyright holders cann be contacted at:
+    The copyright holders can be contacted at:
 
-         COLA/IGES
-         4041 Powder Mill Rd.  Suite 302
-         Calverton, MD  20705
-
-         Phone:  301 595 7000
+    Center for Ocean-Land-Atmosphere Studies (COLA)
+    George Mason University
+    280 Research Hall, Mail Stop 6C5
+    4400 University Drive
+    Fairfax, VA 22030 
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -34,7 +32,7 @@
 		       Version 2, June 1991
 
  Copyright (C) 1989, 1991 Free Software Foundation, Inc.
-                       59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  Everyone is permitted to copy and distribute verbatim copies
  of this license document, but changing it is not allowed.
 

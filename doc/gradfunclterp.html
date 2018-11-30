@@ -1,92 +1,1 @@
-<!--Copyright (C) 1988-2005 by the Institute of Global Environment and Society (IGES). See file COPYRIGHT for more information.--><title>lterp</title>
-
-<style type="text/css">
-body {
-	background-color: #e0f0ff;
-}
-.red {
-	color: #900;
-}
-</style>
-
-<h2><b>lterp</b></h2>
-<p>The lterp function performs  intepolation between two grids. It is a built-in function as of  version 2.0 -- in earlier versions it was implemented as a user defined function. Additional capabilities were added with version 2.0.2. The syntax is:
-<p><code>lterp (<i>source, dest</i>)                 </code> (<span class="red">Version 2.0.1 or earlier</span>) <br />
-  <code>lterp (<i>source, dest &lt;,method&gt; &lt;,pct&gt;</i>)</code> (<span class="red">Version 2.0.2 or later</span>)
-<p> 
-
-Where 
-<p>	<code><i>source    </i></code>a grid expression that contains the data values to be interpolated<br />
-  <code><i>dest      </i></code>a grid expression that describes the grid that the data are to be interpolated to. 
-The data values in <code><i>dest</i></code>  are ignored, only the grid information is used. <br />
-<code><i>method    </i></code>an optional keyword that describes the interpolation method to be used. Options are:<br />
-<code>    bilin    </code>bilinear interpolation -- this is the default, the behavior when no method is specified, and is identical to the pre-2.0.2 behavior<br />
-<code>   bessel   </code> an enhancement to bilinear interpolation that uses 3rd order bessel interpolation <br />
-<code>    aave     </code>area average with latitude weighting -- may be better than bilin when interpolating from higher to lower grid resolution<br />
-<code>    amean    </code>area average without latitude weighting -- same as aave, but when weighting the grid box area by latitude is not desired <br />
-<code><i>pct       </i></code> the minimum percentage of area of each destination grid box that must contain non-missing input data to be considered valid<br />
-<code><i>          </i></code> (<code><i>pct</i></code> is optional and only relevant when used with <code>aave</code> and <code>amean</code> and must be between 0 and 100; default is 50%)
-<H3>Usage Notes</H3>
-<P>The lterp function works only with gridded data. The returned result  is a grid expression on the same grid as <code><i>dest</i></code>. 
-<P>The <code><i>source</i></code> and <code><i>dest</i></code> expressions   must have the same varying dimensions, which may be X, Y, or T. Interpolation is not performed in the Z or E dimension. 
-  <P>The <code><i>source</i></code> and <code><i>dest</i></code> expressions may vary in 1 or 2 dimensions, unless you are using the <code>aave</code> or <code>amean</code> methods, in which case the grids must be 2-D with X and Y as the varying dimensiions.   
-<P>If the domain of 
-  <code><i>source</i></code> is larger than the domain of <code><i>dest</i></code>, the returned result  will have an expanded grid to cover the requested domain.    
-
-<P>For interpolation in the time dimension, you may interpolate  (A) between monthly and yearly time axes, or (B) between minute, hourly, and daily time axes.
-<P>For the <code>bilin</code> method, each of the grid points in the <code><i>dest</i></code> grid contains the  average of  the nearest four grid points in the <code><i>source</i></code> grid, weighted by their distance from the destination grid point.  If any of the four surrounding input grid points contain missing data, the interpolated value will  be flagged as missing. 
-<P>(<span class="red">Version 2.0.2 or later</span>) The <code>bessel</code> method is adapted from the  regrid user defined function. It uses a bessel interpolation routine developed at Fleet Numerical
-  Meteorology and Oceanography Center (courtesy of D. Hensen).  
-The <code>bilin</code> method of  interpolation is performed at all points to
-  produce a &quot;first guess.&quot;  Improvements to the  &quot;first
-  guess&quot; are made using the higher-order terms in the bessel
-  interpolator. Bessel interpolation uses not just the nearst 4 grid boxes in the <code><i>source</i></code> grid, but also the secondary ring of grid points that form a 4x4 matrix around the destination grid point. If  any of the grid boxes in the outer ring of the 4x4 matrix 
-  contain missing data, the output grid is assigned the <code>bilin</code> value. The <code>bessel</code> method may produce a closer fit to the <code><i>source</i></code> data
-  in regions where there are large gradients (e.g., around low pressure centers).
-<P>(<span class="red">Version 2.0.2 or later</span>) For the <code>aave</code> and <code>amean</code> methods, a spatial average using <code><i>source</i></code> data is calculated  in the area outlined by each grid box in the <code><i>dest</i></code> grid. 
-Note that in GrADS the boundaries of all grid boxes are the midpoints between their centers. If a grid box in the <code><i>source</i></code> grid partially overlaps the area of a <code><i>dest</i></code> grid box, its contribution to the spatial average is weighted by the fraction of area within the <code><i>dest</i></code> grid box domain. When the <code><i>source</i></code> grid contains missing data, the <code><i>pct</i></code> argument may be used to specify a threshold for the percentage of the destination grid box area that must be covered with non-missing data in order to avoid being flagged as missing. The default <code><i>pct</i></code> value is 50%. The <code>aave</code> and <code>amean</code> methods may be used when interpolating from a higher to lower resolution grid in order to preserve statistical properties of the grid such as a gloabal mean -- e.g. the result of the expression<code> &quot;aave(<i>source</i>,global)&quot; </code> will be the same as <code> &quot;aave(lterp(<i>source,dest</i>,aave),global)&quot; </code>as long as <code><i>source</i></code> does not contain any missing data. The only difference between <code>aave</code> and <code>amean</code> methods is that with <code>aave</code> the grid box area calculations are weighted by the difference in the sine of the latitude at the northern and southern boundaries of the grid box. Use <code>amean</code> when the Y axis in the <code><i>source</i></code> grid does not represent Latitude. The <code>aave</code> and <code>amean</code> methods are based on the &quot;box average&quot; feature of the regrid user defined function. <br />
-<h3>Examples</h3>
-<p><code>* This shows how to use the new features in version 2.0.2 to interpolate between fine and coarse grids.<br />
-open fine.ctl<br />
-open coarse.ctl<br />
-d lterp(fine,coarse.2,aave)<br />
-d lterp(fine,coarse.2,aave,100)<br />
-d lterp(coarse.2,fine,bessel)</code><code><br />
-  </code><code><br />
-  *
-  This script interpolates a 1-D timeseries of hourly station data to a 3hourly grid<br />
-  open hourly_station_data.ctl<br />
-  open 3hourly_grid_data.ctl<br />
-  set x 1 <br />
-  set y 1<br />
-  set time 00z1jan 00z1feb<br />
-  d lterp(s2g1d(var.1(stid=kbwi)),var.2(lon=-77,lat=39))
-</code>
-<code>
-<p>* This script interpolates  2-D lat/lon grids<br />
-  'open obs.ctl'<br />
-  'open model.ctl'<br />
-  * define the source grid<br />
-'set dfile 2'<br />
-'q file'<br />
-line5 = sublin(result,5)<br />
-sx = subwrd(line5,3)<br />
-sy = subwrd(line5,6)<br />
-'set x 1 'sx<br />
-'set y 1 'sy<br />
-'set t 1'<br />
-'define data = model'<br />
-  * define the destination grid<br />
-  'set dfile 1'<br />
-  'q file'<br />
-  line5 = sublin(result,5)<br />
-  dx = subwrd(line5,3)<br />
-  dy = subwrd(line5,6)<br />
-  'set x 1 'dx<br />
-  'set y 1 'dy<br />
-  'set t 1'<br />
-  'define grid = obs'<br />
-* interpolate model data to obs grid <br />
-'d lterp(data,grid)'</code>
-<p>
-<p>
+<!--Copyright (C) 1988-2005 by the Institute of Global Environment and Society (IGES). See file COPYRIGHT for more information.--><title>lterp</title><h2><b>lterp</b></h2><p>The lterp function performs bi-linear intepolation between two grids. It is a built-in function as of  version 2.0 -- in earlier versions it was implemented as a user defined function. The syntax is:<p><code>lterp(<i>source,dest</i>)</code><p> The data values in  the <code><i>source</i></code> expression are interpolated to the grid in the   <code><i>dest</i></code> expression. The data values in the <code><i>dest</i></code> expression are ignored. The returned result  is on the same grid as <code><i>dest</i></code>.<H3>Usage Notes</H3><P>Works only with gridded data. The <code><i>source</i></code> and <code><i>dest</i></code> expressions   must have the same varying dimensions, which may be X, Y, or T. Interpolation is not performed in the Z or E dimension. The <code><i>source</i></code> and <code><i>dest</i></code> expressions may vary in 1 or 2 dimensions. <P>If the domain of   <code><i>source</i></code> is larger than the domain of <code><i>dest</i></code>, the returned result  will have an expanded grid to cover the requested domain.    <P>For interpolation in the time dimension, you may interpolate  (A) between monthly and yearly time axes, or (B) between minute, hourly, and daily time axes.<h3>Examples</h3><p>* This script interpolates a 1-D timeseries of hourly station data to a 3hourly grid<br />  open hourly_station_data.ctl<br />  open 3hourly_grid_data.ctl<br />  set x 1 <br />  set y 1<br />  set time 00z1jan 00z1feb<br />  d lterp(s2g1d(var.1(stid=kbwi)),var.2(lon=-77,lat=39))<p><p>* This script interpolates  2-D lat/lon grids<br />  'open obs.ctl'<br />  'open model.ctl'<br />  * define the destination grid<br />  'set dfile 1'<br />  'q file'<br />  line5 = sublin(result,5)<br />  ix = subwrd(line5,3)<br />  iy = subwrd(line5,6)<br />  'set x 1 'ix<br />  'set y 1 'iy<br />  'set t 1'<br />  'define grid = obs'<br />  * define the source grid<br />  'set dfile 2'<br />  'q file'<br />  line5 = sublin(result,5)<br />  ix = subwrd(line5,3)<br />  iy = subwrd(line5,6)<br />  'set x 1 'ix<br />  'set y 1 'iy<br />  'set t 1'<br />  'define data = model'<br />  * interpolate model data to obs grid <br />  'd lterp(data,grid)'<p><p>

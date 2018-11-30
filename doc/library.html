@@ -163,13 +163,11 @@
 
   <tr> 
 
-    <td valign=top border=1 class="plaintext"><a href="ftp://cola.gmu.edu/grads/scripts/meteogram_eta.gs">meteogram_eta.gs</a><br>
-      <a href="ftp://cola.gmu.edu/grads/scripts/meteogram_gfs.gs">meteogram_gfs.gs</a><br>
-      <a href="ftp://cola.gmu.edu/grads/scripts/meteogram_gfsb.gs">meteogram_gfsb.gs</a></td>
+    <td valign=top border=1 class="plaintext"><a href="ftp://cola.gmu.edu/grads/scripts/meteogram_subset_GDS.gs">meteogram_subset_GDS.gs</a><br>
+      <a href="ftp://cola.gmu.edu/grads/scripts/meteogram_GDS.gs">meteogram_GDS.gs</a></td>
 
-    <td class="plaintext">These scrips draw meteograms based on NCEP forecast 
-      data, which is accessed through the GrADS-DODS Server. You must use a DODS-enabled 
-      version of GrADS for these scripts to work. </td>
+    <td class="plaintext">These scrips draw a 10-day meteogram based on NCEP GFS forecast 
+      data, which is accessed through the GrADS Data Server. First run meteogram_subset_GDS.gs  with an OPeNDAP-enabled build of GrADS  to download the data to a local file. Then run meteogram_GDS.gs to draw the meteogram. </td>
   </tr>
 
   <tr>
@@ -217,6 +215,10 @@
   <tr>
     <td valign=top class="plaintext"><a href="ftp://cola.gmu.edu/grads/scripts/rgb255.gs">rgb255.gs</a></td>
     <td class="plaintext"><span class="style1">(Version 2.0.a6) </span>Defines a set of rainbow colors and draws a demo plot; uses <a href="ftp://cola.gmu.edu/grads/scripts/cbarm.gs">cbarm.gs</a> to draw a color bar</td>
+  </tr>
+  <tr>
+    <td valign=top class="plaintext"><a href="ftp://cola.gmu.edu/grads/scripts/sdfopen365.gs">sdfopen365.gs</a></td>
+    <td class="plaintext">This script opens creates an xdfopen-style descriptor for files with a 365-day calendar</td>
   </tr>
   <tr>
     <td valign=top class="plaintext"><a href="ftp://cola.gmu.edu/grads/scripts/sdfopent.gs">sdfopent.gs</a></td>

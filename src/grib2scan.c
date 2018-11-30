@@ -1,7 +1,6 @@
-/*  Copyright (C) 1988-2011 by Brian Doty and the
-    Institute of Global Environment and Society (IGES).
-    See file COPYRIGHT for more information.
-    Written by Brian Doty and Jennifer M. Adams  */
+/* Copyright (C) 1988-2018 by George Mason University. See file COPYRIGHT for more information*/
+
+/*  Written by Brian Doty and Jennifer M. Adams  */
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -392,12 +391,12 @@ gaint sect3 (unsigned char *s3, struct gag2 *pg2) {
 
 /* Look at contents of Section 4 */
 gaint sect4 (unsigned char *s4, struct gag2 *pg2) {
-  struct dt reft,fcst,begt,endt;
+  struct dt reft,fcst,endt,versiont;
   gaint enstotal,sp,sp2,gotfcst;
-  gaint ptyp,llsf,llval,ulsf,ulval,llval2,i;
+  gaint ptyp,llsf,llval,ulsf,ulval,i,pctle;
   gadouble ll=0,ul=0;
   gadouble lev1=0,lev2=0;
-  gaint var1,var2,var3,var4,var5,numtr,pos1,pos2;
+  gaint var1,var2,var3,var4,var5,numtr,pos1=0,pos2=0,pos3=0;
   gaint off,atyp,styp,s1sf,s1sval,s2sf,s2sval,wtyp,w1sf,w1sval,w2sf,w2sval;
   gadouble s1,s2,w1,w2;
 
@@ -405,19 +404,19 @@ gaint sect4 (unsigned char *s4, struct gag2 *pg2) {
   pg2->parcat   = gagby(s4, 9,1);
   pg2->parnum   = gagby(s4,10,1);
   /* PDT 48 has 24 unique octets inserted after octet 11 instead of starting at octet 35 */
+  off=0;
   if (pg2->pdt==48) off=24;
-  else off=0;
   pg2->trui     = gagby(s4,17+off,1);
   pg2->ftime    = gagby(s4,18+off,4);
   pg2->lev1type = gagby(s4,22+off,1);
   pg2->lev1sf   = gagby(s4,23+off,1);
-  /* check for a negative level value */
+  /* check for a negative level1 value */
   pg2->lev1 = gagbb(s4,(24+off)*8+1,31);
   i = gagbb(s4,(24+off)*8,1);
   if (i) pg2->lev1 = -1.0*pg2->lev1;
   pg2->lev2type = gagby(s4,28+off,1);
   pg2->lev2sf   = gagby(s4,29+off,1);
-  /* check for a negative level value */
+  /* check for a negative level2 value */
   pg2->lev2 = gagbb(s4,(30+off)*8+1,31);
   i = gagbb(s4,(30+off)*8,1);
   if (i) pg2->lev2 = -1.0*pg2->lev2;
@@ -448,15 +447,25 @@ gaint sect4 (unsigned char *s4, struct gag2 *pg2) {
   sp2 = -1;
   printf("  PDT=%d",pg2->pdt);
   /* instantaneous fields */
-  if (pg2->pdt<=7 || pg2->pdt==15 || pg2->pdt==48) {
-    if (pg2->pdt<=7|| pg2->pdt==48) {
+  if (pg2->pdt<=7 || pg2->pdt==15 || pg2->pdt==48 || pg2->pdt==60) {
+    if (pg2->pdt<=7 || pg2->pdt==48 || pg2->pdt==60) {
       printf ("  %d ",pg2->ftime);
       CodeTable4p4(pg2->trui);
       printf ("Forecast");
+      if (pg2->pdt == 60) {
+        pos3=37;
+        /* get the model version date */
+        versiont.yr = gagby(s4,pos3+0,2);
+        versiont.mo = gagby(s4,pos3+2,1);
+        versiont.dy = gagby(s4,pos3+3,1);
+        versiont.hr = gagby(s4,pos3+4,1);
+        versiont.mn = gagby(s4,pos3+5,1);
+      }
     }
     else if (pg2->pdt==15) {
       /* for PDT 4.15, get info about the type of spatial and statistical processing used */
-      /* pos2 is the location of octet for statistical process code (sp), subsequent octet is for spatial process */
+      /* pos2 is the location of octet for statistical process code (sp),
+         subsequent octet is for spatial process */
       pos2=34;
       sp  = gagby(s4,pos2+0,1);
       sp2 = gagby(s4,pos2+1,1);
@@ -466,9 +475,10 @@ gaint sect4 (unsigned char *s4, struct gag2 *pg2) {
       CodeTable4p15(sp2);
     }
     printf("  Valid Time = %4i-%02i-%02i %02i:%02i  ",fcst.yr,fcst.mo,fcst.dy,fcst.hr,fcst.mn);
+    if (pg2->pdt == 60) printf("  Version = %4i%02i%02i",versiont.yr,versiont.mo,versiont.dy);
   }
   /* fields spanning a time interval */
-  else if (pg2->pdt>=8 && pg2->pdt<=12) {
+  else if ((pg2->pdt>=8 && pg2->pdt<=12) || pg2->pdt==61) {
     /* get the beg/end times and statistical process  */
     /* pos1 is location of octets describing end of overall time period */
     /* pos2 is the location of octet for statistical process code (sp) */
@@ -477,6 +487,14 @@ gaint sect4 (unsigned char *s4, struct gag2 *pg2) {
     else if (pg2->pdt == 10) {pos1=35; pos2=47;}
     else if (pg2->pdt == 11) {pos1=37; pos2=49;}
     else if (pg2->pdt == 12) {pos1=36; pos2=48;}
+    else if (pg2->pdt == 61) {pos1=44; pos2=56; pos3=37;}
+
+    /* get the model version date */
+    versiont.yr = gagby(s4,pos3+0,2);
+    versiont.mo = gagby(s4,pos3+2,1);
+    versiont.dy = gagby(s4,pos3+3,1);
+    versiont.hr = gagby(s4,pos3+4,1);
+    versiont.mn = gagby(s4,pos3+5,1);
 
     /* get the ending time of the overall averaging period */
     endt.yr = gagby(s4,pos1+0,2);
@@ -485,27 +503,27 @@ gaint sect4 (unsigned char *s4, struct gag2 *pg2) {
     endt.hr = gagby(s4,pos1+4,1);
     endt.mn = gagby(s4,pos1+5,1);
 
-    /* get info about statistical processing */
-    sp   = gagby(s4,pos2+0,1);
-    var1 = gagby(s4,pos2+1,1);
-    var2 = gagby(s4,pos2+2,1);
-    var3 = gagby(s4,pos2+3,4);
-    var4 = gagby(s4,pos2+7,1);
-    var5 = gagby(s4,pos2+8,4);
-
-    /* get number of time specifications */
+    /* get number of time range specifications */
     numtr = gagby(s4,pos1+7,1);
+
+    /* get info about outermost (or only) statistical process */
     if (numtr) {
-      if (var5==0) {   /* continuous statistical processing function */
-        printf("  %d ",var3);
-        CodeTable4p4(var2);
-        if (sp==255)
-          printf("Interval");
-        else
-          CodeTable4p10(sp);
-        printf("  BegTime = %4i-%02i-%02i %02i:%02i",fcst.yr,fcst.mo,fcst.dy,fcst.hr,fcst.mn);
-        printf("  EndTime = %4i-%02i-%02i %02i:%02i",endt.yr,endt.mo,endt.dy,endt.hr,endt.mn);
-      }
+      sp   = gagby(s4,pos2+0,1);  /* statistical process */
+      var1 = gagby(s4,pos2+1,1);  /* not used, type of time increment... */
+      var2 = gagby(s4,pos2+2,1);  /* time unit for var3 */
+      var3 = gagby(s4,pos2+3,4);  /* length of time over which statistical processing is done */
+      var4 = gagby(s4,pos2+7,1);  /* not used, time unit for var5 */
+      var5 = gagby(s4,pos2+8,4);  /* not used, time increment between successive fields, 0 if continuous */
+      printf("  %d ",var3);
+      CodeTable4p4(var2);
+      if (sp==255)
+        printf(" Interval");
+      else
+        CodeTable4p10(sp);
+      printf("  BegTime = %4i-%02i-%02i %02i:%02i",fcst.yr,fcst.mo,fcst.dy,fcst.hr,fcst.mn);
+      printf("  EndTime = %4i-%02i-%02i %02i:%02i",endt.yr,endt.mo,endt.dy,endt.hr,endt.mn);
+      printf("  Version = %4i%02i%02i",versiont.yr,versiont.mo,versiont.dy);
+      if ((verb) & (numtr>1)) printf("\n   (Record has %d time range specifications for statistical processing)",numtr);
     }
   }
   printf(" \n");
@@ -555,7 +573,7 @@ gaint sect4 (unsigned char *s4, struct gag2 *pg2) {
     }
   }
   else {    /* only one level type */
-    if (pg2->lev1 != -1) {
+    if (pg2->lev1 != -1 && pg2->lev1type>10) {     /* some level types don't have an associated level value */
       printf ("   Level: ltype,lval = %d,%g ",pg2->lev1type,lev1);
       if (ctl) sprintf (levs,"%d,%g",pg2->lev1type,lev1);
       if (verb) printf("  (sf,sval = %d %d)",pg2->lev1sf,pg2->lev1);
@@ -568,8 +586,8 @@ gaint sect4 (unsigned char *s4, struct gag2 *pg2) {
   }
 
   /* Ensemble Metadata */
-  if (pg2->pdt==1 || pg2->pdt==2 || pg2->pdt==11 || pg2->pdt==12) {
-    if (pg2->pdt==1 || pg2->pdt==11) {   /* individual ensemble members */
+  if (pg2->pdt==1 || pg2->pdt==2 || pg2->pdt==11 || pg2->pdt==12 || pg2->pdt==60 || pg2->pdt==61) {
+    if (pg2->pdt==1 || pg2->pdt==11 || pg2->pdt==60 || pg2->pdt==61) {   /* individual ensemble members */
       pg2->enstype    = gagby(s4,34,1);
       pg2->enspertnum = gagby(s4,35,1);
       enstotal        = gagby(s4,36,1);
@@ -631,6 +649,13 @@ gaint sect4 (unsigned char *s4, struct gag2 *pg2) {
     }
     if (verb>1) printf ("   (llsf,llval=%d,%d  ulsf,ulval=%d,%d)",llsf,llval,ulsf,ulval);
     printf("\n");
+  }
+
+  /* Percentile Forecasts */
+  if ((pg2->pdt==6) | (pg2->pdt==10)) {
+    pctle = gagby(s4,34,1);
+    printf ("   Percentile: %d\n",pctle);
+    if (ctl) sprintf (extra,"a%d",pctle);
   }
 
   /* Optical Properties of Aerosols */

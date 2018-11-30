@@ -1,6 +1,4 @@
-/*  Copyright (C) 1988-2011 by Brian Doty and the
-    Institute of Global Environment and Society (IGES).
-    See file COPYRIGHT for more information.   */
+/* Copyright (C) 1988-2018 by George Mason University. See file COPYRIGHT for more information. */
 
 /* Authored by B. Doty */
 
@@ -16,7 +14,7 @@
 #include <math.h>
 #include "grads.h"
 
-static char pout[256];     /* Build error msgs here */
+static char pout[1256];     /* Build error msgs here */
 static gaint pass=0;  /* Internal pass number */
 
 /* Debugging routine to print the current stack */
@@ -65,9 +63,8 @@ gaint size;
   pass++;
 
   cmdlen = strlen(expr);
-/*   size = cmdlen * ( 7 + sizeof(struct smem) ); */
   size = sizeof(struct smem[cmdlen+10]);
-  stack = (struct smem *)malloc(size);
+  stack = (struct smem *)galloc(size,"stack");
   if (stack==NULL) {
     gaprnt (0,"Memory Allocation Error:  parser stack\n");
     return (1);
@@ -139,8 +136,8 @@ gaint size;
       }
 
       else {
-        cont=0; err=1;
         gaprnt (0,"Syntax Error:  Expected operand or '('\n");
+        cont=0; err=1;
       }
 
     } else {                         /* Expect operator or ')'      */
@@ -175,6 +172,44 @@ gaint size;
    /*   stkdmp(stack,curr);  */
         pos++;
         state=1;
+      }
+
+      /* logical operator */
+
+      else if ( (*pos=='=')||(*pos=='!')||(*pos=='<')||(*pos=='>')
+                       ||(*pos=='|')||(*pos=='&') ) {
+        if (*(pos+1)=='=') {
+          curr++;
+          stack[curr].type=1;
+          if ( (*pos=='=')&&(*(pos+1)=='=') ) stack[curr].obj.op=20;
+          if ( (*pos=='<')&&(*(pos+1)=='=') ) stack[curr].obj.op=23;
+          if ( (*pos=='>')&&(*(pos+1)=='=') ) stack[curr].obj.op=24;
+          if ( (*pos=='!')&&(*(pos+1)=='=') ) stack[curr].obj.op=25;
+          pos+=2;
+          state=1;
+        } else if ((*pos=='|')&&(*(pos+1)=='|')) {
+          curr++;
+          stack[curr].type=1;
+          stack[curr].obj.op=26;
+          pos+=2;
+          state=1;
+        } else if ((*pos=='&')&&(*(pos+1)=='&')) {
+          curr++;
+          stack[curr].type=1;
+          stack[curr].obj.op=27;
+          pos+=2;
+          state=1;
+        } else {
+          curr++;
+          stack[curr].type=1;
+          if (*pos=='=') stack[curr].obj.op=20;
+          if (*pos=='<') stack[curr].obj.op=21;
+          if (*pos=='>') stack[curr].obj.op=22;
+          if (*pos=='|') stack[curr].obj.op=26;
+          if (*pos=='&') stack[curr].obj.op=27;
+          pos++;
+          state=1;
+        }
       }
 
       else {
@@ -213,26 +248,27 @@ gaint size;
   if (err) {
     if (pass==1) {
       i = 1 + pos - expr;
-      snprintf(pout,255,"  Error ocurred at column %i\n",i);
+      snprintf(pout,1255,"  Error ocurred at column %i\n",i);
       gaprnt (0,pout);
     }
 
 /*  release any memory still hung off the stack  */
-    for (i=0; i<curr; i++) {
+    for (i=0; i<=curr; i++) {
       if (stack[i].type==-1) {
         pgr = stack[i].obj.pgr;
         gagfre(pgr);
+        pst->result.pgr=NULL;
       } else if (stack[i].type==-2) {
         stn = stack[i].obj.stn;
         for (j=0; j<BLKNUM; j++) {
-          if (stn->blks[j] != NULL) free(stn->blks[j]);
+          if (stn->blks[j] != NULL) gree(stn->blks[j],"f172");
         }
-        free(stn);
+        gree(stn);
+        pst->result.stn=NULL;
       }
     }
   }
-
-  free(stack);
+  gree(stack);
   pass--;
   return (err);
 }
@@ -460,8 +496,14 @@ char *uval1,*uval2;
           else *val2 = *val1 / *val2;
         }
       } else if (op==10) {
-        if (swap) *val2 = pow(*val2,*val1);
-        else *val2 = pow(*val1,*val2);
+        if (swap) {
+          if (isnan(pow(*val2,*val1))) *uval2 = 0;
+          else *val2 = pow(*val2,*val1);
+        }
+        else {
+          if (isnan(pow(*val1,*val2))) *uval2 = 0;
+          else *val2 = pow(*val1,*val2);
+        }
       } else if (op==11)  *val2 = hypot(*val1,*val2);
       else if (op==12) {
         if (*val1==0.0 && *val2==0.0) *val2 = 0.0;
@@ -476,7 +518,70 @@ char *uval1,*uval2;
           if (*val2<0.0) *uval2 = 0;
           else *val2 = *val1;
         }
+      } else if (op==14) {   /* for if function.  pairs with op 15 */
+        if (swap) {
+          if (*val2<0.0) *val2 = 0.0;
+          else *val2 = *val1;
+        } else {
+          if (*val1<0.0) *val2 = 0.0;
+        }
+      } else if (op==15) {
+        if (swap) {
+          if (*val2<0.0) *val2 = *val1;
+          else *val2 = 0.0;
+        } else {
+          if (!(*val1<0.0)) *val2 = 0.0;
+        }
+      } else if (op>=21 && op<=24 ) {
+        if (swap) {
+          if (op==21) {
+            if (*val2 < *val1) *val2 = 1.0;
+            else *val2 = -1.0;
+          }
+          if (op==22) {
+            if (*val2 > *val1) *val2 = 1.0;
+            else *val2 = -1.0;
+          }
+          if (op==23) {
+            if (*val2 <= *val1) *val2 = 1.0;
+            else *val2 = -1.0;
+          }
+          if (op==24) {
+            if (*val2 >= *val1) *val2 = 1.0;
+            else *val2 = -1.0;
+          }
+        } else {
+          if (op==21) {
+            if (*val1 < *val2) *val2 = 1.0;
+            else *val2 = -1.0;
+          }
+          if (op==22) {
+            if (*val1 > *val2) *val2 = 1.0;
+            else *val2 = -1.0;
+          }
+          if (op==23) {
+            if (*val1 <= *val2) *val2 = 1.0;
+            else *val2 = -1.0;
+          }
+          if (op==24) {
+            if (*val1 >= *val2) *val2 = 1.0;
+            else *val2 = -1.0;
+          }
+        }
+      } else if (op==20) {
+        if (*val1 == *val2) *val2 = 1.0;
+        else *val2 = -1.0;
+      } else if (op==25) {
+        if (*val1 != *val2) *val2 = 1.0;
+        else *val2 = -1.0;
+      } else if (op==26) {
+        if ( (*val1<0.0)&&(*val2<0.0) ) *val2 = -1.0;
+        else *val2 = 1.0;
+      } else if (op==27) {
+        if ( (*val1>=0.0)&&(*val2>=0.0) ) *val2 = 1.0;
+        else *val2 = -1.0;
       }
+
       else {
         gaprnt (0,"Internal logic check 17: invalid oper value\n");
         return (NULL);
@@ -500,16 +605,16 @@ char *uval1,*uval2;
   err1:
     gaprnt (0,"Operation error:  Incompatable grids \n");
     gaprnt (1,"   Varying dimensions are different\n");
-    snprintf(pout,255,"  1st grid dims = %i %i   2nd = %i %i \n",
+    snprintf(pout,1255,"  1st grid dims = %i %i   2nd = %i %i \n",
             pgr1->idim, pgr2->idim, pgr1->jdim, pgr2->jdim);
     gaprnt (2,pout);
     return (NULL);
 
   err2:
     gaprnt (0,"Operation error:  Incompatable grids \n");
-    snprintf(pout,255,"  Dimension = %i\n",i);
+    snprintf(pout,1255,"  Dimension = %i\n",i);
     gaprnt (2, pout);
-    snprintf(pout,255,"  1st grid range = %i %i   2nd = %i %i \n",
+    snprintf(pout,1255,"  1st grid range = %i %i   2nd = %i %i \n",
             pgr1->dimmin[i],pgr1->dimmax[i],
             pgr2->dimmin[i],pgr2->dimmax[i]);
     gaprnt (2,pout);
@@ -586,8 +691,14 @@ gaint swap,i,j,flag,dimtyp;
         }
       }
       else if (op==10) {
-        if (swap) rpt1->val = pow(rpt2->val,rpt1->val);
-        else rpt1->val = pow(rpt1->val,rpt2->val);
+        if (swap) {
+          if (isnan(pow(rpt2->val,rpt1->val))) rpt1->umask = 0;
+          else rpt1->val = pow(rpt2->val,rpt1->val);
+        }
+        else {
+          if (isnan(pow(rpt1->val,rpt2->val))) rpt1->umask = 0;
+          else rpt1->val = pow(rpt1->val,rpt2->val);
+        }
       }
       else if (op==11)
         rpt1->val = hypot(rpt1->val,rpt2->val);
@@ -650,8 +761,14 @@ gaint i;
       }
     }
     else if (op==10) {
-      if (swap) rpt->val = pow(val,rpt->val);
-      else rpt->val = pow(rpt->val,val);
+      if (swap) {
+        if (isnan(pow(val,rpt->val))) rpt->umask = 0;
+        else rpt->val = pow(val,rpt->val);
+      }
+      else {
+        if (isnan(pow(rpt->val,val))) rpt->umask = 0;
+        else rpt->val = pow(rpt->val,val);
+      }
     }
     else if (op==11)
       rpt->val = hypot(rpt->val,val);
@@ -793,7 +910,7 @@ size_t sz;
     ch++;
     pos = intprs(ch,&fnum);
     if (pos==NULL || fnum<1) {
-      snprintf(pout,255,"Syntax error: Bad file number for variable %s \n",name);
+      snprintf(pout,1255,"Syntax error: Bad file number for variable %s \n",name);
       gaprnt (0,pout);
       return (NULL);
     }
@@ -826,7 +943,7 @@ size_t sz;
       for (i=1; i<fnum && pfi!=NULL; i++) pfi = pfi->pforw;
       if (pfi==NULL) {
         gaprnt (0,"Data Request Error:  File number out of range \n");
-        snprintf(pout,255,"  Variable = %s \n",vnam);
+        snprintf(pout,1255,"  Variable = %s \n",vnam);
         gaprnt (0,pout);
         return (NULL);
       }
@@ -844,10 +961,10 @@ size_t sz;
       if (cmpwrd(name,"lat")) {vfake.offset = 1; snprintf(vfake.abbrv,5,"lat");}
       if (cmpwrd(name,"lev")) {vfake.offset = 2; snprintf(vfake.abbrv,5,"lev");}
       if (pfi->type==2 || pfi->type==3) {
-        snprintf(pout,255,"Data Request Error:  Predefined variable %s\n", vnam);
+        snprintf(pout,1255,"Data Request Error:  Predefined variable %s\n", vnam);
         gaprnt (0,pout);
         gaprnt (0,"   is only defined for grid type files\n");
-        snprintf(pout,255,"   File %i is a station file\n",fnum);
+        snprintf(pout,1255,"   File %i is a station file\n",fnum);
         gaprnt (0,pout);
         return (NULL);
       }
@@ -909,9 +1026,9 @@ size_t sz;
       dmax[i] = ceil(dmax[i]-0.0001);
       if (dmax[i]<=dmin[i]) {
         gaprnt (0,"Data Request Error: Invalid grid coordinates\n");
-        snprintf(pout,255,"  Varying dimension %i decreases: %g to %g\n",i,dmin[i],dmax[i]);
+        snprintf(pout,1255,"  Varying dimension %i decreases: %g to %g\n",i,dmin[i],dmax[i]);
         gaprnt (0,pout);
-        snprintf(pout,255,"  Error ocurred getting variable '%s'\n",vnam);
+        snprintf(pout,1255,"  Error ocurred getting variable '%s'\n",vnam);
         gaprnt (0,pout);
         return (NULL);
       }
@@ -925,14 +1042,14 @@ size_t sz;
     while (*ch!=')') {
       pos = dimprs(ch, pst, pfi, &dim, &d1, 1, &rc);
       if (pos==NULL) {
-        snprintf(pout,255,"  Variable name = %s\n",vnam);
+        snprintf(pout,1255,"  Variable name = %s\n",vnam);
         gaprnt (0,pout);
         return (NULL);
       }
       if (id[dim]) {
         gaprnt (0,"Syntax Error: Invalid dimension expression\n");
         gaprnt (0,"  Same dimension specified multiple times ");
-        snprintf(pout,255,"for variable = %s\n",vnam);
+        snprintf(pout,1255,"for variable = %s\n",vnam);
         gaprnt (0,pout);
         return (NULL);
       }
@@ -940,7 +1057,7 @@ size_t sz;
       if ( dim==pst->idim || dim==pst->jdim) {
         gaprnt (0,"Data Request Error: Invalid dimension expression\n");
         gaprnt (0,"  Attempt to set or modify varying dimension\n");
-        snprintf(pout,255,"  Variable = %s, Dimension = %i \n",vnam,dim);
+        snprintf(pout,1255,"  Variable = %s, Dimension = %i \n",vnam,dim);
         gaprnt (0,pout);
         return (NULL);
       }
@@ -998,7 +1115,7 @@ size_t sz;
       gaprnt (0,"Data Request Error: Invalid grid coordinates\n");
       gaprnt (0,"  World coordinates convert to non-integer");
       gaprnt (0,"  grid coordinates\n");
-      snprintf(pout,255,"    Variable = %s  Dimension = %i \n",vnam,i);
+      snprintf(pout,1255,"    Variable = %s  Dimension = %i \n",vnam,i);
       gaprnt (0,pout);
       return (NULL);
     }
@@ -1080,13 +1197,13 @@ size_t sz;
   /* Get grid */
   rc = gaggrd (pgr);
   if (rc>0) {
-    snprintf(pout,255,"Data Request Error:  Error for variable '%s'\n", vnam);
+    snprintf(pout,1255,"Data Request Error:  Error for variable '%s'\n", vnam);
     gaprnt (0,pout);
     gagfre(pgr);
     return (NULL);
   }
   if (rc<0) {
-    snprintf(pout,255,"  Warning issued for variable = %s\n",vnam);
+    snprintf(pout,1255,"  Warning issued for variable = %s\n",vnam);
     gaprnt (2,pout);
   }
 
@@ -1115,7 +1232,7 @@ size_t sz;
       pgr2->pvar = pvar2;
       rc = gaggrd (pgr2);
       if (rc>0) {
-        snprintf(pout,255,"Data Request Error:  Error for variable '%s'\n", vnam);
+        snprintf(pout,1255,"Data Request Error:  Error for variable '%s'\n", vnam);
         gaprnt (0,pout);
         gagfre(pgr);
         gagfre(pgr2);
@@ -1353,14 +1470,14 @@ size_t sz;
         pos = dimprs(ch, pst, pfi, &dim, &d, 0, &rc);
       }
       if (pos==NULL) {
-        snprintf(pout,255,"  Variable name = %s\n",vnam);
+        snprintf(pout,1255,"  Variable name = %s\n",vnam);
         gaprnt (0,pout);
         return (NULL);
       }
       if (dim<6 && id[dim]>1) {
         gaprnt (0,"Syntax Error: Invalid dimension expression\n");
         gaprnt (0,"  Same dimension specified more than twice ");
-        snprintf(pout,255,"for variable = %s\n",vnam);
+        snprintf(pout,1255,"for variable = %s\n",vnam);
         gaprnt (0,pout);
         return (NULL);
       }
@@ -1368,7 +1485,7 @@ size_t sz;
            ( dim>3 && (pst->idim==0 || pst->idim==1 || pst->jdim==1))) {
         gaprnt (0,"Data Request Error: Invalid dimension expression\n");
         gaprnt (0,"  Attempt to set or modify varying dimension\n");
-        snprintf(pout,255,"  Variable = %s, Dimension = %i \n",vnam,dim);
+        snprintf(pout,1255,"  Variable = %s, Dimension = %i \n",vnam,dim);
         gaprnt (0,pout);
         return (NULL);
       }
@@ -1392,9 +1509,9 @@ size_t sz;
   for (i=0; i<4; i++) {
     if ((i!=2 && dmin[i]>dmax[i]) || (i==2 && dmax[i]>dmin[i])) {
       gaprnt (0,"Data Request Error: Invalid grid coordinates\n");
-      snprintf(pout,255,"  Varying dimension %i decreases: %g to %g \n",i,dmin[i],dmax[i]);
+      snprintf(pout,1255,"  Varying dimension %i decreases: %g to %g \n",i,dmin[i],dmax[i]);
       gaprnt (0,pout);
-      snprintf(pout,255,"  Error ocurred getting variable '%s'\n",vnam);
+      snprintf(pout,1255,"  Error ocurred getting variable '%s'\n",vnam);
       gaprnt (0,pout);
       return (NULL);
     }
@@ -1409,7 +1526,6 @@ size_t sz;
     gaprnt (0,"Memory Allocation Error:  Station Request Block \n");
     return (NULL);
   }
-
   stn->rnum = 0;
   stn->rpt = NULL;
   stn->pfi = pfi;
@@ -1443,7 +1559,7 @@ size_t sz;
   rc = gagstn (stn);
 
   if (rc) {
-    snprintf(pout,255,"Data Request Error:  Variable is '%s'\n",vnam);
+    snprintf(pout,1255,"Data Request Error:  Variable is '%s'\n",vnam);
     gaprnt (0,pout);
     gree(stn,"f171");
     return (NULL);

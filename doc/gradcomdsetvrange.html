@@ -1,30 +1,8 @@
 <!--Copyright (C) 1988-2005 by the Institute of Global Environment and Society (IGES). See file COPYRIGHT for more information.-->
-<style type="text/css">
-body {
-	background-color: #e0f0ff;
-}
-</style>
-
 
 <h2><b>set vrange</b></h2>
-<p><code>set vrange v1 v2</code></p>
-<p>When drawing a 1-D plot, this command specifies the range of the  values for the scale on the Y-axis (from v1
-to v2).</p>
-<p> When drawing a 2-D scatter plot  using graphics output type <code><a href="gradcomdsetgxout.html">gxout scatter</a></code>, this command specifies the range of values for the scale on the X axis; use the <code><a href="gradcomdsetvrange2.html">set vrange2</a></code> command to control the range of the Y-axis values on your scatter plot.</p>
-<p>
-<H3>Usage Note</H3>
-<P> Reset by <code><a href="gradcomdclear.html">clear</a></code> only. 
-<H3>Examples</H3>
-<pre>
-set lat 50
-set lon 0 360
-set gxout contour
-set vrange -20 20
-d u10
-
-set gxout scatter
-set vrange 250 300
-set vrange2 980 1040
-d temp;slp
-</pre>
-
+<code>set vrange y1 y2</code><p>
+Specifies the range of the variable values for y-axis scaling (from y1
+- y2).  Reset by <code>clear</code> only.<p>
+<H3>Usage Note</H3><P>
+<H3>Examples</H3><P>

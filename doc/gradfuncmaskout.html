@@ -1,17 +1,24 @@
 <!--Copyright (C) 1988-2005 by the Institute of Global Environment and Society (IGES). See file COPYRIGHT for more information.-->
+<style type="text/css">
+body {
+	background-color: #e0f0ff;
+}
+</style>
+
 
 <h2><b>maskout</b></h2><p>
 
 <code>maskout(<i>expr,mask</i>)</code><p> 
 
 Wherever the <code><i>mask</i></code> values are less than zero, the
-values in <code><i>expr</i></code> are set to the missing data value. <p>
+values in <code><i>expr</i></code> are set to the missing data value. 
+<p>
 
 Works with gridded or station data. Where <code><i>mask</i></code> values
 are positive, the <code><i>expr</i></code> values are not modified. Thus
 the result of <code>maskout</code> is data with a possibly increased
 number of missing data values. The <code>maskout</code> function, in spite
-of its apparant simplicity, is extremely useful.  <p>
+of its apparent simplicity, is extremely useful.  <p>
 
 <H3>Usage Notes</H3><P>
 

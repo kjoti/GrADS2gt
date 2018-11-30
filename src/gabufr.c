@@ -1,6 +1,4 @@
-/* Copyright (C) 1988-2011 by Brian Doty and the
-   Institute of Global Environment and Society (IGES).
-   See file COPYRIGHT for more information.   */
+/* Copyright (C) 1988-2018 by George Mason University. See file COPYRIGHT for more information. */
 
 /* Authored by Joe Wielgosz */
 #ifdef HAVE_CONFIG_H
@@ -96,7 +94,7 @@ gaint gabufr_load2mem(const char * path, gabufr_dset * dset) {
   fseeko(datafile, 0, SEEK_END);
   bytesleft = filesize = ftello(datafile);
   fseeko(datafile, 0, SEEK_SET);
-  if (GABUFR_DEBUG) printf("filesize is %ld\n", filesize);
+  if (GABUFR_DEBUG) printf("filesize is %lld\n", filesize);
 
   pos = filebuf = malloc(filesize);
   if (filebuf == NULL) {
@@ -106,7 +104,7 @@ gaint gabufr_load2mem(const char * path, gabufr_dset * dset) {
 
   while (bytesleft > 0) {
     bytesread = fread(pos, 1, bytesleft, datafile);
-    if (GABUFR_DEBUG) printf("read %ld bytes\n", bytesleft);
+    if (GABUFR_DEBUG) printf("read %lld bytes\n", bytesleft);
     if (ferror(datafile)) {
       printf("Low level read error on BUFR file %s\n", path);
       free(filebuf);

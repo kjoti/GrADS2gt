@@ -1,6 +1,4 @@
-/*  Copyright (C) 1988-2011 by Brian Doty and the
-    Institute of Global Environment and Society (IGES).
-    See file COPYRIGHT for more information.   */
+/* Copyright (C) 1988-2018 by George Mason University. See file COPYRIGHT for more information. */
 
 /*
    Reads the metadata from a Self-Describing File
@@ -47,7 +45,7 @@ extern struct gamfcmn mfcmn ;
 extern FILE *descr ;
 
 char *gxgnam(char *) ;     /* This is also in gx.h */
-static char pout[256];    /* Build error msgs here */
+static char pout[1256];    /* Build error msgs here */
 gaint utISinit = 0 ;
 
 
@@ -112,7 +110,7 @@ gaint gasdfopen (char *args, struct gacmn *pcm) {
     pcm->pfid = pcm->pfi1;
     pcm->dfnum = 1;
   }
-  snprintf(pout,255,"SDF file %s is open as file %i\n",pfi->name,pcm->fnum);
+  snprintf(pout,1255,"SDF file %s is open as file %i\n",pfi->name,pcm->fnum);
   gaprnt (2,pout);
 
   /* If first file open, set up some default dimension ranges for the user */
@@ -121,10 +119,10 @@ gaint gasdfopen (char *args, struct gacmn *pcm) {
       gacmd ("set lon 0 360",pcm,0);
     }
     else {
-      snprintf(pout,255,"set x 1 %i",pfi->dnum[0]);
+      snprintf(pout,1255,"set x 1 %i",pfi->dnum[0]);
       gacmd (pout,pcm,0);
     }
-    snprintf(pout,255,"set y 1 %i",pfi->dnum[1]);
+    snprintf(pout,1255,"set y 1 %i",pfi->dnum[1]);
     gacmd (pout,pcm,0);
     gacmd ("set z 1",pcm,0);
     gacmd ("set t 1",pcm,0);
@@ -208,7 +206,7 @@ gaint gaxdfopen (char *args, struct gacmn *pcm) {
   /* get remaining required metadata */
   rc = gadsdf(pfi, parms) ;
   if (rc==Failure) {
-    snprintf(pout,255, "SDF Descriptor file %s was not successfully opened & parsed.\n", pfi->dnam) ;
+    snprintf(pout,1255, "SDF Descriptor file %s was not successfully opened & parsed.\n", pfi->dnam) ;
     gaprnt(0, pout) ;
     frepfi (pfi, 0) ;
     freeparms(&parms);
@@ -229,7 +227,7 @@ gaint gaxdfopen (char *args, struct gacmn *pcm) {
     return Failure;
   }
   else {
-    snprintf(pout,255, "SDF file %s is open as file %i\n", pfi->name, pcm->fnum);
+    snprintf(pout,1255, "SDF file %s is open as file %i\n", pfi->name, pcm->fnum);
     gaprnt(2, pout);
   }
 
@@ -239,10 +237,10 @@ gaint gaxdfopen (char *args, struct gacmn *pcm) {
       gacmd ("set lon 0 360",pcm,0);
     }
     else {
-      snprintf(pout,255,"set x 1 %i",pfi->dnum[0]);
+      snprintf(pout,1255,"set x 1 %i",pfi->dnum[0]);
       gacmd (pout,pcm,0);
     }
-    snprintf(pout,255,"set y 1 %i",pfi->dnum[1]);
+    snprintf(pout,1255,"set y 1 %i",pfi->dnum[1]);
     gacmd (pout,pcm,0);
     gacmd ("set z 1",pcm,0);
     gacmd ("set t 1",pcm,0);
@@ -320,7 +318,7 @@ gadouble time1,time2,lat1,lat2,lev1,lev2,incrfactor,sf;
 gafloat dsec;
 size_t len_time_units,trunc_point,sz ;
 gaint len,noname,notinit,nolength;
-gaint i,j,c,rc,flag,numdvars,e,t;
+gaint i,j,c,rc,flag,fwflg,numdvars,e,t;
 gaint iyr,imo,idy,ihr,imn,isec,ispress,isDatavar ;
 gaint xdimid,ydimid,zdimid,tdimid,edimid ;
 gaint istart,icount,havesf,haveao;
@@ -367,38 +365,61 @@ utUnit timeunit ;
 
   /* Handle undef attribute */
   if (parms.needundef) {
+    fwflg = 0;
+    pfi->undefattrflg = 0;
+
+    /* Check for user-defined undef attribute */
     attr = NULL;
     attr = find_att("ALL", pfi->attr, "missing_value") ;
-    if (!attr) {
-      attr = find_att("ALL", pfi->attr, "_FillValue") ;
-    }
-    if (!attr) {
-      pfi->undef =  -9.99e33;  /* must use default */
-      pfi->undefattrflg = 0;
-    } else {
-      /* set the undef attribute name and trip the flag */
+    if (attr) {
+      /* set the primary undef attribute flag and store the attribute name */
       pfi->undefattrflg = 1;
       len = strlen(attr->name);
-      sz = len+1;
-      if ((pfi->undefattr = (char *)galloc(sz,"undefattr1")) == NULL) goto err1;
+      if ((pfi->undefattr = (char *)galloc(len+1,"undefattr1")) == NULL) goto err1;
       strncpy(pfi->undefattr, attr->name, len);
       *(pfi->undefattr+len) = '\0';
-      /* If undef type is NC_FLOAT or NC_DOUBLE, use it for file-wide, otherwise use default */
-      if (attr->len == 1) {
-        if (attr->nctype == 5) {
-          pfi->undef = *(gafloat*)(attr->value);
-          }
-        else if (attr->nctype == 6) {
-          pfi->undef = *(gadouble*)(attr->value);
-        }
-        else {
-          pfi->undef = -9.99e33;
-        }
-      }
-      else {
-        pfi->undef = -9.99e33;
+
+      /* If there is a single value of type NC_SHORT, NC_INT, NC_FLOAT or NC_DOUBLE, use it for file-wide */
+      if (attr->len==1) {
+        if (attr->nctype == 3) { pfi->undef = *(short*)(attr->value);    fwflg=1; }
+        if (attr->nctype == 4) { pfi->undef = *(gaint*)(attr->value);    fwflg=1; }
+        if (attr->nctype == 5) { pfi->undef = *(gafloat*)(attr->value);  fwflg=1; }
+        if (attr->nctype == 6) { pfi->undef = *(gadouble*)(attr->value); fwflg=1; }
       }
     }
+
+    /* Check for secondary (default) undef attribute */
+    attr = NULL;
+    attr = find_att("ALL", pfi->attr, "_FillValue") ;
+    if (attr) {
+      if (pfi->undefattrflg==1) {
+        /* uptick the undef attribute flag and store the second attribute name */
+        pfi->undefattrflg = 2;
+        len = strlen(attr->name);
+        if ((pfi->undefattr2 = (char *)galloc(len+1,"undefattr2")) == NULL) goto err1;
+        strncpy(pfi->undefattr2, attr->name, len);
+        *(pfi->undefattr2+len) = '\0';
+      }
+      else {
+        /* set the primary undef attribute flag and store the attribute name */
+        pfi->undefattrflg = 1;
+        len = strlen(attr->name);
+        if ((pfi->undefattr = (char *)galloc(len+1,"undefattr1")) == NULL) goto err1;
+        strncpy(pfi->undefattr, attr->name, len);
+        *(pfi->undefattr+len) = '\0';
+      }
+      if (!fwflg) {
+        /* If we haven't got one already, use this value for file-wide undef */
+        if (attr->len==1) {
+          if (attr->nctype == 3) { pfi->undef = *(short*)(attr->value);    fwflg=1; }
+          if (attr->nctype == 4) { pfi->undef = *(gaint*)(attr->value);    fwflg=1; }
+          if (attr->nctype == 5) { pfi->undef = *(gafloat*)(attr->value);  fwflg=1; }
+          if (attr->nctype == 6) { pfi->undef = *(gadouble*)(attr->value); fwflg=1; }
+        }
+      }
+    }
+    /* Set a default file-wide undef if we don't have one already */
+    if (!fwflg) pfi->undef = 9.96921e+36;  /* use default for NC_FLOAT */
   }
 
   /* Look for scale factor or slope attribute */
@@ -450,7 +471,7 @@ utUnit timeunit ;
       if ((rc==Failure) || (Xcoord == NULL)) {
         gaprnt(0, "gadsdf: SDF file has no discernable X coordinate.\n") ;
         gaprnt(0,"  To open this file with GrADS, use a descriptor file with an XDEF entry.\n");
-        gaprnt(0,"  Documentation is at http://iges.org/grads/gadoc/SDFdescriptorfile.html\n");
+        gaprnt(0,"  Documentation is at http://cola.gmu.edu/grads/gadoc/SDFdescriptorfile.html\n");
         return Failure ;
       }
     }
@@ -458,7 +479,7 @@ utUnit timeunit ;
       /* find the axis named in the descriptor file */
       Xcoord = find_var(pfi, parms.xdimname) ;
       if (!Xcoord) {
-        snprintf(pout,255, "gadsdf: Can't find variable %s for X coordinate.\n",parms.xdimname);
+        snprintf(pout,1255, "gadsdf: Can't find variable %s for X coordinate.\n",parms.xdimname);
         gaprnt(0,pout);
         return Failure ;
       }
@@ -482,7 +503,7 @@ utUnit timeunit ;
   if (parms.isxdf && (!parms.xsrch)) {
     xdimid = find_dim(pfi, parms.xdimname) ;
     if (xdimid == -1) {
-      snprintf(pout,255, "gadsdf: Lon dimension %s is not an SDF dimension.\n",parms.xdimname);
+      snprintf(pout,1255, "gadsdf: Lon dimension %s is not an SDF dimension.\n",parms.xdimname);
       gaprnt(0,pout);
       return Failure;
     }
@@ -503,7 +524,7 @@ utUnit timeunit ;
       if ((rc==Failure) || (Ycoord == NULL)) {
         gaprnt(0, "gadsdf: SDF file has no discernable Y coordinate.\n") ;
         gaprnt(0,"  To open this file with GrADS, use a descriptor file with a YDEF entry.\n");
-        gaprnt(0,"  Documentation is at http://iges.org/grads/gadoc/SDFdescriptorfile.html\n");
+        gaprnt(0,"  Documentation is at http://cola.gmu.edu/grads/gadoc/SDFdescriptorfile.html\n");
         return Failure ;
       }
     }
@@ -511,7 +532,7 @@ utUnit timeunit ;
       /* find the axis named in the descriptor file */
       Ycoord = find_var(pfi, parms.ydimname) ;
       if (!Ycoord) {
-        snprintf(pout,255, "gadsdf: Can't find variable %s for Y coordinate.\n",parms.ydimname);
+        snprintf(pout,1255, "gadsdf: Can't find variable %s for Y coordinate.\n",parms.ydimname);
         gaprnt(0,pout);
         return Failure ;
       }
@@ -553,7 +574,7 @@ utUnit timeunit ;
   if (parms.isxdf && (!parms.ysrch)) {
     ydimid = find_dim(pfi, parms.ydimname) ;
     if (ydimid == -1) {
-      snprintf(pout,255,"gadsdf: Lat dimension %s is not an SDF dimension.\n",parms.ydimname);
+      snprintf(pout,1255,"gadsdf: Lat dimension %s is not an SDF dimension.\n",parms.ydimname);
       gaprnt(0,pout);
       return Failure;
     }
@@ -576,7 +597,7 @@ utUnit timeunit ;
       /* find the axis named in the descriptor file */
       Zcoord = find_var(pfi, parms.zdimname) ;
       if (!Zcoord) {
-        snprintf(pout,255,"gadsdf: Can't find variable %s for Z coordinate.\n",parms.zdimname);
+        snprintf(pout,1255,"gadsdf: Can't find variable %s for Z coordinate.\n",parms.zdimname);
         gaprnt(0,pout);
         return Failure ;
       }
@@ -651,7 +672,7 @@ utUnit timeunit ;
   if (parms.isxdf && (!parms.zsrch)) {
     zdimid = find_dim(pfi, parms.zdimname) ;
     if (zdimid == -1) {
-      snprintf(pout,255, "gadsdf: Lev dimension %s is not an SDF dimension.\n",parms.zdimname);
+      snprintf(pout,1255, "gadsdf: Lev dimension %s is not an SDF dimension.\n",parms.zdimname);
       gaprnt(0,pout);
       return Failure;
     }
@@ -673,7 +694,7 @@ utUnit timeunit ;
       /* find the axis named in the descriptor file */
       Tcoord = find_var(pfi, parms.tdimname) ;
       if (!Tcoord) {
-        snprintf(pout,255, "gadsdf: Can't find variable %s for T coordinate.\n",parms.tdimname);
+        snprintf(pout,1255, "gadsdf: Can't find variable %s for T coordinate.\n",parms.tdimname);
         gaprnt(0,pout);
         return Failure ;
       }
@@ -1018,12 +1039,12 @@ utUnit timeunit ;
                 }
               }
               else /* monthly or greater */ {
-                if (tvals[6] < (60.0 * 24.0 * 360.0)) {
+                if (incrfactor < (60.0 * 24.0 * 360.0)) {
                   tvals[5] = ((gaint) ((incrfactor / (60.0 * 24.0)) + 0.5)) / 28;
                   tvals[6] = 0.0 ;
                 }
                 else {
-                  gaprnt(0,"gadsdf: Time increment too large for 'minutes since' time units attribute\n");
+                  gaprnt(0,"gadsdf: Time increment is too large for 'minutes since' time units attribute\n");
                   goto err2;
                 }
               }
@@ -1045,7 +1066,7 @@ utUnit timeunit ;
                     tvals[6] = 0.0 ;
                   }
                   else {
-                    gaprnt(0,"gadsdf: Time increment too large for 'seconds since' time units attribute\n");
+                    gaprnt(0,"gadsdf: Time increment is too large for 'seconds since' time units attribute\n");
                     goto err2;
                   }
                 }
@@ -1080,7 +1101,7 @@ utUnit timeunit ;
     if (parms.tdimname != NULL) {
       tdimid = find_dim(pfi, parms.tdimname) ;
       if (tdimid == -1) {
-        snprintf(pout,255, "gadsdf: Time dimension %s is not an SDF dimension.\n",parms.tdimname);
+        snprintf(pout,1255, "gadsdf: Time dimension %s is not an SDF dimension.\n",parms.tdimname);
         gaprnt(0,pout);
         return Failure;
       }
@@ -1105,7 +1126,7 @@ utUnit timeunit ;
       /* find the axis named in the descriptor file */
       Ecoord = find_var(pfi, parms.edimname) ;
       if (!Ecoord) {
-        snprintf(pout,255,"gadsdf: Can't find variable %s for Ensemble coordinate.\n",parms.edimname);
+        snprintf(pout,1255,"gadsdf: Can't find variable %s for Ensemble coordinate.\n",parms.edimname);
         gaprnt(0,pout);
         return Failure ;
       }
@@ -1269,7 +1290,7 @@ utUnit timeunit ;
   if (parms.isxdf && (!parms.esrch)) {
     edimid = find_dim(pfi, parms.edimname) ;
     if (edimid == -1) {
-      snprintf(pout,255,"gadsdf: Ensemble dimension %s is not an SDF dimension.\n",parms.edimname);
+      snprintf(pout,1255,"gadsdf: Ensemble dimension %s is not an SDF dimension.\n",parms.edimname);
       gaprnt(0,pout);
       return Failure;
     }
@@ -1315,7 +1336,7 @@ utUnit timeunit ;
       /* get filename for initial time of current ensemble member  */
       ch = gafndt(pfi->name,&tdefe,&tdefe,pfi->abvals[3],pfi->pchsub1,pfi->ens1,ens->gt,e,&flag);
       if (ch==NULL) {
-        snprintf(pout,255,"Open Error: couldn't determine data file name for e=%d t=%d\n",e,ens->gt);
+        snprintf(pout,1255,"Open Error: couldn't determine data file name for e=%d t=%d\n",e,ens->gt);
         gaprnt(0,pout);
         goto err2;
       }
@@ -1326,7 +1347,7 @@ utUnit timeunit ;
         gr2t(pfi->grvals[3],(gadouble)t,&tdef);
         pos = gafndt(pfi->name,&tdef,&tdefe,pfi->abvals[3],pfi->pchsub1,pfi->ens1,t,e,&flag);
         if (pos==NULL) {
-          snprintf(pout,255,"Open Error: couldn't determine data file name for e=%d t=%d\n",e,t);
+          snprintf(pout,1255,"Open Error: couldn't determine data file name for e=%d t=%d\n",e,t);
           gaprnt(0,pout);
           goto err2;
         }
@@ -1431,15 +1452,11 @@ utUnit timeunit ;
   pfi->gsiz = pfi->dnum[XINDEX] * pfi->dnum[YINDEX];
 
   /* Set the default netcdf/hdf5 cache size to be big enough to contain
-     a global 2D grid of 8-byte data values times the global cache scale factor */
+     a global 2D grid of 8-byte data values */
   if (pfi->cachesize == (long)-1) {
-    sf = qcachesf();
-    sf = sf * 8 * pfi->dnum[0] * pfi->dnum[1];
+    sf = 8 * pfi->dnum[0] * pfi->dnum[1];
     pfi->cachesize = (long)floor(sf) ;
   }
-  /* set the netCDF-4 cache size */
-  sz = (size_t)pfi->cachesize;
-  set_nc_cache(sz);
 
   return Success;
 
@@ -1526,17 +1543,17 @@ gaint isdvar(struct gafile *pfi, struct gavar *var,
     attr = find_att(var->longnm, pfi->attr, "long_name");
     if (attr == NULL) attr = find_att(var->longnm, pfi->attr, "standard_name");
     if (attr == NULL) {
-      strncpy(var->varnm,var->longnm,126);
-      var->varnm[127] = '\0';
+      strncpy(var->varnm,var->longnm,159);
+      var->varnm[160] = '\0';
     }
     else {
-      if (attr->len < 128) {
+      if (attr->len < 160) {
         strcpy(var->varnm,(char*)attr->value);
         var->varnm[attr->len-1] = '\0';
       }
       else {
-        strncpy(var->varnm,(char*)attr->value,127);
-        var->varnm[127] = '\0';
+        strncpy(var->varnm,(char*)attr->value,159);
+        var->varnm[160] = '\0';
       }
     }
     return Success;
@@ -1696,7 +1713,7 @@ uint32 *uidata=NULL;
       break;
 
     default:
-      snprintf(pout,255,"HDF coordinate axis data type %d not handled\n",dtype);
+      snprintf(pout,1255,"HDF coordinate axis data type %d not handled\n",dtype);
       gaprnt(0,pout);
       goto err1;
     };
@@ -2290,7 +2307,7 @@ char sdsname[H4_MAX_NC_NAME+1];
 char dimname[H4_MAX_NC_NAME+1];
 #endif
 
-  if ((pfi->name == NULL) || (strlen (pfi->name) == 0)) return Failure;
+ if (strlen (pfi->name) == 0) return Failure;
 
   /* Open the file */
   if (pfi->tmplat) {
@@ -2330,7 +2347,7 @@ char dimname[H4_MAX_NC_NAME+1];
       sds_id = SDselect(pfi->sdid, i);
       status = SDgetinfo(sds_id, sdsname, &rank, dim_sizes, &dtype, &natts);
       if (status == -1) {
-        snprintf(pout,255,"read_metadata: SDgetinfo failed for sds_id=%d\n",sds_id);
+        snprintf(pout,1255,"read_metadata: SDgetinfo failed for sds_id=%d\n",sds_id);
         gaprnt(0,pout);
         goto err3;
       }
@@ -2339,7 +2356,7 @@ char dimname[H4_MAX_NC_NAME+1];
         dim_id = SDgetdimid(sds_id,0);
         status = SDdiminfo(dim_id, dimname, &dimsize, &dtype, &ndatts);
         if (status == -1) {
-          snprintf(pout,255,"read_metadata: SDdiminfo failed for sds_id=%d, dimid=%d\n",sds_id,dim_id);
+          snprintf(pout,1255,"read_metadata: SDdiminfo failed for sds_id=%d, dimid=%d\n",sds_id,dim_id);
           gaprnt(0,pout);
           goto err3;
         }
@@ -2438,6 +2455,7 @@ char dimname[H4_MAX_NC_NAME+1];
     pvar->isu = 0;
     pvar->isdvar = 0;
     pvar->nvardims = 0;
+    pvar->nh5vardims = 0;
     for (ii=0; ii<16; ii++) pvar->units[ii]=-999;
 
     /* get the variable info */
@@ -2447,19 +2465,19 @@ char dimname[H4_MAX_NC_NAME+1];
       /* get info about the current data set */
       sds_id = SDselect(pfi->sdid, i);
       if (sds_id==FAIL) {
-        snprintf(pout,255,"read_metadata: SDselect failed for varid %d\n",i);
+        snprintf(pout,1255,"read_metadata: SDselect failed for varid %d\n",i);
         gaprnt(0,pout);
         goto err3;
       }
       status = SDgetinfo(sds_id, name, &(pvar->nvardims), dim_sizes, &dtype, &natts);
       if (status == -1) {
-        snprintf(pout,255,"read_metadata: SDgetinfo failed for varid %d\n",i);
+        snprintf(pout,1255,"read_metadata: SDgetinfo failed for varid %d\n",i);
         gaprnt(0,pout);
         goto err3;
       }
       status = SDnametoindex(pfi->sdid, name);
       if (status == -1) {
-        snprintf(pout,255,"read_metadata: SDnametoindex failed for varid %d\n",i);
+        snprintf(pout,1255,"read_metadata: SDnametoindex failed for varid %d\n",i);
         gaprnt(0,pout);
         goto err3;
       }
@@ -2474,7 +2492,7 @@ char dimname[H4_MAX_NC_NAME+1];
     if (pfi->ncflg==1) {
       status = nc_inq_var(pfi->ncid, i, name, NULL, &(pvar->nvardims), pvar->vardimids, &natts);
       if (status != NC_NOERR) {
-        snprintf(pout,255,"read_metadata: nc_inq_var failed to retrieve variable info for varid %d\n",i);
+        snprintf(pout,1255,"read_metadata: nc_inq_var failed to retrieve variable info for varid %d\n",i);
         gaprnt(0,pout);
         handle_error(status);
         goto err3;
@@ -2691,7 +2709,7 @@ size_t sz;
       return(Failure);
     }
     if (SDattrinfo(sds_id, i, attname, &attr_dtype, &attr_count) == -1) {
-      snprintf(pout,255,"SDattrinfo failed for variable %s, attribute number %d\n", varname, i);
+      snprintf(pout,1255,"SDattrinfo failed for variable %s, attribute number %d\n", varname, i);
       gaprnt(2,pout);
     }
     else {
@@ -2813,7 +2831,7 @@ size_t sz;
             }
             break;
           default:
-            snprintf(pout,255,"Failed to retrieve attribute %d of type %d \n", i, attr_dtype);
+            snprintf(pout,1255,"Failed to retrieve attribute %d of type %d \n", i, attr_dtype);
             gaprnt(2,pout);
           };
 
@@ -2821,7 +2839,7 @@ size_t sz;
           /* Successfully extracted the attribute, so add a link to the list */
           sz = sizeof(struct gaattr);
           if ((newattrib = (struct gaattr *) galloc(sz,"newathdf")) == NULL) {
-            snprintf(pout,255,"read_hdfatts error: memory allocation failed when adding attribute number %d\n",i);
+            snprintf(pout,1255,"read_hdfatts error: memory allocation failed when adding attribute number %d\n",i);
             gaprnt(2,pout);
             if (cval)   { gree(cval,"f145");   cval=NULL;   }
             if (ucval)  { gree(ucval,"f146");  ucval=NULL;  }
@@ -2922,8 +2940,9 @@ long   *ival=NULL;
 short  *sval=NULL;
 char   *bval=NULL;
 char   *cval=NULL;
+char  **strval=NULL;
 char   *attname,*varname=NULL;
-gaint   i,len,status,gotatt;
+gaint   i,j,len,status,gotatt;
 size_t  sz,attlen;
 nc_type type;
 
@@ -2956,7 +2975,7 @@ nc_type type;
     status = nc_inq_attname(cdfid, varid, i, attname);
     if (status != NC_NOERR) {
       handle_error(status);
-      snprintf(pout,255,"read_ncatts: ncattname failed for varid %d attribute number %d\n",varid,i);
+      snprintf(pout,1255,"read_ncatts: ncattname failed for varid %d attribute number %d\n",varid,i);
       gaprnt(2,pout);
     }
     else {
@@ -2965,7 +2984,7 @@ nc_type type;
       status = nc_inq_att(cdfid, varid, attname, &type, &attlen);
       if (status != NC_NOERR) {
         handle_error(status);
-        snprintf(pout,255,"read_ncatts: nc_inq_att failed for varid %d attribute number %d\n",varid,i);
+        snprintf(pout,1255,"read_ncatts: nc_inq_att failed for varid %d attribute number %d\n",varid,i);
         gaprnt(2,pout);
       }
       else {
@@ -2982,7 +3001,7 @@ nc_type type;
                 gree(bval,"f22");
                 bval = NULL;
                 handle_error(status);
-                snprintf(pout,255,"read_ncatts: failed to get %s attribute %d type BYTE\n",varname,i);
+                snprintf(pout,1255,"read_ncatts: failed to get %s attribute %d type BYTE\n",varname,i);
                 gaprnt(2,pout);
               }
               else {
@@ -2998,12 +3017,35 @@ nc_type type;
                 gree(cval,"f24");
                 cval = NULL;
                 handle_error(status);
-                snprintf(pout,255,"read_ncatts: failed to get %s attribute %d type CHAR\n",varname,i);
+                snprintf(pout,1255,"read_ncatts: failed to get %s attribute %d type CHAR\n",varname,i);
                 gaprnt(2,pout);
               }
               else {
                 gotatt=1;
                 cval[attlen-1]='\0';
+              }
+              break;
+            case (NC_STRING):
+              strval = (char**)galloc(attlen * sizeof(char*),"strval");
+              memset(strval, 0, attlen * sizeof(char*));  /* fill with zeros as in nc doc example */
+              status = nc_get_att_string(cdfid, varid, attname, strval);
+              if (status != NC_NOERR) {
+                gree(strval,"f24b"); strval = NULL;
+                handle_error(status);
+                snprintf(pout,1255,"read_ncatts: failed to get %s attribute %d type STRING\n",varname,i);
+                gaprnt(2,pout);
+              }
+              else {
+                gotatt=1;
+                /* NC_STRING attribute is an array (size attlen) of pointers to variable length strings.
+                   We only look at the first one, strval[0], and don't check if attlen>1.
+                   We get the length of the first string, copy it into cval, then free the array */
+                sz = 1 + (int)strlen(strval[0]);
+                cval = (char *)galloc(sz*sizeof(char),"cval");
+                for (j=0; j<sz; j++) cval[j] = strval[0][j];
+                cval[sz]='\0';
+                nc_free_string(attlen, strval);
+                gree(strval);
               }
               break;
             case (NC_SHORT):
@@ -3014,7 +3056,7 @@ nc_type type;
                 gree(sval,"f26");
                 sval=NULL;
                 handle_error(status);
-                snprintf(pout,255,"read_ncatts: failed to get %s attribute %d type SHORT\n",varname,i);
+                snprintf(pout,1255,"read_ncatts: failed to get %s attribute %d type SHORT\n",varname,i);
                 gaprnt(2,pout);
               }
               else {
@@ -3029,7 +3071,7 @@ nc_type type;
                 gree(ival,"f28");
                 ival = NULL;
                 handle_error(status);
-                snprintf(pout,255,"read_ncatts: failed to get %s attribute %d type LONG\n",varname,i);
+                snprintf(pout,1255,"read_ncatts: failed to get %s attribute %d type LONG\n",varname,i);
                 gaprnt(2,pout);
               }
               else {
@@ -3044,7 +3086,7 @@ nc_type type;
                 gree(fval,"f30");
                 fval = NULL;
                 handle_error(status);
-                snprintf(pout,255,"read_ncatts: failed to get %s attribute %d type FLOAT\n",varname,i);
+                snprintf(pout,1255,"read_ncatts: failed to get %s attribute %d type FLOAT\n",varname,i);
                 gaprnt(2,pout);
               }
               else {
@@ -3059,7 +3101,7 @@ nc_type type;
                 gree(dval,"f32");
                 dval = NULL;
                 handle_error(status);
-                snprintf(pout,255,"read_ncatts: failed to get %s attribute %d type DOUBLE\n",varname,i);
+                snprintf(pout,1255,"read_ncatts: failed to get %s attribute %d type DOUBLE\n",varname,i);
                 gaprnt(2,pout);
               }
               else {
@@ -3067,7 +3109,7 @@ nc_type type;
               }
             break;
             default:
-              snprintf(pout,255,"read_ncatts: %s attribute %d type %d not supported\n",varname,i,type);
+              snprintf(pout,1255,"read_ncatts: %s attribute %d type %d not supported\n",varname,i,type);
               gaprnt(2,pout);
             };
 
@@ -3075,7 +3117,7 @@ nc_type type;
             /* Successfully extracted the attribute, so add a link to the list */
             sz = sizeof(struct gaattr);
             if ((newattrib = (struct gaattr *) galloc(sz,"newattr")) == NULL) {
-              snprintf(pout,255,"read_ncatts: memory allocation failed when adding attribute number %d\n",i);
+              snprintf(pout,1255,"read_ncatts: memory allocation failed when adding attribute number %d\n",i);
               gaprnt(2,pout);
               if (bval) { gree(bval,"f33"); bval = NULL; }
               if (cval) { gree(cval,"f34"); cval = NULL; }
@@ -3103,6 +3145,7 @@ nc_type type;
               newattrib->nctype = (gaint)type;
               if      (type == NC_BYTE)   newattrib->value = bval;
               else if (type == NC_CHAR)   newattrib->value = cval;
+              else if (type == NC_STRING) newattrib->value = cval;
               else if (type == NC_SHORT)  newattrib->value = sval;
               else if (type == NC_LONG)   newattrib->value = ival;
               else if (type == NC_FLOAT)  newattrib->value = fval;
@@ -3185,7 +3228,7 @@ gaint read_one_dimension (struct gafile *pfi, struct gavar *coord,
       *data = ddata;
       break;
     default:
-      snprintf(pout,255,"SDF coordinate axis data type %d not handled\n",dtype);
+      snprintf(pout,1255,"SDF coordinate axis data type %d not handled\n",dtype);
       gaprnt(0,pout);
       return Failure;
     };
@@ -3280,7 +3323,7 @@ gaint decode_delta_t (char *delta_t_str, gaint *year, gaint *month, gaint *day, 
 /* Handle return codes */
 void handle_error(gaint status) {
 #if USENETCDF==1
-  snprintf(pout,255," %s\n",nc_strerror(status));
+  snprintf(pout,1255," %s\n",nc_strerror(status));
   gaprnt(0,pout);
 #endif
 }
@@ -3486,11 +3529,22 @@ size_t sz;
         len = 0;
         while (*(ch+len)!=' ' && *(ch+len)!='\n' && *(ch+len)!='\t') len++;
         sz = len+1;
-        if ((pfi->undefattr = (char *)galloc(sz,"undefattr2")) == NULL) goto err8;
+        if ((pfi->undefattr = (char *)galloc(sz,"undefattr5")) == NULL) goto err8;
         for (i=0; i<len; i++) *(pfi->undefattr+i) = *(ch+i);
         *(pfi->undefattr+len) = '\0';
         /* Set the undef attribute flag */
         pfi->undefattrflg = 1;
+        /* Get the secondary undef attribute name, if it's there */
+        if ((ch=nxtwrd(ch))!=NULL) {
+          len = 0;
+          while (*(ch+len)!=' ' && *(ch+len)!='\n' && *(ch+len)!='\t') len++;
+          sz = len+1;
+          if ((pfi->undefattr2 = (char *)galloc(sz,"undefattr6")) == NULL) goto err8;
+          for (i=0; i<len; i++) *(pfi->undefattr2+i) = *(ch+i);
+          *(pfi->undefattr2+len) = '\0';
+          /* uptick the undef attribute flag */
+          pfi->undefattrflg = 2;
+        }
       }
       pfi->ulow = fabs(pfi->undef/EPSILON);
       pfi->uhi  = pfi->undef + pfi->ulow;
@@ -3518,7 +3572,7 @@ size_t sz;
       else {
         if ((pos = intprs(ch,&(pfi->dnum[0])))==NULL) goto err1;
         if (pfi->dnum[0]<1) {
-          snprintf(pout,255,"Warning: Invalid XDEF syntax in %s -- Changing size of X axis from %d to 1 \n",
+          snprintf(pout,1255,"Warning: Invalid XDEF syntax in %s -- Changing size of X axis from %d to 1 \n",
                   pfi->dnam,pfi->dnum[0]);
           gaprnt (1,pout);
           pfi->dnum[0] = 1;
@@ -3564,7 +3618,7 @@ size_t sz;
       else {
         if ((pos = intprs(ch,&(pfi->dnum[1])))==NULL) goto err1 ;
         if (pfi->dnum[1]<1) {
-          snprintf(pout,255,"Warning: Invalid YDEF syntax in %s -- Changing size of Y axis from %d to 1 \n",
+          snprintf(pout,1255,"Warning: Invalid YDEF syntax in %s -- Changing size of Y axis from %d to 1 \n",
                   pfi->dnam,pfi->dnum[1]);
           gaprnt (1,pout);
           pfi->dnum[1] = 1;
@@ -3647,7 +3701,7 @@ size_t sz;
       else {
         if ((pos = intprs(ch,&(pfi->dnum[2])))==NULL) goto err1 ;
         if (pfi->dnum[2]<1) {
-          snprintf(pout,255,"Warning: Invalid ZDEF syntax in %s -- Changing size of Z axis from %d to 1 \n",
+          snprintf(pout,1255,"Warning: Invalid ZDEF syntax in %s -- Changing size of Z axis from %d to 1 \n",
                   pfi->dnam,pfi->dnum[2]);
           gaprnt (1,pout);
           pfi->dnum[2] = 1;
@@ -3716,7 +3770,7 @@ size_t sz;
           }
         }
         else if (pfi->dnum[3]<1) {
-          snprintf(pout,255,"Warning: Invalid TDEF syntax in %s -- Changing size of T axis from %d to 1 \n",
+          snprintf(pout,1255,"Warning: Invalid TDEF syntax in %s -- Changing size of T axis from %d to 1 \n",
                   pfi->dnam,pfi->dnum[3]);
           gaprnt (1,pout);
           pfi->dnum[3] = 1;
@@ -3772,7 +3826,7 @@ size_t sz;
       if ((ch = nxtwrd(ch)) != NULL) {
         if ((pos = intprs(ch,&(pfi->dnum[EINDEX]))) == NULL) goto err1;
         if (pfi->dnum[EINDEX]<1) {
-          snprintf(pout,255,"Warning: Invalid EDEF syntax in %s -- Changing size of E axis from %d to 1 \n",
+          snprintf(pout,1255,"Warning: Invalid EDEF syntax in %s -- Changing size of E axis from %d to 1 \n",
                   pfi->dnam,pfi->dnum[EINDEX]);
           gaprnt (1,pout);
           pfi->dnum[EINDEX] = 1;
@@ -3842,7 +3896,7 @@ size_t sz;
       while (i<pfi->vnum) {
         if (fgets(rec,512,descr)==NULL) {
           gaprnt (0,"gadxdf error: Unexpected EOF reading variables\n");
-          snprintf(pout,255, "Was expecting %i records.  Found %i.\n", pfi->vnum, i);
+          snprintf(pout,1255, "Was expecting %i records.  Found %i.\n", pfi->vnum, i);
           gaprnt (2,pout);
           goto retrn;
         }
@@ -3874,7 +3928,7 @@ size_t sz;
         }
         if (cmpwrd("endvars",rec)) {
           gaprnt (0,"gadxdf error: Unexpected ENDVARS record\n");
-          snprintf(pout,255, "Was expecting %i records.  Found %i.\n", pfi->vnum, i);
+          snprintf(pout,1255, "Was expecting %i records.  Found %i.\n", pfi->vnum, i);
           gaprnt (2,pout);
           goto err9;
         }
@@ -3898,7 +3952,7 @@ size_t sz;
           if ((ddfattr(mrec,pfi)) == -1) goto retrn;
         }
         else {
-          snprintf(pout,255,"gadxdf error: Looking for \"endvars\", found \"%s\" instead.\n",rec);
+          snprintf(pout,1255,"gadxdf error: Looking for \"endvars\", found \"%s\" instead.\n",rec);
           gaprnt (0,pout);
           goto err9;
         }
@@ -4021,7 +4075,7 @@ size_t sz;
       /* get filename for initial time of current ensemble member  */
       ch = gafndt(pfi->name,&tdefe,&tdefe,pfi->abvals[3],pfi->pchsub1,pfi->ens1,ens->gt,e,&flag);
       if (ch==NULL) {
-        snprintf(pout,255,"Open Error: couldn't determine data file name for e=%d t=%d\n",e,ens->gt);
+        snprintf(pout,1255,"Open Error: couldn't determine data file name for e=%d t=%d\n",e,ens->gt);
         gaprnt(0,pout);
         goto err2;
       }
@@ -4040,7 +4094,7 @@ size_t sz;
         gr2t(pfi->grvals[3],(gadouble)t,&tdef);
         pos = gafndt(pfi->name,&tdef,&tdefe,pfi->abvals[3],pfi->pchsub1,pfi->ens1,t,e,&flag);
         if (pos==NULL) {
-          snprintf(pout,255,"Open Error: couldn't determine data file name for e=%d t=%d\n",e,t);
+          snprintf(pout,1255,"Open Error: couldn't determine data file name for e=%d t=%d\n",e,t);
           gaprnt(0,pout);
           goto err2;
         }

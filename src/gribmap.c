@@ -1,6 +1,4 @@
-/*  Copyright (C) 1988-2011 by Brian Doty and the
-    Institute of Global Environment and Society (IGES).
-    See file COPYRIGHT for more information.   */
+/* Copyright (C) 1988-2018 by George Mason University. See file COPYRIGHT for more information. */
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -38,17 +36,19 @@ gaint main (gaint argc, char *argv[]) {
   verb=0;         /* verbose default is NO */
   quiet=0;        /* quiet mode default is NO */
   bigflg=0;       /* assume small <2GB files sizes */
-  g1ver=3;        /* default version for grib1 maps */
-  g2ver=1;        /* default version for grib2 maps */
+  g1ver=5;        /* default version for grib1 maps */
+  g2ver=3;        /* default version for grib2 maps */
   scaneof=0;      /* option to ignore failure to find data at end of file */
   scanEOF=0;      /* option to ignore failure to find data at end of file */
   scanlim=1000;   /* the default # of max bytes between records */
   notau=0;        /* force time to be base time */
+  upgrade=0;      /* do not create a newer version of existing index file */
+  downgrade=0;    /* do not create a older version of existing index file */
   tauave=0;       /* use end time (default) for averaged products vs. start time */
   tauflg=0;       /* search for a fixed tau in filling the 4-D volume */
   tauoff=0;       /* the fixed tau in h */
   tau0=0;         /* set the base dtg for tau search */
-  update=0;       /* set the base dtg for tau search */
+  update=0;       /* write out a new index file */
   write_map=1;    /* write out the map  */
   diag=0;         /* full diagnostics */
   mpiflg=0;
@@ -73,22 +73,13 @@ gaint main (gaint argc, char *argv[]) {
         notau = 1;                            /* reference time is the valid time */
         flg = 0;
       }
-      else if (*ch=='-' && *(ch+1)=='1') {    /* Create machine-specific version 1 map */
-        g1ver = 1;
-        flg = 0;
-      }
-      else if (*ch=='-' && *(ch+1)=='2') {    /* Create machine-independent version 2 map */
-        g1ver = 2;
-        flg = 0;
-      }
-      else if (*ch=='-' && *(ch+1)=='b' && *(ch+2)=='i' && *(ch+3)=='g') {    /* >2GB sizes */
+      else if (*ch=='-' && *(ch+1)=='b' && *(ch+2)=='i' && *(ch+3)=='g') {    /* >2GB file sizes */
         if (sizeof(off_t) != 8) {
-          printf ("Gribmap Error:  -big flag requires size of off_t to be 8.\n");
+          printf ("gribmap: ERROR! The \"-big\" flag requires size of off_t to be 8.\n");
           printf ("                The size of off_t is %ld\n",sizeof(off_t));
           return (4);
         }
-        bigflg=1;
-        g1ver=4;
+        bigflg = 1;
         flg = 0;
       }
       else if (*ch=='-' && *(ch+1)=='b') {    /* Valid time for averages is beginning of period */
@@ -124,7 +115,7 @@ gaint main (gaint argc, char *argv[]) {
         help=1;
         flg = 0;
       }
-      else if (*ch=='-' && *(ch+1)=='h') {          /* Header bytes to skip before scanning */
+      else if (*ch=='-' && *(ch+1)=='h') {   /* Header bytes to skip before scanning */
         ch+=2;
         i = 0;
         while(*(ch+i) && i<900) {
@@ -140,8 +131,16 @@ gaint main (gaint argc, char *argv[]) {
         no_min = 1;
         flg = 0;
       }
-      else if (*ch=='-' && *(ch+1)=='m') {         /* Use base time from descriptor instead of grib header */
+      else if (*ch=='-' && *(ch+1)=='m') {    /* Use base time from descriptor instead of grib header */
         mpiflg = 1;
+        flg = 0;
+      }
+      else if (*ch=='-' && *(ch+1)=='n' && *(ch+2)=='e' && *(ch+3)=='w') { /* Newer version of index file */
+        upgrade = 1;
+        flg = 0;
+      }
+      else if (*ch=='-' && *(ch+1)=='o' && *(ch+2)=='l' && *(ch+3)=='d') { /* Older version of index file */
+        downgrade = 1;
         flg = 0;
       }
       else if (*ch=='-' && *(ch+1)=='N') {    /* Do not write a map file */
@@ -171,8 +170,7 @@ gaint main (gaint argc, char *argv[]) {
         flg = 0;
       }
       else if (*ch=='-' && *(ch+1)=='u') {    /* Update existing map (for templated data sets) */
-        printf("The -u option has been temporarily disabled\n");
-        /* update = 1; */
+        update = 1;
         flg = 0;
       }
       else if (*ch=='-' && *(ch+1)=='v') {    /* Verbose mode */
@@ -194,6 +192,16 @@ gaint main (gaint argc, char *argv[]) {
     command_line_help();
     return(0);
   }
+  /* check to make sure there are no conflicting options */
+  if (upgrade && downgrade) {
+    printf("gribmap: ERROR! You cannot use the \"-new\" and \"-old\" options together \n");
+    return(1);
+  }
+  if (bigflg && downgrade) {
+    printf("gribmap: ERROR! You cannot use the \"-big\" and \"-old\" options together \n");
+    return(1);
+  }
+
 
   mfcmn.cal365=-1; /* initialize the GrADS calendar so it is set to the file calendar in gaddes */
   rc=gribmap();
@@ -221,10 +229,12 @@ printf("   -i fname  provides the name of data descriptor file to map\n");
 printf("   -m        uses the initial time from the descriptor file instead of the base time in the grib header \n");
 printf("   -min0     ignores minutes code \n");
 printf("   -N        does NOT write out the map \n");
+printf("   -new      creates a newer version of an existing index file \n");
+printf("   -old      creates an older version of an existing index file \n");
 printf("   -q        quiet mode gives no listing except for errors\n");
 printf("   -sNNNN    where NNNN is the maximum # of bytes to skip between GRIB messages (default is 1000)\n");
 printf("   -t0       forces a match if base time in the GRIB header equals the initial time in the descriptor file\n");
-/* printf("   -u        updates existing gribmap (N.B. This option is temporarily disabled)\n"); */
+printf("   -u        updates existing gribmap (N.B. For extending T or E axis)\n");
 printf("   -v        verbose option shows details of the mapping\n");
 printf("\n");
 }
@@ -235,12 +245,4 @@ void gaprnt (gaint i, char *ch) {
 
 char *gxgsym(char *ch) {
   return (getenv(ch));
-}
-
-gadouble qcachesf(void) {
-  return(1.0);
-}
-
-void set_nc_cache(size_t arg) {
-  return;
 }

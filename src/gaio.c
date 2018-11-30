@@ -1,6 +1,4 @@
-/*  Copyright (C) 1988-2011 by Brian Doty and the
-    Institute of Global Environment and Society (IGES).
-    See file COPYRIGHT for more information.   */
+/* Copyright (C) 1988-2018 by George Mason University. See file COPYRIGHT for more information. */
 
 /* Authored by B. Doty and Jennifer Adams */
 
@@ -50,12 +48,13 @@ static struct gaindx *pindx;
 static struct gaindxb *pindxb;
 static gaint timerr;
 static gaint msgflg=1;
-static char pout[256];
+static char pout[1256];
+static long cachesf;
 
 /* For STNDALN, routines included are gaopfn, gaopnc, and gaophdf */
 #ifndef STNDALN
 
-/* GRIB I/O caching.  GRIB data is chached, as well as the bit
+/* GRIB I/O caching.  GRIB data is cached, as well as the bit
    maps, if present.  Sometimes the expanded bit map is cached. */
 static char *cache;             /* I/O cache for GRIB */
 static unsigned char *bcache;   /* Bit map cache */
@@ -93,6 +92,11 @@ static gaint debug=0;
 /* Routine resets flag to allow warning in regards to interpolation */
 void gaiomg () {
   msgflg = 1;
+}
+
+/* Routine to change the value of the cache scale factor */
+void setcachesf (long sf) {
+  cachesf = sf;
 }
 
 /* Routine to obtain a grid.  The addresses of the gagrid
@@ -148,7 +152,7 @@ gaint gaggrd (struct gagrid *pgrid) {
   if (pgr->idim < -1 || pgr->idim > 4 ||
       pgr->jdim < -1 || pgr->jdim > 4 ||
       (pgr->idim == -1 && pgr->jdim!=-1)) {
-    snprintf(pout,255,"Internal logic check 16:  %i %i  \n", pgr->idim, pgr->jdim);
+    snprintf(pout,1255,"Internal logic check 16:  %i %i  \n", pgr->idim, pgr->jdim);
     gaprnt (0,pout);
     return (16);
   }
@@ -260,7 +264,7 @@ gaint gaggrd (struct gagrid *pgrid) {
       rc = h5openvar(pfi->h5id,vname,&dsid,&vid);
       if (rc) {
         pvr->h5vid = -888;
-        snprintf(pout,255,"Error: Variable %s not in HDF5 file\n",vname);
+        snprintf(pout,1255,"Error: Variable %s not in HDF5 file\n",vname);
         gaprnt(0,pout);
         return (rc);
       }
@@ -361,10 +365,10 @@ nodatmsg:
   if(mfcmn.warnflg>0) {
     gaprnt (1,"Data Request Warning:  Request is completely outside file limits\n");
     gaprnt (2,"  Entire grid contents are set to missing data \n");
-    snprintf(pout,255,"  Grid limits of file:     X = 1 %i  Y = 1 %i  Z = 1 %i  T = 1 %i  E = 1 %i \n",
+    snprintf(pout,1255,"  Grid limits of file:     X = 1 %i  Y = 1 %i  Z = 1 %i  T = 1 %i  E = 1 %i \n",
              pfi->dnum[0],pfi->dnum[1],pfi->dnum[2],pfi->dnum[3],pfi->dnum[4]);
     gaprnt (2,pout);
-    snprintf(pout,255,"  Grid limits of request:  X = %i %i  Y = %i %i  Z = %i %i  T = %i %i  E = %i %i \n",
+    snprintf(pout,1255,"  Grid limits of request:  X = %i %i  Y = %i %i  Z = %i %i  T = %i %i  E = %i %i \n",
              pgr->dimmin[0],pgr->dimmax[0],
              pgr->dimmin[1],pgr->dimmax[1],
              pgr->dimmin[2],pgr->dimmax[2],
@@ -493,9 +497,11 @@ gaint y,z,t,e;
     if (oflg) {
       /* Force new bit map cache if new file opened */
       bpsav = (off_t)-999;
+    }
 #if USEHDF5==1
-      /* if HDF5, call h5setup and h5openvar if new file opened */
-      if (pfi->ncflg==3) {
+    /* For HDF5, call h5setup and h5openvar if new file opened or if a new variable */
+    if (pfi->ncflg==3) {
+      if (oflg || pvr->h5varflg<0) {
         /* get the variable name */
         if (pvr->longnm[0] != '\0')
           vname = pvr->longnm;
@@ -505,7 +511,7 @@ gaint y,z,t,e;
         rc = h5openvar(pfi->h5id,vname,&dsid,&vid);
         if (rc) {
           pvr->h5vid = -888;
-          snprintf(pout,255,"Error: Variable %s not in HDF5 file\n",vname);
+          snprintf(pout,1255,"Error: Variable %s not in HDF5 file\n",vname);
           gaprnt(0,pout);
           return (rc);
         }
@@ -521,8 +527,8 @@ gaint y,z,t,e;
         /* set h5-relevant variables in the gavar structure */
         pvr->h5vid = (gaint)vid;
       }
-#endif
     }
+#endif
   }
   else {
     ee = e;  /* set relative ensemble number to e for non-templated data sets */
@@ -617,7 +623,7 @@ off_t xl, yl, zl, tl, el;
   pos =
     ltmpe +
       ltmpt +
-        (off_t)pvr->offset +
+        pvr->offset +
           ltmpz +
             ltmpy +
               (xl-1);
@@ -653,11 +659,11 @@ size_t sz;
   rc = fseeko(pfi->infile, ffpos, 0);
   if (rc!=0) {
     gaprnt (0,"Low Level I/O Error:  Seek error on data file \n");
-    snprintf(pout,255,"  Data file name = %s \n",pfi->name);
+    snprintf(pout,1255,"  Data file name = %s \n",pfi->name);
     gaprnt (0,pout);
-    snprintf(pout,255,"%d rc=%d fpos=%ld pfi->fhdr=%ld\n",__LINE__,rc,(long)fpos,pfi->fhdr);
+    snprintf(pout,1255,"%d rc=%d fpos=%ld pfi->fhdr=%ld\n",__LINE__,rc,(long)fpos,pfi->fhdr);
     gaprnt (0,pout);
-    snprintf(pout,255,"  Error occurred when seeking to byte %ld \n",(long)ffpos);
+    snprintf(pout,1255,"  Error occurred when seeking to byte %ld \n",(long)ffpos);
     gaprnt (0,pout);
     return (1);
   }
@@ -760,9 +766,9 @@ size_t sz;
 
 readerr:
   gaprnt (0,"Low Level I/O Error:  Read error on data file \n");
-  snprintf(pout,255,"  Data file name = %s \n",pfi->name);
+  snprintf(pout,1255,"  Data file name = %s \n",pfi->name);
   gaprnt (0,pout);
-  snprintf(pout,255,"  Error reading %ld bytes at location %ld \n",sz,(long)ffpos);
+  snprintf(pout,1255,"  Error reading %ld bytes at location %ld \n",sz,(long)ffpos);
   gaprnt (0,pout);
   return (1);
 
@@ -966,7 +972,7 @@ size_t sz;
             if (rtot>nsiz) {
               gaprnt (0,"Low Level I/O Error:  Sequential read error\n");
               gaprnt (0,"  Record size exceeds report size\n");
-              snprintf(pout,255,"  Data file name = %s \n",pfi->name);
+              snprintf(pout,1255,"  Data file name = %s \n",pfi->name);
               gaprnt (0,pout);
               goto err;
             }
@@ -1023,7 +1029,7 @@ size_t sz;
           if (rtot>sizf) {
             gaprnt (0,"Low Level I/O Error:  Sequential read error\n");
             gaprnt (0,"  Record size exceeds report size\n");
-            snprintf(pout,255,"  Data file name = %s \n",pfi->name);
+            snprintf(pout,1255,"  Data file name = %s \n",pfi->name);
             gaprnt (0,pout);
             goto err;
           }
@@ -1187,11 +1193,11 @@ gaint rc;
   rc = fseeko(pfi->infile, fpos, 0);
   if (rc!=0) {
     gaprnt (0,"Low Level I/O Error:  Seek error on data file \n");
-    snprintf(pout,255,"  Data file name = %s \n",pfi->name);
+    snprintf(pout,1255,"  Data file name = %s \n",pfi->name);
     gaprnt (0,pout);
-    snprintf(pout,255,"%d  rc=%d pos=%ld pfi->fhdr =%ld \n",__LINE__,rc,(long)fpos,pfi->fhdr);
+    snprintf(pout,1255,"%d  rc=%d pos=%ld pfi->fhdr =%ld \n",__LINE__,rc,(long)fpos,pfi->fhdr);
     gaprnt (0,pout);
-    snprintf(pout,255,"  Error occurred when seeking to byte %ld \n",(long)fpos);
+    snprintf(pout,1255,"  Error occurred when seeking to byte %ld \n",(long)fpos);
     gaprnt (0,pout);
     return (1);
   }
@@ -1207,9 +1213,9 @@ gaint rc;
   rc = fread (val, siz, 1, pfi->infile);
   if (rc<1) {
     gaprnt (0,"Low Level I/O Error:  Read error on data file \n");
-    snprintf(pout,255,"  Data file name = %s \n",pfi->name);
+    snprintf(pout,1255,"  Data file name = %s \n",pfi->name);
     gaprnt (0,pout);
-    snprintf(pout,255,"  Error reading %i bytes at location %ld \n", siz, (long)fpos);
+    snprintf(pout,1255,"  Error reading %i bytes at location %ld \n", siz, (long)fpos);
     gaprnt (0,pout);
     return (1);
   }
@@ -1428,7 +1434,7 @@ char *gru;
 gaint gairow (gaint x, gaint y, gaint z, gaint t, gaint e, gaint offset, gaint len,
               gadouble *gr, char *gru) {
 gaint irec,ioff,bstrt,bend,blen,cstrt,cend,clen,rc;
-gaint brec;
+gaint brec,bigflg;
 gaint ival,i,yy,boff,siz,gtyp,xsiz,ysiz;
 off_t fpos,bpos,seek;
 float dsf,bsf,ref;
@@ -1455,7 +1461,11 @@ gaint g2off,ng2elems=2;
  /* GRIB1 */
  if (pfi->idxflg==1) {
    /* Figure out position and length of the I/O */
-   gtyp = *(pindx->hipnt+3);
+   gtyp = *(pindx->hipnt+3);     /* this is written into index header as pfi->grbgrd */
+   bigflg=0;
+   if ((pindx->type==4) ||                       /* version=4 --> off_t in use */
+       (pindx->type==5 && *(pindx->hipnt+4)>0))  /* version=5 & bignum>0 --> off_t in use */
+     bigflg=1;
    irec = (e-1)*pfi->dnum[3]*pfi->trecs + (t-1)*pfi->trecs + pvr->recoff + z - 1;
    brec = irec;
    if (gtyp==29) {
@@ -1474,15 +1484,15 @@ gaint g2off,ng2elems=2;
    else
      ioff = yy*xsiz + x - 1;
    boff = ioff;
-   if (pindx->type==4) blen = *(pindx->intpnt + brec);
-   else blen = *(pindx->intpnt + irec + 2);
+   if (bigflg) blen = *(pindx->intpnt + brec);
+   else        blen = *(pindx->intpnt + irec + 2);
    if (blen<0) {
      for (i=0; i<len; i++) *(gr+i) = pfi->undef;
      for (i=0; i<len; i++) *(gru+i) = 0;
      return (0);
    }
-   if (pindx->type==4) bpos = *(pindxb->bigpnt + brec*2 + 1);
-   else bpos = (off_t)(*(pindx->intpnt + irec + 1));
+   if (bigflg) bpos = *(pindxb->bigpnt + brec*2 + 1);
+   else        bpos = (off_t)(*(pindx->intpnt + irec + 1));
    dsf = *(pindx->fltpnt+irec);
    bsf = *(pindx->fltpnt+irec+1);
    ref = *(pindx->fltpnt+irec+2);
@@ -1538,8 +1548,8 @@ gaint g2off,ng2elems=2;
    cstrt = bstrt/8;
    cend = bend/8;
    clen = cend-cstrt+2;
-   if (pindx->type==4) fpos = *(pindxb->bigpnt+brec*2);
-   else fpos = (off_t)(*(pindx->intpnt+irec));
+   if (bigflg) fpos = *(pindxb->bigpnt+brec*2);
+   else        fpos = (off_t)(*(pindx->intpnt+irec));
    rc = gaird(fpos,cstrt,clen,xsiz,ysiz,blen);
    if (rc) return(rc);
    bstrt = bstrt - cstrt*8;
@@ -1564,15 +1574,15 @@ gaint g2off,ng2elems=2;
 
   /* figure out which record to retrieve from index file */
   irec = (e-1)*pfi->dnum[3]*pfi->trecs + (t-1)*pfi->trecs + pvr->recoff + z - 1;
-  if (pfi->g2indx->version==1) irec = irec * ng2elems;
+  if (pfi->g2indx->bigflg==0) irec = irec * ng2elems;
   if (irec > pfi->g2indx->g2intnum) {
-    snprintf(pout,255,"GRIB2 I/O error: irec=%d is greater than g2intnum=%d\n",irec,pfi->g2indx->g2intnum);
+    snprintf(pout,1255,"GRIB2 I/O error: irec=%d is greater than g2intnum=%d\n",irec,pfi->g2indx->g2intnum);
     gaprnt(0,pout);
     return(1);
   }
 
   /* get file position offset and field number from grib2map file */
-  if (pfi->g2indx->version==2) {
+  if (pfi->g2indx->bigflg) {
     seek = *(pfi->g2indx->g2bigpnt+irec);
     ifld = *(pfi->g2indx->g2intpnt+irec);
   } else {
@@ -1580,7 +1590,7 @@ gaint g2off,ng2elems=2;
     ifld = *(pfi->g2indx->g2intpnt+irec+1);
   }
   if (debug==2) {
-    snprintf(pout,255,"gairow debug: seek,ifld = %jd %ld\n",seek, ifld);
+    snprintf(pout,1255,"gairow debug: seek,ifld = %ld %ld\n",(long)seek,(long)ifld);
     gaprnt(0,pout);
   }
 
@@ -1700,7 +1710,7 @@ gaint diag=0;
     if (diag) printf("Sec1   %d\n",gagby(s1,0,4));
     roff += gagby(s1,0,4);
   } else {
-    snprintf(pout,255,"GRIB2 I/O Error: reading header, section 1 expected, found %i\n",i);
+    snprintf(pout,1255,"GRIB2 I/O Error: reading header, section 1 expected, found %i\n",i);
     gaprnt (0,pout);
     goto g2err;
   }
@@ -1726,7 +1736,7 @@ gaint diag=0;
       roff += gagby(s3,0,4);
     }
     else if (field==1) {
-      snprintf(pout,255,"GRIB2 I/O Error: reading header, section 3 expected, found %i\n",i);
+      snprintf(pout,1255,"GRIB2 I/O Error: reading header, section 3 expected, found %i\n",i);
       gaprnt (0,pout);
       goto g2err;
     }
@@ -1742,7 +1752,7 @@ gaint diag=0;
       roff += gagby(s4,0,4);
     }
     else if (field==1) {
-      snprintf(pout,255,"GRIB2 I/O Error: reading header, section 4 expected, found %i\n",i);
+      snprintf(pout,1255,"GRIB2 I/O Error: reading header, section 4 expected, found %i\n",i);
       gaprnt (0,pout);
       goto g2err;
     }
@@ -1758,7 +1768,7 @@ gaint diag=0;
       roff += gagby(s5,0,4);
     }
     else if (field==1) {
-      snprintf(pout,255,"GRIB2 I/O Error: reading header, section 5 expected, found %i\n",i);
+      snprintf(pout,1255,"GRIB2 I/O Error: reading header, section 5 expected, found %i\n",i);
       gaprnt (0,pout);
       goto g2err;
     }
@@ -1786,7 +1796,7 @@ gaint diag=0;
       roff += gagby(s7,0,4);
     }
     else if (field==1) {
-      snprintf(pout,255,"GRIB2 I/O Error: reading header, section 7 expected, found %i\n",i);
+      snprintf(pout,1255,"GRIB2 I/O Error: reading header, section 7 expected, found %i\n",i);
       gaprnt(0,pout);
       goto g2err;
     }
@@ -1813,7 +1823,7 @@ gaint diag=0;
     case 90: soct = 63; break;
     case 204: soct = 71; break;
     default:
-      snprintf(pout,255,"g2read error: Grid Definition Template %d not handled\n",gdt);
+      snprintf(pout,1255,"g2read error: Grid Definition Template %d not handled\n",gdt);
       gaprnt (0,pout);
       goto g2err;
   };
@@ -1830,7 +1840,7 @@ gaint diag=0;
   expand=1;
   ierr=g2_getfld(cgrib,ifld,unpack,expand,&gfld);
   if (ierr) {
-    snprintf(pout,255,"GRIB2 I/O Error: g2_getfld failed, ierr=%d\n",ierr);
+    snprintf(pout,1255,"GRIB2 I/O Error: g2_getfld failed, ierr=%d\n",ierr);
     gaprnt (0,pout);
     goto g2err;
   }
@@ -1872,7 +1882,7 @@ gaint diag=0;
 
   /* create the undef mask */
   if (gfld->ibmap!=0 && gfld->ibmap!=254 && gfld->ibmap!=255) {
-    snprintf(pout,255,"GRIB2 I/O Error: Predefined bitmap applies (ibmap=%ld) \n",gfld->ibmap);
+    snprintf(pout,1255,"GRIB2 I/O Error: Predefined bitmap applies (ibmap=%ld) \n",gfld->ibmap);
     gaprnt (0,pout);
     goto g2err1;
   }
@@ -2154,7 +2164,7 @@ size_t sz;
       rc = fseeko(pfi->infile, fpos, 0);
       rc = fread(cache,sizeof(char),siz,pfi->infile);
       if (rc==0) {
-        snprintf(pout,255,"GRIB I/O Error reading %i bytes at %ld\n",siz,(long)fpos);
+        snprintf(pout,1255,"GRIB I/O Error reading %i bytes at %ld\n",siz,(long)fpos);
         gaprnt (0,pout);
         gaprnt (0,"  File name is: ");
         if (pfi->tempname) gaprnt(0,pfi->tempname);
@@ -2171,7 +2181,7 @@ size_t sz;
     rc = fseeko(pfi->infile, fpos+cstrt, 0);
     rc = fread (pfi->pbuf, sizeof(char), clen, pfi->infile);
     if (rc==0) {
-      snprintf(pout,255,"GRIB I/O Error reading %i bytes at %ld\n",clen,(long)fpos+cstrt);
+      snprintf(pout,1255,"GRIB I/O Error reading %i bytes at %ld\n",clen,(long)fpos+cstrt);
       gaprnt (0,pout);
       gaprnt (0,"  File name is: ");
       if (pfi->tempname) gaprnt(0,pfi->tempname);
@@ -2369,13 +2379,29 @@ gaint gancsetup (void) {
   gaint vid,error,rc,oldncopts,storage;
   gadouble val;
   gaint ndims,i;
-  size_t *chsize,nelems,size,cachesz;
+  size_t *chsize,nelems,size,newsize;
   nc_type type;
 
   /* Turn off automatic error handling. */
   ncopts = NC_VERBOSE ;
   oldncopts = ncopts ;
   ncopts = 0;
+
+#if HAVENETCDF4==1
+  /* Here is where we set the cache size -- it is here at the top, outside of the
+     code block that sets the varid and gets other metadata and checks whether the
+     cache size will be big enough. If the user must change the cachesf after seeing
+     the dire warnings, the cache size will be reset based on the new cachesf. */
+
+  gafloat preemption;
+  /* Get the cache size, nelems, and preemption policy. Also get the global cachesf */
+  rc = nc_get_chunk_cache(&size, &nelems, &preemption);
+  nelems = 51203;
+  /* Set the new cache size and nelems, recycle preemption policy. */
+  newsize = cachesf*pfi->cachesize;
+  rc = nc_set_chunk_cache(newsize, nelems, preemption);
+  if (rc != NC_NOERR) gaprnt(1,"Warning: Unable to change the NetCDF cache parameters \n");
+#endif
 
   /* Get the varid if we haven't already done that for this file */
   if (pvr->ncvid == -888) {
@@ -2394,33 +2420,46 @@ gaint gancsetup (void) {
     if (error) {
       pvr->ncvid = -888;  /* set flag so we won't try this variable ever again */
       if (pvr->longnm[0] != '\0') {
-        snprintf(pout,255,"Error: Variable %s not in netcdf file\n",pvr->longnm);
+        snprintf(pout,1255,"Error: Variable %s not in netcdf file\n",pvr->longnm);
      }
       else {
-        snprintf(pout,255,"Error: Variable %s not in netcdf file\n",pvr->abbrv);
+        snprintf(pout,1255,"Error: Variable %s not in netcdf file\n",pvr->abbrv);
       }
       gaprnt (0,pout);
       ncopts = oldncopts ;
       return (1);
     }
-    /* No errors, so we can set the varid in the gavar structure */
+    /* No errors, so we can set the varid in the gavar structure, set cache size, and get metadata */
     pvr->ncvid = vid;
 
-    /* If undef attribute name is given, get the undef value */
+    /* Do we have undef attribute names? */
     if (pfi->undefattrflg) {
+      /* get the primary undef value */
       if (nc_get_att_double(pfi->ncid, pvr->ncvid, pfi->undefattr, &val) != NC_NOERR) {
-        snprintf(pout,255,"Warning: Could not retrieve \"%s\" -- using %g instead\n",
-                pfi->undefattr,pfi->undef);
+        snprintf(pout,1255,"Warning: value for primary undef attribute \"%s\" not found\n",pfi->undefattr);
         gaprnt(1,pout);
         pvr->undef = pfi->undef;
       }
       else {
         pvr->undef = val;
       }
+      /* get the secondary undef value */
+      if (pfi->undefattrflg==2) {
+        if (nc_get_att_double(pfi->ncid, pvr->ncvid, pfi->undefattr2, &val) != NC_NOERR) {
+          snprintf(pout,1255,"Warning: value for secondary undef attribute \"%s\" not found\n",pfi->undefattr2);
+          gaprnt(1,pout);
+          pvr->undef2 = pfi->undef;
+        }
+        else {
+          pvr->undef2 = val;
+        }
+      }
+      else pvr->undef2 = pfi->undef;
     }
     else {
-      /* If no undef attribute name is given, copy the file-wide undef */
-      pvr->undef = pfi->undef;
+      /* If no undef attribute names are given, copy the file-wide undef */
+      pvr->undef  = pfi->undef;
+      pvr->undef2 = pfi->undef;
     }
 
     /* If data are packed, get the scale factor and offset attribute values */
@@ -2450,6 +2489,7 @@ gaint gancsetup (void) {
         }
       }
     }
+
 #if HAVENETCDF4 == 1
     /* Check the chunk size */
     ndims = pvr->nvardims;
@@ -2460,23 +2500,23 @@ gaint gancsetup (void) {
             if ((nc_inq_type(pfi->ncid, type, NULL, &size)) == NC_NOERR) {
               nelems = 1;
               for (i=0; i<ndims; i++) nelems *= chsize[i];
-              if (nelems*size > pfi->cachesize) {
+              if (nelems*size > cachesf*pfi->cachesize) {
                 gaprnt(1,"*** WARNING! ***\n");
                 gaprnt(1,"*** The I/O for this variable will be extremely slow \n");
                 gaprnt(1,"*** because the chunks are too big to fit in the cache \n");
-                snprintf(pout,255,"*** chunk size = %ld bytes  (",(long)(nelems*size));
+                snprintf(pout,1255,"*** chunk size = %ld bytes  (",(long)(nelems*size));
                 gaprnt(1,pout);
                 for (i=ndims-1; i>=0; i--) {
-                  snprintf(pout,255,"%ld * ",(long)chsize[i]); gaprnt(1,pout);
+                  snprintf(pout,1255,"%ld * ",(long)chsize[i]); gaprnt(1,pout);
                 }
-                snprintf(pout,255,"%ld bytes)\n",(long)size);
+                snprintf(pout,1255,"%ld bytes)\n",(long)size);
                 gaprnt(1,pout);
-                snprintf(pout,255,"*** cache size = %ld bytes \n",cachesz);
+                snprintf(pout,1255,"*** cache size = %ld bytes  (scale factor)*(file cachesize) \n",cachesf*pfi->cachesize);
                 gaprnt(1,pout);
                 gaprnt(1,"*** There are two ways to control the cache size: \n");
                 gaprnt(1,"*** add a CACHESIZE entry to the descriptor file \n");
-                gaprnt(1,"*** or change the cache size scale factor with 'set cachesf' \n");
-                gaprnt(1,"*** Please read http://iges.org/grads/gadoc/compression.html \n");
+                gaprnt(1,"*** or change the scale factor with 'set cachesf' \n");
+                gaprnt(1,"*** Please read http://cola.gmu.edu/grads/gadoc/compression.html \n");
               }
             }
           }
@@ -2505,7 +2545,7 @@ gaint xpad,ypad,zpad,tpad,epad,padmin,padmax;
 gaint jbeg,jend,groff,tmpoff,itmp,jtmp,jlimit;
 gaint dimswap,nrows,ncols;
 size_t sz,start[16],count[16];
-gadouble ulow,uhi;
+gadouble ulow,uhi,ulow2,uhi2;
 gadouble unitsvals[5]={-100,-101,-102,-103,-104};
 gadouble *grtmp=NULL,*grtmp2=NULL;
 char *grutmp=NULL;
@@ -2692,7 +2732,7 @@ gaint oldncopts ;         /* to save and restore setting for automatic error han
   grtmp = (gadouble *)galloc(sz,"grtmp");
   if (grtmp==NULL) {
     gaprnt (0,"gancgrid error: unable to allocate memory for grtmp grid storage \n");
-    snprintf(pout,255,"  grid size = xlen * ylen * zlen * tlen * elen = %d * %d * %d * %d * %d\n",
+    snprintf(pout,1255,"  grid size = xlen * ylen * zlen * tlen * elen = %d * %d * %d * %d * %d\n",
             xlen,ylen,zlen,tlen,elen);
     gaprnt (0,pout);
     rtrn=1; goto cleanup;
@@ -2701,7 +2741,7 @@ gaint oldncopts ;         /* to save and restore setting for automatic error han
   grutmp = (char *)galloc(sz,"grutmp");
   if (grutmp==NULL) {
     gaprnt (0,"gancgrid error: unable to allocate memory for grutmp grid storage \n");
-    snprintf(pout,255,"  grid size = xlen * ylen * zlen * tlen * elen = %d * %d * %d * %d * %d\n",
+    snprintf(pout,1255,"  grid size = xlen * ylen * zlen * tlen * elen = %d * %d * %d * %d * %d\n",
             xlen,ylen,zlen,tlen,elen);
     gaprnt (0,pout);
     rtrn=1; goto cleanup;
@@ -2720,7 +2760,6 @@ gaint oldncopts ;         /* to save and restore setting for automatic error han
     if (pvr->units[i] == -104) { start[i] = ee; count[i] = elen; }
     if (pvr->units[i] >=0) { start[i] = pvr->units[i];  count[i] = 1; }
   }
-
   /* what is the real order of dimension sizes in grtmp? */
   got1 = 0;
   nid = njd = -1 ;
@@ -2793,7 +2832,7 @@ gaint oldncopts ;         /* to save and restore setting for automatic error han
       grtmp2 = (gadouble *)galloc(sz,"grtmp2");
       if (grtmp2==NULL) {
         gaprnt (0,"gancgrid error: unable to allocate memory for grtmp2 grid storage \n");
-        snprintf(pout,255,"  grid size = xlen * ylen * zlen * tlen * elen = %d * %d * %d * %d * %d\n",
+        snprintf(pout,1255,"  grid size = xlen * ylen * zlen * tlen * elen = %d * %d * %d * %d * %d\n",
                 xlen,ylen,zlen,tlen,elen);
         gaprnt (0,pout);
         rtrn=1; goto cleanup;
@@ -2806,7 +2845,7 @@ gaint oldncopts ;         /* to save and restore setting for automatic error han
     /* Do the I/O into temporary grid grtmp2 */
     rc = nc_get_vara_double(pfi->ncid, pvr->ncvid, start, count, grtmp2);
     if (rc != NC_NOERR) {
-      snprintf(pout,255,"gancgrid error: nc_get_vara_double failed; %s\n",nc_strerror(rc));
+      snprintf(pout,1255,"gancgrid error: nc_get_vara_double failed; %s\n",nc_strerror(rc));
       gaprnt(0,pout);
       rtrn=1; goto cleanup;
     }
@@ -2826,7 +2865,7 @@ gaint oldncopts ;         /* to save and restore setting for automatic error han
     /* Do the I/O and put data directly into grtmp */
     rc = nc_get_vara_double(pfi->ncid, pvr->ncvid, start, count, grtmp);
     if (rc != NC_NOERR) {
-      snprintf(pout,255,"gancgrid error: nc_get_vara_double failed; %s\n",nc_strerror(rc));
+      snprintf(pout,1255,"gancgrid error: nc_get_vara_double failed; %s\n",nc_strerror(rc));
       gaprnt(0,pout);
       rtrn=1; goto cleanup;
     }
@@ -2834,21 +2873,27 @@ gaint oldncopts ;         /* to save and restore setting for automatic error han
 
   /* Set missing data mask values and then unpack grid data if necessary */
   /* use the gavar undef to set the fuzzy test limits */
+
   /* If gavar undef equals zero, change it to 1/EPSILON */
-  if (dequal(pvr->undef, 0.0, 1e-08)==0) {
-    ulow = 1e-5;
-  }
-  else {
-    ulow = fabs(pvr->undef/EPSILON);
-  }
+  if (dequal(pvr->undef, 0.0, 1e-08)==0) ulow = 1e-5;
+  else ulow = fabs(pvr->undef/EPSILON);
   uhi  = pvr->undef + ulow;
   ulow = pvr->undef - ulow;
+  /* set fuzzy limits for secondary undef */
+  if (dequal(pvr->undef2, 0.0, 1e-08)==0) ulow2 = 1e-5;
+  else ulow2 = fabs(pvr->undef2/EPSILON);
+  uhi2  = pvr->undef2 + ulow2;
+  ulow2 = pvr->undef2 - ulow2;
+
   /* now set the gagrid undef equal to the gafile undef */
   pgr->undef = pfi->undef;
 
   /* Test for NaN, Inf, and the fuzzy test for undef values. Then unpack */
   for (i=0;i<grsize;i++) {
-    if ((*(grtmp+i)>=ulow && *(grtmp+i)<=uhi) || (isnan(*(grtmp+i))) || (isinf(*(grtmp+i)))) {
+    if ((*(grtmp+i)>=ulow  && *(grtmp+i)<=uhi) ||
+        (*(grtmp+i)>=ulow2 && *(grtmp+i)<=uhi2) ||
+        (isnan(*(grtmp+i))) ||
+        (isinf(*(grtmp+i)))) {
       *(grutmp+i) = 0;
     }
     else {
@@ -2932,7 +2977,7 @@ gaint gancrow (gaint x, gaint y, gaint z, gaint t, gaint e, gaint len, gadouble 
 #if USENETCDF == 1
   gaint rc,i,yy,zz;
   size_t  start[16],count[16];
-  gadouble   ulow,uhi;
+  gadouble ulow,uhi,ulow2,uhi2;
   gaint oldncopts ;         /* to save and restore setting for automatic error handling */
 
   /* Turn off automatic error handling. */
@@ -2981,29 +3026,35 @@ gaint gancrow (gaint x, gaint y, gaint z, gaint t, gaint e, gaint len, gadouble 
   /* Now we are ready to do the I/O  */
   rc = nc_get_vara_double(pfi->ncid, pvr->ncvid, start, count, gr);
   if (rc != NC_NOERR) {
-    snprintf(pout,255,"NetCDF Error (gancrow, nc_get_vara_double): %s\n",nc_strerror(rc));
+    snprintf(pout,1255,"NetCDF Error (gancrow, nc_get_vara_double): %s\n",nc_strerror(rc));
     gaprnt(0,pout);
     ncopts = oldncopts ;
     return (1);
   }
 
   /* Set missing data values to gafile undef and then unpack if necessary */
-  /* use the gavar undef to set the fuzzy test limits */
+  /* use the gavar undefs to set the fuzzy test limits */
+
   /* If gavar undef equals zero, change it to 1/EPSILON */
-  if (dequal(pvr->undef, 0.0, 1e-08)==0) {
-    ulow = 1e-5;
-  }
-  else {
-    ulow = fabs(pvr->undef/EPSILON);
-  }
+  if (dequal(pvr->undef, 0.0, 1e-08)==0) ulow = 1e-5;
+  else ulow = fabs(pvr->undef/EPSILON);
   uhi  = pvr->undef + ulow;
   ulow = pvr->undef - ulow;
+  /* set fuzzy limits for secondary undef */
+  if (dequal(pvr->undef2, 0.0, 1e-08)==0) ulow2 = 1e-5;
+  else ulow2 = fabs(pvr->undef2/EPSILON);
+  uhi2  = pvr->undef2 + ulow2;
+  ulow2 = pvr->undef2 - ulow2;
+
   /* set the gagrid undef equal to the gafile undef */
   pgr->undef = pfi->undef;
 
   /* Do the NaN, Inf, and fuzzy test for undef values before unpacking */
   for (i=0;i<len;i++) {
-    if ((*(gr+i) >= ulow && *(gr+i) <= uhi) || (isnan(*(gr+i))) || (isinf(*(gr+i)))) {
+    if ((*(gr+i)>=ulow  && *(gr+i)<=uhi) ||
+        (*(gr+i)>=ulow2 && *(gr+i)<=uhi2) ||
+        (isnan(*(gr+i))) ||
+        (isinf(*(gr+i)))) {
       *(gru+i) = 0;
     }
     else {
@@ -3057,47 +3108,58 @@ size_t sz;
     if (v_id==FAIL) {
       pvr->sdvid = -888;
       if (pvr->longnm[0] != '\0') {
-        snprintf(pout,255,"Error: Variable %s not in HDF-SDS file\n",pvr->longnm);
+        snprintf(pout,1255,"Error: Variable %s not in HDF-SDS file\n",pvr->longnm);
       }
       else {
-        snprintf(pout,255,"Error: Variable %s not in HDF-SDS file\n",pvr->abbrv);
+        snprintf(pout,1255,"Error: Variable %s not in HDF-SDS file\n",pvr->abbrv);
       }
       gaprnt(0,pout);
       return (1);
     }
     pvr->sdvid = v_id;
 
-    /* If undef attribute name is used, get the undef value */
+    /* Do we have undef attribute names? */
     if (pfi->undefattrflg) {
-      /* Select the variable (get sds_id) */
+
+      /* First, select the variable (get sds_id) */
       v_id = pvr->sdvid;
       sds_id = SDselect(sd_id,v_id);
       if (sds_id==FAIL) {
         if (pvr->longnm[0] != '\0') {
-          snprintf(pout,255,"Error: SDselect failed for %s \n",pvr->longnm);
+          snprintf(pout,1255,"Error: SDselect failed for %s \n",pvr->longnm);
         }
         else {
-          snprintf(pout,255,"Error: SDselect failed for %s \n",pvr->abbrv);
+          snprintf(pout,1255,"Error: SDselect failed for %s \n",pvr->abbrv);
         }
         gaprnt(0,pout);
         return (1);
       }
-      /* Retrieve the HDF undef attribute value */
+      /* Retrieve the primary HDF undef attribute value */
       if (hdfattr(sds_id, pfi->undefattr, &val) != 0) {
-        snprintf(pout,255,"Warning: Could not retrieve undef attribute \"%s\" -- using %g instead\n",
-                pfi->undefattr,pfi->undef);
+        snprintf(pout,1255,"Warning: value for primary undef attribute \"%s\" not found\n",pfi->undefattr);
         gaprnt(1,pout);
         pvr->undef = pfi->undef;
       }
       else {
         pvr->undef = val;
       }
+      /* Retrieve the secondary HDF undef attribute value */
+      if (pfi->undefattrflg==2) {
+        if (hdfattr(sds_id, pfi->undefattr2, &val) != 0) {
+          snprintf(pout,1255,"Warning: value for secondary undef attribute \"%s\" not found\n",pfi->undefattr2);
+          gaprnt(1,pout);
+          pvr->undef2 = pfi->undef;
+        }
+        else {
+          pvr->undef2 = val;
+        }
+      }
     }
     /* If undef attribute name is not given, copy the file-wide undef */
     else {
-      pvr->undef = pfi->undef;
+      pvr->undef  = pfi->undef;
+      pvr->undef2 = pfi->undef;
     }
-
 
     /* If data are packed, get the scale factor and offset attribute values */
     if (pfi->packflg) {
@@ -3110,10 +3172,10 @@ size_t sz;
       sds_id = SDselect(sd_id,v_id);
       if (sds_id==FAIL) {
         if (pvr->longnm[0] != '\0') {
-          snprintf(pout,255,"Error: SDselect failed for %s \n",pvr->longnm);
+          snprintf(pout,1255,"Error: SDselect failed for %s \n",pvr->longnm);
         }
         else {
-          snprintf(pout,255,"Error: SDselect failed for %s \n",pvr->abbrv);
+          snprintf(pout,1255,"Error: SDselect failed for %s \n",pvr->abbrv);
         }
         gaprnt(0,pout);
         return (1);
@@ -3121,7 +3183,7 @@ size_t sz;
       /* Retrieve the scale factor attribute value */
       if (pfi->packflg == 1 || pfi->packflg == 2) {
         if (hdfattr(sds_id, pfi->scattr, &pvr->scale) != 0) {
-          snprintf(pout,255,"Warning: Could not retrieve \"%s\" -- setting to 1.0\n",pfi->scattr);
+          snprintf(pout,1255,"Warning: Could not retrieve \"%s\" -- setting to 1.0\n",pfi->scattr);
           gaprnt(1,pout);
           pvr->scale = 1.0;
         }
@@ -3129,7 +3191,7 @@ size_t sz;
       /* Retrieve the add offset attribute value if required */
       if (pfi->packflg == 2 || pfi->packflg == 3) {
         if (hdfattr(sds_id, pfi->ofattr, &pvr->add) != 0) {
-          snprintf(pout,255,"Warning: Could not retrieve \"%s\" -- setting to 0.0\n",pfi->ofattr);
+          snprintf(pout,1255,"Warning: Could not retrieve \"%s\" -- setting to 0.0\n",pfi->ofattr);
           gaprnt(1,pout);
           pvr->add = 0.0;
         }
@@ -3143,10 +3205,10 @@ size_t sz;
 
   if (sds_id==FAIL) {
     if (pvr->longnm[0] != '\0') {
-      snprintf(pout,255,"Error: SDselect failed for %s \n",pvr->longnm);
+      snprintf(pout,1255,"Error: SDselect failed for %s \n",pvr->longnm);
     }
     else {
-      snprintf(pout,255,"Error: SDselect failed for %s \n",pvr->abbrv);
+      snprintf(pout,1255,"Error: SDselect failed for %s \n",pvr->abbrv);
     }
     gaprnt(0,pout);
     return (1);
@@ -3338,7 +3400,7 @@ size_t sz;
       break;
 
     default:
-      snprintf(pout,255,"HDF-SDS Error: Data type %d not handled\n", data_dtype);
+      snprintf(pout,1255,"HDF-SDS Error: Data type %d not handled\n", data_dtype);
       gaprnt(0,pout);
       return(1);
   };
@@ -3408,7 +3470,7 @@ gaint h5setup(void) {
   /* Retrieve the HDF5 undef attribute value */
   if (pfi->undefattrflg) {
     if (h5attr(vid, vname, pfi->undefattr, &val) != 0) {
-      snprintf(pout,255,"h5setup warning: Could not retrieve undef attribute \"%s\" -- using %g instead\n",
+      snprintf(pout,1255,"h5setup warning: Could not retrieve undef attribute \"%s\" -- using %g instead\n",
               pfi->undefattr,pfi->undef);
       gaprnt(1,pout);
       pvr->undef = pfi->undef;
@@ -3431,7 +3493,7 @@ gaint h5setup(void) {
     /* Retrieve the scale factor attribute value */
     if (pfi->packflg == 1 || pfi->packflg == 2) {
       if (h5attr(vid, vname, pfi->scattr, &val) != 0) {
-        snprintf(pout,255,"Warning: Could not retrieve \"%s\" -- setting to 1.0\n",pfi->scattr);
+        snprintf(pout,1255,"Warning: Could not retrieve \"%s\" -- setting to 1.0\n",pfi->scattr);
         gaprnt(1,pout);
       }
       else {
@@ -3441,7 +3503,7 @@ gaint h5setup(void) {
     /* Retrieve the add offset attribute value if required */
     if (pfi->packflg == 2 || pfi->packflg == 3) {
       if (h5attr(vid, vname, pfi->ofattr, &val) != 0) {
-        snprintf(pout,255,"Warning: Could not retrieve \"%s\" -- setting to 0.0\n",pfi->ofattr);
+        snprintf(pout,1255,"Warning: Could not retrieve \"%s\" -- setting to 0.0\n",pfi->ofattr);
         gaprnt(1,pout);
       }
       else {
@@ -3452,36 +3514,38 @@ gaint h5setup(void) {
 
   /* Check the chunk size */
   ndims = pvr->nvardims;
-  if ((chsize = (hsize_t*)galloc(ndims*sizeof(hsize_t),"chsize"))!=NULL) {
-    if ((plid = H5Dget_create_plist(vid)) > 0) {
-      if ((rank = H5Pget_chunk(plid,ndims,chsize)) > 0) {
-        if ((tid  = H5Dget_type(vid)) > 0) {
-          if ((size = H5Tget_size(tid)) > 0) {
-            nelems = 1;
-            for (i=0; i<ndims; i++) nelems *= chsize[i];
-            if (nelems*size > pfi->cachesize) {
-              gaprnt(1,"*** WARNING! ***\n");
-              gaprnt(1,"*** The I/O for this variable will be extremely slow \n");
-              gaprnt(1,"*** because the chunks are too big to fit in the cache \n");
-              snprintf(pout,255,"*** chunk size = %ld bytes  (",(long)(nelems*size));
-              gaprnt(1,pout);
-              for (i=ndims-1; i>=0; i--) {
-                snprintf(pout,255,"%ld * ",(long)chsize[i]); gaprnt(1,pout);
+  if ((plid = H5Dget_create_plist(vid)) > 0) {
+    if ((H5Pget_layout(plid)) == H5D_CHUNKED) {
+      if ((chsize = (hsize_t*)galloc(ndims*sizeof(hsize_t),"chsize"))!=NULL) {
+        if ((rank = H5Pget_chunk(plid,ndims,chsize)) > 0) {
+          if ((tid  = H5Dget_type(vid)) > 0) {
+            if ((size = H5Tget_size(tid)) > 0) {
+              nelems = 1;
+              for (i=0; i<ndims; i++) nelems *= chsize[i];
+                if (nelems*size > cachesf*pfi->cachesize) {
+                gaprnt(1,"*** WARNING! ***\n");
+                gaprnt(1,"*** The I/O for this variable will be extremely slow \n");
+                gaprnt(1,"*** because the chunks are too big to fit in the cache \n");
+                snprintf(pout,1255,"*** chunk size = %ld bytes  (",(long)(nelems*size));
+                gaprnt(1,pout);
+                for (i=ndims-1; i>=0; i--) {
+                        snprintf(pout,1255,"%ld * ",(long)chsize[i]); gaprnt(1,pout);
+                }
+                snprintf(pout,1255,"%ld bytes)\n",(long)size);
+                gaprnt(1,pout);
+                snprintf(pout,1255,"*** cache size = %ld bytes  (scale factor)*(file cachesize) \n",cachesf*pfi->cachesize);
+                gaprnt(1,pout);
+                gaprnt(1,"*** There are two ways to control the cache size: \n");
+                gaprnt(1,"*** add a CACHESIZE entry to the descriptor file \n");
+                gaprnt(1,"*** or change the scale factor with 'set cachesf' \n");
+                gaprnt(1,"*** Please read http://cola.gmu.edu/grads/gadoc/compression.html \n");
               }
-              snprintf(pout,255,"%ld bytes)\n",(long)size);
-              gaprnt(1,pout);
-              snprintf(pout,255,"*** cache size = %ld bytes \n",pfi->cachesize);
-              gaprnt(1,pout);
-              gaprnt(1,"*** There are two ways to control the cache size: \n");
-              gaprnt(1,"*** add a CACHESIZE entry to the descriptor file \n");
-              gaprnt(1,"*** or use the 'set cachesf' command \n");
-              gaprnt(1,"*** Please read http://iges.org/grads/gadoc/compression.html \n");
             }
           }
         }
+        gree(chsize,"f274");
       }
     }
-    gree(chsize,"f274");
   }
 #endif
   return(0);
@@ -3502,13 +3566,13 @@ gaint h5openvar (gaint h5id, char *vname, hid_t *dataspace, hid_t *h5varflg) {
   plid = H5Pcreate (H5P_DATASET_ACCESS);
   nslots = 51203;
   pp = 0.75;
-  H5Pset_chunk_cache(plid, nslots, pfi->cachesize, pp);
+  H5Pset_chunk_cache(plid, nslots, cachesf*pfi->cachesize, pp);
 
   /* now open the variable with the modified property list */
   fid = (hid_t)h5id;
   vid = H5Dopen2 (fid, vname, plid);
   if (vid<0) {
-    snprintf(pout,255,"Error: H5Dopen2 failed for variable %s \n",vname);
+    snprintf(pout,1255,"Error: H5Dopen2 failed for variable %s \n",vname);
     gaprnt(0,pout);
     return (1);
   }
@@ -3536,7 +3600,7 @@ gaint h5closevar (hid_t dsid, hid_t vid) {
   /* release variable dataspace */
   if (dsid > (hid_t)0) {
     if ((H5Sclose(dsid))<0) {
-      snprintf(pout,255,"H5Sclose failed to close dataspace %d\n",(gaint)dsid);
+      snprintf(pout,1255,"H5Sclose failed to close dataspace %d\n",(gaint)dsid);
       gaprnt(1,pout);
       return (1);
     }
@@ -3544,7 +3608,7 @@ gaint h5closevar (hid_t dsid, hid_t vid) {
   /* close variable */
   if (vid > (hid_t)0) {
     if ((H5Dclose(vid))<0) {
-      snprintf(pout,255,"H5Dclose failed to close varid %d\n",(gaint)vid);
+      snprintf(pout,1255,"H5Dclose failed to close varid %d\n",(gaint)vid);
       gaprnt(1,pout);
       return (1);
     }
@@ -3610,14 +3674,13 @@ gafloat *fval;
     if (pvr->units[i] == -104) { start[i] = e-1; count[i] = 1;   }
     if (pvr->units[i] >= 0) { start[i] = pvr->units[i];   count[i] = 1; }
   }
-
   /* select the desired hyperslab in the source dataspace */
   if ((H5Sselect_hyperslab(pvr->dataspace, H5S_SELECT_SET, start, NULL, count, NULL))<0) {
     gaprnt(0,"HDF5 Error: unable to select dataspace hyperslab\n");
     return (1);
   }
   /* create a new destination dataspace  and open it for access */
-  if ((memspace  = H5Screate_simple(pvr->nvardims,count,NULL))<0) {
+  if ((memspace  = H5Screate_simple(pvr->nh5vardims,count,NULL))<0) {
     gaprnt(0,"HDF5 Error: unable to create memspace\n");
     return (1);
   }
@@ -3630,7 +3693,7 @@ gafloat *fval;
     gaprnt(0,"HDF5 Error: unable to retrieve data class\n");
     return (1);
   }
-  if ((datasize = H5Tget_size(datatype))<0) {
+  if ((datasize = H5Tget_size(datatype))==0) {
     gaprnt(0,"HDF5 Error: unable to retrieve data size\n");
     return (1);
   }
@@ -3657,7 +3720,7 @@ gafloat *fval;
       }
     }
     else {
-      snprintf(pout,255,"H5T_FLOAT of size %d not handled\n",(int)datasize);
+      snprintf(pout,1255,"H5T_FLOAT of size %d not handled\n",(int)datasize);
       gaprnt(0,pout);
       return (1);
     }
@@ -3800,13 +3863,13 @@ gafloat *fval;
       }
     }
     else {
-      snprintf(pout,255,"H5T_INTEGER of size %d not handled\n",(int)datasize);
+      snprintf(pout,1255,"H5T_INTEGER of size %d not handled\n",(int)datasize);
       gaprnt(2,pout);
       return (1);
     }
   }
   else {
-    snprintf(pout,255,"HDF5 Error: Data class %d not handled\n", dataclass);
+    snprintf(pout,1255,"HDF5 Error: Data class %d not handled\n", dataclass);
     gaprnt(0,pout);
     return(1);
   }
@@ -3875,7 +3938,7 @@ gadouble dval;
 
   /* get the attribute id */
   if ((aid = H5Aopen_by_name(vid, vname, aname, H5P_DEFAULT, H5P_DEFAULT))<0) {
-    snprintf(pout,255,"HDF5 attribute named \"%s\" does not exist\n",aname);
+    snprintf(pout,1255,"HDF5 attribute named \"%s\" does not exist\n",aname);
     gaprnt(2,pout);
     return(1);
   }
@@ -3885,7 +3948,7 @@ gadouble dval;
   /* get the attribute type, class, and size */
   if ((atype  = H5Aget_type(aid))<0) { gaprnt(2,"H5Aget_type failed\n"); return (1); }
   if ((aclass = H5Tget_class(atype))<0) { gaprnt(2,"H5Tget_class failed\n"); return (1); }
-  if ((asize  = H5Tget_size(atype))<0) { gaprnt(2,"H5Tget_size failed\n"); return (1); }
+  if ((asize  = H5Tget_size(atype))==0) { gaprnt(2,"H5Tget_size failed\n"); return (1); }
 
   if (aclass == H5T_FLOAT) {
     if (asize == 4) {
@@ -4005,7 +4068,7 @@ size_t sz;
   /* Get the attribute index number from its name */
   attr_index = SDfindattr(sds_id, attr_name);
   if (attr_index == -1) {
-    snprintf(pout,255,"Warning: HDF attribute named \"%s\" does not exist\n",attr_name);
+    snprintf(pout,1255,"Warning: HDF attribute named \"%s\" does not exist\n",attr_name);
     gaprnt(1,pout);
     return(1);
   }
@@ -4017,7 +4080,7 @@ size_t sz;
   }
   else {
     if (attr_count != 1) {
-      snprintf(pout,255,"Warning: HDF attribute named \"%s\" has more than one value\n",attr_name);
+      snprintf(pout,1255,"Warning: HDF attribute named \"%s\" has more than one value\n",attr_name);
       gaprnt(1,pout);
       return(1);
     }
@@ -4130,7 +4193,7 @@ size_t sz;
         break;
 
       default:
-        snprintf(pout,255,"Warning: HDF Attribute \"%s\" is not a numeric data type (%d)\n",
+        snprintf(pout,1255,"Warning: HDF Attribute \"%s\" is not a numeric data type (%d)\n",
                 attr_name, attr_dtype);
         gaprnt(1,pout);
         return(1);
@@ -4152,10 +4215,11 @@ gafloat  *fattr_val;
 long   *iattr_val;
 short  *sattr_val;
 char   *cattr_val;
+char  **strattr_val;
 char   *battr_val;
 char attr_name[MAX_NC_NAME];
 nc_type attr_dtype;
-gaint error=0, aindx=-999, rc, i, varid, n_atts;
+gaint error=0, aindx=-999, rc, i, j, varid, n_atts;
 size_t sz,asize;
 
 /* Get the variable id and number of attributes */
@@ -4177,7 +4241,7 @@ size_t sz,asize;
   if (!error) {
     if (hdrflg) {
       if (n_atts > 0) {
-        snprintf(pout,255,"Native Attributes for File %i : %s \n",fnum,ftit);
+        snprintf(pout,1255,"Native Attributes for File %i : %s \n",fnum,ftit);
         gaprnt(2,pout);
       }
     }
@@ -4191,13 +4255,13 @@ size_t sz,asize;
 
     /* Get current attribute's name */
     if (nc_inq_attname(ncid, varid, aindx, attr_name) == -1) {
-      snprintf(pout,255,"nc_inq_attname failed for variable %s, attribute number %d\n", abbrv, aindx);
+      snprintf(pout,1255,"nc_inq_attname failed for variable %s, attribute number %d\n", abbrv, aindx);
       gaprnt(2,pout);
     }
     else {
       /* Get current attribute's data type and length */
       if (nc_inq_att(ncid, varid, attr_name, &attr_dtype, &asize) == -1) {
-        snprintf(pout,255,"nc_inq_att failed for variable %s, attribute number %d\n", abbrv, aindx);
+        snprintf(pout,1255,"nc_inq_att failed for variable %s, attribute number %d\n", abbrv, aindx);
         gaprnt(2,pout);
       }
       else {
@@ -4217,7 +4281,7 @@ size_t sz,asize;
                 gaprnt(2,attr_name);
                 gaprnt(2," ");
                 for (i=0; i<asize; i++) {
-                  snprintf(pout,255,"%d ", (gaint)(battr_val[i]));
+                  snprintf(pout,1255,"%d ", (gaint)(battr_val[i]));
                   gaprnt(2,pout);
                 }
                 gaprnt(2,"\n");
@@ -4240,6 +4304,29 @@ size_t sz,asize;
               }
               gree(cattr_val,"f140");
               break;
+            case (NC_STRING):
+              /* NC_STRING attribute is an array (size asize) of pointers to variable length strings. */
+              strattr_val = (char **) galloc(asize*sizeof(char*),"strattrval1");
+              if (nc_get_att_string(ncid, varid, attr_name, strattr_val) == -1) {
+                gaprnt(2,"nc_get_att_string failed for type NC_STRING\n");
+              }
+              else {
+              /*  We only look at the first one, strattr_val[0], and don't check if asize>1.
+                  We get the length of the first string, copy it into cval, then free the array */
+                sz = 1 + strlen(strattr_val[0]);
+                cattr_val = (char *) galloc(sz*sizeof(char),"cattrval1");
+                for (j=0; j<sz; j++) cattr_val[j] = strattr_val[0][j];
+                cattr_val[sz]='\0';
+                nc_free_string(asize, strattr_val);
+                gree(strattr_val);
+                gaprnt(2,abbrv);
+                gaprnt(2," String ");
+                gaprnt(2,attr_name);
+                gaprnt(2," ");
+                prntwrap(abbrv, attr_name, cattr_val);
+              }
+              gree(cattr_val,"f140");
+              break;
             case (NC_SHORT):
               sz = asize * sizeof (NC_SHORT);
               sattr_val = (short *) galloc(sz,"sattrval1");
@@ -4252,7 +4339,7 @@ size_t sz,asize;
                 gaprnt(2,attr_name);
                 gaprnt(2," ");
                 for (i=0; i<asize; i++) {
-                  snprintf(pout,255,"%d", (gaint)(sattr_val[i]));
+                  snprintf(pout,1255,"%d", (gaint)(sattr_val[i]));
                   gaprnt(2,pout);
                   if (i<asize-1) gaprnt(2,",");
                 }
@@ -4272,7 +4359,7 @@ size_t sz,asize;
                 gaprnt(2,attr_name);
                 gaprnt(2," ");
                 for (i=0; i<asize; i++) {
-                  snprintf(pout,255,"%ld", iattr_val[i]);
+                  snprintf(pout,1255,"%ld", iattr_val[i]);
                   gaprnt(2,pout);
                   if (i<asize-1) gaprnt(2,",");
                 }
@@ -4292,7 +4379,7 @@ size_t sz,asize;
                 gaprnt(2,attr_name);
                 gaprnt(2," ");
                 for (i=0; i<asize; i++) {
-                  snprintf(pout,255,"%g", fattr_val[i]);
+                  snprintf(pout,1255,"%g", fattr_val[i]);
                   gaprnt(2,pout);
                   if (i<asize-1) gaprnt(2,",");
                 }
@@ -4312,7 +4399,7 @@ size_t sz,asize;
                 gaprnt(2,attr_name);
                 gaprnt(2," ");
                 for (i=0; i<asize; i++) {
-                  snprintf(pout,255,"%g", dattr_val[i]);
+                  snprintf(pout,1255,"%g", dattr_val[i]);
                   gaprnt(2,pout);
                   if (i<asize-1) gaprnt(2,",");
                 }
@@ -4321,7 +4408,7 @@ size_t sz,asize;
               gree(dattr_val,"f144");
               break;
             default:
-              snprintf(pout,255,"Failed to retrieve attribute %d of type %d \n", aindx, attr_dtype);
+              snprintf(pout,1255,"Failed to retrieve attribute %d of type %d \n", aindx, attr_dtype);
               gaprnt(2,pout);
             };
         } /* end of if statement for asize >0 */
@@ -4375,7 +4462,7 @@ size_t sz;
   if (!error) {
     if (hdrflg) {
       if (n_atts > 0) {
-        snprintf(pout,255,"Native Attributes for File %i : %s \n",fnum,ftit);
+        snprintf(pout,1255,"Native Attributes for File %i : %s \n",fnum,ftit);
         gaprnt(2,pout);
       }
     }
@@ -4389,7 +4476,7 @@ size_t sz;
 
     /* Get info about the current attribute and then print out Name, Type, and Value */
     if (SDattrinfo(sds_id, attr_index, attr_name, &attr_dtype, &attr_count) == -1) {
-      snprintf(pout,255,"SDattrinfo failed for variable %s, attribute number %d\n", abbrv, attr_index);
+      snprintf(pout,1255,"SDattrinfo failed for variable %s, attribute number %d\n", abbrv, attr_index);
       gaprnt(2,pout);
     }
     else {
@@ -4403,7 +4490,7 @@ size_t sz;
           }
           else {
             cattr_val[attr_count]='\0';
-            snprintf(pout,255,"%s String %s ",abbrv,attr_name);
+            snprintf(pout,1255,"%s String %s ",abbrv,attr_name);
             gaprnt(2,pout);
             prntwrap(abbrv, attr_name, cattr_val);
           }
@@ -4437,7 +4524,7 @@ size_t sz;
             gaprnt(2,attr_name);
             gaprnt(2," ");
             for (i=0; i<attr_count; i++) {
-              snprintf(pout,255,"%d ", (gaint)(icattr_val[i]));
+              snprintf(pout,1255,"%d ", (gaint)(icattr_val[i]));
               gaprnt(2,pout);
             }
             gaprnt(2,"\n");
@@ -4456,7 +4543,7 @@ size_t sz;
             gaprnt(2,attr_name);
             gaprnt(2," ");
             for (i=0; i<attr_count; i++) {
-              snprintf(pout,255,"%u ", (gauint)(uicattr_val[i]));
+              snprintf(pout,1255,"%u ", (gauint)(uicattr_val[i]));
               gaprnt(2,pout);
             }
             gaprnt(2,"\n");
@@ -4475,7 +4562,7 @@ size_t sz;
             gaprnt(2,attr_name);
             gaprnt(2," ");
             for (i=0; i<attr_count; i++) {
-              snprintf(pout,255,"%d ", (gaint)(sattr_val[i]));
+              snprintf(pout,1255,"%d ", (gaint)(sattr_val[i]));
               gaprnt(2,pout);
             }
             gaprnt(2,"\n");
@@ -4494,7 +4581,7 @@ size_t sz;
             gaprnt(2,attr_name);
             gaprnt(2," ");
             for (i=0; i<attr_count; i++) {
-              snprintf(pout,255,"%u ", (gauint)(usattr_val[i]));
+              snprintf(pout,1255,"%u ", (gauint)(usattr_val[i]));
               gaprnt(2,pout);
             }
             gaprnt(2,"\n");
@@ -4513,7 +4600,7 @@ size_t sz;
             gaprnt(2,attr_name);
             gaprnt(2," ");
             for (i=0; i<attr_count; i++) {
-              snprintf(pout,255,"%d ", iattr_val[i]);
+              snprintf(pout,1255,"%d ", iattr_val[i]);
               gaprnt(2,pout);
             }
             gaprnt(2,"\n");
@@ -4532,7 +4619,7 @@ size_t sz;
             gaprnt(2,attr_name);
             gaprnt(2," ");
             for (i=0; i<attr_count; i++) {
-              snprintf(pout,255,"%u ", uiattr_val[i]);
+              snprintf(pout,1255,"%u ", uiattr_val[i]);
               gaprnt(2,pout);
             }
             gaprnt(2,"\n");
@@ -4551,7 +4638,7 @@ size_t sz;
             gaprnt(2,attr_name);
             gaprnt(2," ");
             for (i=0; i<attr_count; i++) {
-              snprintf(pout,255,"%g ", fattr_val[i]);
+              snprintf(pout,1255,"%g ", fattr_val[i]);
               gaprnt(2,pout);
             }
             gaprnt(2,"\n");
@@ -4570,7 +4657,7 @@ size_t sz;
             gaprnt(2,attr_name);
             gaprnt(2," ");
             for (i=0; i<attr_count; i++) {
-              snprintf(pout,255,"%g ", dattr_val[i]);
+              snprintf(pout,1255,"%g ", dattr_val[i]);
               gaprnt(2,pout);
             }
             gaprnt(2,"\n");
@@ -4578,7 +4665,7 @@ size_t sz;
           gree(dattr_val,"f154");
           break;
         default:
-          snprintf(pout,255,"Failed to retrieve attribute %d of type %d \n", attr_index, attr_dtype);
+          snprintf(pout,1255,"Failed to retrieve attribute %d of type %d \n", attr_index, attr_dtype);
           gaprnt(2,pout);
         };
     }  /* end of if-else statment following call to SDattrinfo */
@@ -4625,7 +4712,7 @@ gadouble *dval=NULL;
   n_atts = (gaint)oinfo.num_attrs;
   if (hdrflg) {
     if (n_atts > 0) {
-      snprintf(pout,255,"Native Attributes for File %i : %s \n",fnum,ftit);
+      snprintf(pout,1255,"Native Attributes for File %i : %s \n",fnum,ftit);
       gaprnt(2,pout);
     }
   }
@@ -4638,7 +4725,7 @@ gadouble *dval=NULL;
     ai = (hsize_t)aindex;
     aid = H5Aopen_by_idx(vid,".",H5_INDEX_CRT_ORDER,H5_ITER_INC,ai,H5P_DEFAULT,H5P_DEFAULT); if (aid<0) err=1;
     /* get the attribute name */
-    if (!err) len    = H5Aget_name(aid,0,NULL); if (len<0) err=1;
+    if (!err) len    = H5Aget_name(aid,0,NULL); if (len<=0) err=1;
     sz = (len+1)*sizeof(char);
     if (!err) aname  = (char*)galloc(sz,"aname"); if (aname==NULL) err=1;
     if (!err) rc     = H5Aget_name(aid,len+1,aname); if (rc<0) err=1;
@@ -4648,9 +4735,9 @@ gadouble *dval=NULL;
     /* get the attribute type, class, and size */
     if (!err) atype  = H5Aget_type(aid); if (atype<0) err=1;
     if (!err) aclass = H5Tget_class(atype); if (aclass<0) err=1;
-    if (!err) asize  = H5Tget_size(atype); if (asize<0) err=1;
+    if (!err) asize  = H5Tget_size(atype); if (asize==0) err=1;
     if (err) {
-      snprintf(pout,255,"Unable to retrieve required info for attribute number %d for variable %s \n",aindex,abbrv);
+      snprintf(pout,1255,"Unable to retrieve required info for attribute number %d for variable %s \n",aindex,abbrv);
       gaprnt(2,pout);
       continue; /* move on to the next attribute */
     }
@@ -4662,9 +4749,9 @@ gadouble *dval=NULL;
           sz = rank*sizeof(gafloat);
           if ((fval = (gafloat*)galloc(sz,"fval"))!=NULL) {
             if ((rc = H5Aread(aid,H5T_NATIVE_FLOAT,fval))>=0) {
-              snprintf(pout,255,"%s Float32 %s ",abbrv,aname); gaprnt(2,pout);
+              snprintf(pout,1255,"%s Float32 %s ",abbrv,aname); gaprnt(2,pout);
               for (i=0; i<rank; i++) {
-                snprintf(pout,255,"%g ", fval[i]); gaprnt(2,pout);
+                snprintf(pout,1255,"%g ", fval[i]); gaprnt(2,pout);
               }
               gaprnt(2,"\n");
             }
@@ -4676,9 +4763,9 @@ gadouble *dval=NULL;
           sz = rank*sizeof(gadouble);
           if ((dval = (gadouble*)galloc(sz,"dval"))!=NULL) {
             if ((rc = H5Aread(aid,H5T_NATIVE_DOUBLE,dval))>=0) {
-              snprintf(pout,255,"%s Float64 %s ",abbrv,aname); gaprnt(2,pout);
+              snprintf(pout,1255,"%s Float64 %s ",abbrv,aname); gaprnt(2,pout);
               for (i=0; i<rank; i++) {
-                snprintf(pout,255,"%g ", dval[i]); gaprnt(2,pout);
+                snprintf(pout,1255,"%g ", dval[i]); gaprnt(2,pout);
               }
               gaprnt(2,"\n");
             }
@@ -4695,9 +4782,9 @@ gadouble *dval=NULL;
               sz = rank*sizeof(unsigned char);
               if ((ucval = (unsigned char*)galloc(sz,"ucval"))!=NULL) {
                 if ((rc = H5Aread(aid,H5T_NATIVE_UCHAR,(void*)ucval))>=0) {
-                  snprintf(pout,255,"%s Byte %s ",abbrv,aname); gaprnt(2,pout);
+                  snprintf(pout,1255,"%s Byte %s ",abbrv,aname); gaprnt(2,pout);
                   for (i=0; i<rank; i++) {
-                    snprintf(pout,255,"%u ", (gaint)ucval[i]);
+                    snprintf(pout,1255,"%u ", (gaint)ucval[i]);
                     gaprnt(2,pout);
                   }
                   gaprnt(2,"\n");
@@ -4709,9 +4796,9 @@ gadouble *dval=NULL;
               sz = rank*sizeof(char);
               if ((cval = (char*)galloc(sz,"cval"))!=NULL) {
                 if ((rc = H5Aread(aid,H5T_NATIVE_CHAR,(void*)cval))>=0) {
-                  snprintf(pout,255,"%s Byte %s ",abbrv,aname); gaprnt(2,pout);
+                  snprintf(pout,1255,"%s Byte %s ",abbrv,aname); gaprnt(2,pout);
                   for (i=0; i<rank; i++) {
-                    snprintf(pout,255,"%d ", (gaint)cval[i]);
+                    snprintf(pout,1255,"%d ", (gaint)cval[i]);
                     gaprnt(2,pout);
                   }
                   gaprnt(2,"\n");
@@ -4726,9 +4813,9 @@ gadouble *dval=NULL;
               sz = rank*sizeof(unsigned short);
               if ((usval = (unsigned short*)galloc(sz,"usval"))!=NULL) {
                 if ((rc = H5Aread(aid,H5T_NATIVE_USHORT,(void*)usval))>=0) {
-                  snprintf(pout,255,"%s UInt16 %s ",abbrv,aname); gaprnt(2,pout);
+                  snprintf(pout,1255,"%s UInt16 %s ",abbrv,aname); gaprnt(2,pout);
                   for (i=0; i<rank; i++) {
-                    snprintf(pout,255,"%u ", (gaint)usval[i]);
+                    snprintf(pout,1255,"%u ", (gaint)usval[i]);
                     gaprnt(2,pout);
                   }
                   gaprnt(2,"\n");
@@ -4740,9 +4827,9 @@ gadouble *dval=NULL;
               sz = rank*sizeof(short);
               if ((sval = (short*)galloc(sz,"sval"))!=NULL) {
                 if ((rc = H5Aread(aid,H5T_NATIVE_SHORT,(void*)sval))>=0) {
-                  snprintf(pout,255,"%s Int16 %s ",abbrv,aname); gaprnt(2,pout);
+                  snprintf(pout,1255,"%s Int16 %s ",abbrv,aname); gaprnt(2,pout);
                   for (i=0; i<rank; i++) {
-                    snprintf(pout,255,"%d ", (gaint)sval[i]);
+                    snprintf(pout,1255,"%d ", (gaint)sval[i]);
                     gaprnt(2,pout);
                   }
                   gaprnt(2,"\n");
@@ -4757,9 +4844,9 @@ gadouble *dval=NULL;
               sz = rank*sizeof(gauint);
               if ((uival = (gauint*)galloc(sz,"uival"))!=NULL) {
                 if ((rc = H5Aread(aid,H5T_NATIVE_UINT,(void*)uival))>=0) {
-                  snprintf(pout,255,"%s UInt32 %s ",abbrv,aname); gaprnt(2,pout);
+                  snprintf(pout,1255,"%s UInt32 %s ",abbrv,aname); gaprnt(2,pout);
                   for (i=0; i<rank; i++) {
-                    snprintf(pout,255,"%u ", uival[i]);
+                    snprintf(pout,1255,"%u ", uival[i]);
                     gaprnt(2,pout);
                   }
                   gaprnt(2,"\n");
@@ -4771,9 +4858,9 @@ gadouble *dval=NULL;
               sz = rank*sizeof(gaint);
               if ((ival = (gaint*)galloc(sz,"ival"))!=NULL) {
                 if ((rc = H5Aread(aid,H5T_NATIVE_INT,(void*)ival))>=0) {
-                  snprintf(pout,255,"%s Int32 %s ",abbrv,aname); gaprnt(2,pout);
+                  snprintf(pout,1255,"%s Int32 %s ",abbrv,aname); gaprnt(2,pout);
                   for (i=0; i<rank; i++) {
-                    snprintf(pout,255,"%d ", ival[i]);
+                    snprintf(pout,1255,"%d ", ival[i]);
                     gaprnt(2,pout);
                   }
                   gaprnt(2,"\n");
@@ -4788,9 +4875,9 @@ gadouble *dval=NULL;
               sz = rank*sizeof(unsigned long);
               if ((ulval = (unsigned long*)galloc(sz,"ulval"))!=NULL) {
                 if ((rc = H5Aread(aid,H5T_NATIVE_ULONG,(void*)ulval))>=0) {
-                  snprintf(pout,255,"%s UInt32 %s ",abbrv,aname); gaprnt(2,pout);
+                  snprintf(pout,1255,"%s UInt32 %s ",abbrv,aname); gaprnt(2,pout);
                   for (i=0; i<rank; i++) {
-                    snprintf(pout,255,"%lu ", ulval[i]);
+                    snprintf(pout,1255,"%lu ", ulval[i]);
                     gaprnt(2,pout);
                   }
                   gaprnt(2,"\n");
@@ -4802,9 +4889,9 @@ gadouble *dval=NULL;
               sz = rank*sizeof(long);
               if ((lval = (long*)galloc(sz,"lval"))!=NULL) {
                 if ((rc = H5Aread(aid,H5T_NATIVE_LONG,(void*)lval))>=0) {
-                  snprintf(pout,255,"%s Int32 %s ",abbrv,aname); gaprnt(2,pout);
+                  snprintf(pout,1255,"%s Int32 %s ",abbrv,aname); gaprnt(2,pout);
                   for (i=0; i<rank; i++) {
-                    snprintf(pout,255,"%ld ", lval[i]);
+                    snprintf(pout,1255,"%ld ", lval[i]);
                     gaprnt(2,pout);
                   }
                   gaprnt(2,"\n");
@@ -4814,17 +4901,17 @@ gadouble *dval=NULL;
             }
           }
           else {
-            snprintf(pout,255,"HDF5 class H5T_INTEGER of size %d not handled\n",(gaint)asize);
+            snprintf(pout,1255,"HDF5 class H5T_INTEGER of size %d not handled\n",(gaint)asize);
             gaprnt(2,pout);
           }
         }
       }
       else if (aclass == H5T_STRING) {
-        if ((stosize = H5Aget_storage_size(aid))>=0) {
+        if ((stosize = H5Aget_storage_size(aid))==0) {
           if ((string = (char*)malloc((stosize+1)*sizeof(char)))!=NULL) {
             if ((rc = H5Aread(aid,atype,(void*)string))>=0) {
               string[stosize]='\0';
-              snprintf(pout,255,"%s String %s ",abbrv,aname);
+              snprintf(pout,1255,"%s String %s ",abbrv,aname);
               gaprnt(2,pout);
               prntwrap(abbrv,aname,string);
             }
@@ -4837,6 +4924,7 @@ gadouble *dval=NULL;
     H5Aclose(aid);
     H5Tclose(atype);
   }
+
   h5closevar(dsid,vid);
   return(n_atts);
 #endif
@@ -4852,7 +4940,7 @@ void prntwrap(char *vname, char *aname, char *str ) {
       *pos = '\0';         /* swap null for carriage return */
       gaprnt(2,line);
       /* add varname, attr_type, and attr_name after carriage return */
-      snprintf(pout,255," \n%s String %s ",vname,aname);
+      snprintf(pout,1255," \n%s String %s ",vname,aname);
       gaprnt(2,pout);
       *pos = '\n';         /* put the carriage return back in */
       line = pos+1;
@@ -5007,9 +5095,9 @@ char *filename;
   rc = nc_open(filename, NC_NOWRITE, &i);
   if (rc != NC_NOERR) {
     if (eflag) {
-      snprintf(pout,255,"Error: nc_open failed to open file %s\n",filename);
+      snprintf(pout,1255,"Error: nc_open failed to open file %s\n",filename);
       gaprnt(0,pout);
-      snprintf(pout,255,"%s\n",nc_strerror(rc));
+      snprintf(pout,1255,"%s\n",nc_strerror(rc));
       gaprnt(0,pout);
     }
     return (1);
@@ -5037,7 +5125,7 @@ gaint gaophdf (struct gafile *pfil, gaint tflag, gaint eflag) {
   /* open the file, set the file id in the gafile structure */
   if ((sd_id = SDstart(filename, DFACC_READ))==FAIL) {
     if (eflag) {
-      snprintf(pout,255,"gaophdf error: SDstart failed to open hdf-sds file %s\n",filename);
+      snprintf(pout,1255,"gaophdf error: SDstart failed to open hdf-sds file %s\n",filename);
       gaprnt(0,pout);
     }
     return (1);
@@ -5080,7 +5168,7 @@ gaint gaoph5 (struct gafile *pfil, gaint tflag, gaint eflag) {
   }
   else {
     if (eflag) {
-      snprintf(pout,255,"Error: Unable to open HDF5 file %s \n",filename);
+      snprintf(pout,1255,"Error: Unable to open HDF5 file %s \n",filename);
       gaprnt(0,pout);
     }
     return (1);
@@ -5100,7 +5188,7 @@ gaint gaclosenc (struct gafile *pfi) {
     rc = nc_close(pfi->ncid);
     if (rc != NC_NOERR) {
       gaprnt(0,"Error: nc_close failed\n");
-      snprintf(pout,255,"%s\n",nc_strerror(rc));
+      snprintf(pout,1255,"%s\n",nc_strerror(rc));
       gaprnt(0,pout);
       return (1);
     }

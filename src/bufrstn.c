@@ -1,6 +1,4 @@
-/*  Copyright (C) 1988-2011 by Brian doty and the
-    Institute of Global Environment and Society (IGES).
-    See file COPYRIGHT for more information.   */
+/* Copyright (C) 1988-2018 by George Mason University. See file COPYRIGHT for more information. */
 
 /* Authored by Jennifer Adams */
 
@@ -258,6 +256,7 @@ gaint getbufr (struct gastn *stn) {
                     rpt->lon = hlon;
                     rpt->lev = stn->pfi->undef;
                     rpt->tim = htim;
+                    rpt->umask = 1;
                     rpt->val = bval->val;
                     for (k=0; k<8; k++) *(rpt->stid+k) = *(rfhdr.stid+k);
                     stn->rnum++;
@@ -280,6 +279,7 @@ gaint getbufr (struct gastn *stn) {
                     rpt->lon = hlon;
                     rpt->lev = stn->pfi->undef;
                     rpt->tim = htim;
+                    rpt->umask = 1;
                     rpt->val = bval->val;
                     for (k=0; k<8; k++) *(rpt->stid+k) = *(rfhdr.stid+k);
                     stn->rnum++;
@@ -315,6 +315,7 @@ gaint getbufr (struct gastn *stn) {
                       rpt->lon = hlon;
                       rpt->lev = hlev;
                       rpt->tim = htim;
+                      rpt->umask = 1;
                       rpt->val = bval->val;
                       for (k=0; k<8; k++) *(rpt->stid+k) = *(rfhdr.stid+k);
                       stn->rnum++;

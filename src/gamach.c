@@ -1,6 +1,4 @@
-/*  Copyright (C) 1988-2011 by Brian Doty and the
-    Institute of Global Environment and Society (IGES).
-    See file COPYRIGHT for more information.   */
+/* Copyright (C) 1988-2018 by George Mason University. See file COPYRIGHT for more information. */
 
 /*
  * Include ./configure's header file
@@ -289,7 +287,7 @@ unsigned char *ch1;
       *(ch1+3) = *(ch+ioff);
       *(ch1+2) = *(ch+ioff+1);
       *(ch1+1) = *(ch+ioff+2);
-      *ch1     = *(ch+ioff+3);
+      *ch1 = *(ch+ioff+3);
     }
   }
   return (ival);
