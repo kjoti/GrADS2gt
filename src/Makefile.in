@@ -247,8 +247,8 @@ grads_DEPENDENCIES = $(am__DEPENDENCIES_3) $(am__DEPENDENCIES_1) \
 am_grib2scan_OBJECTS = grib2scan.$(OBJEXT) gamach.$(OBJEXT) \
 	galloc.$(OBJEXT)
 grib2scan_OBJECTS = $(am_grib2scan_OBJECTS)
-grib2scan_DEPENDENCIES = gautil.sa.o gatxt.o $(am__DEPENDENCIES_2) \
-	$(am__DEPENDENCIES_1)
+grib2scan_DEPENDENCIES = gautil.sa.o gatxt.o gacal.o caltime.o \
+	$(am__DEPENDENCIES_2) $(am__DEPENDENCIES_1)
 am_gribmap_OBJECTS = gribmap.$(OBJEXT) gagmap.$(OBJEXT) \
 	gamach.$(OBJEXT) galloc.$(OBJEXT)
 gribmap_OBJECTS = $(am_gribmap_OBJECTS)
@@ -612,7 +612,9 @@ gribscan_LDADD = gautil.sa.o gatxt.o gacal.o caltime.o \
 			 $(LDADD) $(readline_libs)
 
 grib2scan_SOURCES = grib2scan.c gamach.c galloc.c
-grib2scan_LDADD = gautil.sa.o gatxt.o $(LDADD) $(readline_libs)
+grib2scan_LDADD = gautil.sa.o gatxt.o gacal.o caltime.o \
+			$(LDADD) $(readline_libs)
+
 bufrscan_SOURCES = bufrscan.c gabufr.c gabufrtbl.c gamach.c
 all: config.h
 	$(MAKE) $(AM_MAKEFLAGS) all-am

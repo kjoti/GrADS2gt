@@ -201,7 +201,8 @@ gribscan_LDADD	       = gautil.sa.o gatxt.o gacal.o caltime.o \
 
 ## grib2scan
 grib2scan_SOURCES      = grib2scan.c gamach.c galloc.c
-grib2scan_LDADD	       = gautil.sa.o gatxt.o $(LDADD) $(readline_libs)
+grib2scan_LDADD	= gautil.sa.o gatxt.o gacal.o caltime.o \
+			$(LDADD) $(readline_libs)
 
 ## bufrscan
 bufrscan_SOURCES       = bufrscan.c gabufr.c gabufrtbl.c gamach.c
