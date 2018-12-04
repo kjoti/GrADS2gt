@@ -19498,8 +19498,10 @@ $as_echo "#define USECAIRO 1" >>confdefs.h
 
 fi
 
-# look for libraries to support gtool3.
+# * * * GTOOL3 * * *
 echo
+echo GTOOL3
+echo ------
 LDFLAGS_save=$LDFLAGS
 CFLAGS_save=$CFLAGS
 if test "$with_gtool3" != "no" ; then
@@ -19545,7 +19547,7 @@ fi
 $as_echo "$ac_cv_lib_gtool3_GT3_open" >&6; }
 if test "x$ac_cv_lib_gtool3_GT3_open" = xyes; then :
    use_gtool3=yes
-	    gtool3_libs=-lgtool3
+            gtool3_libs=-lgtool3
 fi
 
 fi
@@ -19558,14 +19560,12 @@ $as_echo "#define GTOOL3 0" >>confdefs.h
 
   LDFLAGS=$LDFLAGS_save
   CFLAGS=CFLAGS_save
-  echo "- GTOOL3 disabled "
 else
 
 $as_echo "#define GTOOL3 1" >>confdefs.h
 
 
 
-  echo "+ GTOOL3 enabled "
 fi
 
 # * * * HDF5 * * *
@@ -26120,9 +26120,9 @@ else
   fi
 fi
 if test "$use_gtool3" = "yes" ; then
-   echo "  |  + gtool3 enabled             |"
+   echo "  |  + GTOOL3 enabled             |"
 else
-   echo "  |  - gtool3 disabled            |"
+   echo "  |  - GTOOL3 disabled            |"
 fi
 if test "$use_gadap" = "yes" -o "$use_dap" = "yes" ; then
   echo "  |  + OPeNDAP enabled            |"

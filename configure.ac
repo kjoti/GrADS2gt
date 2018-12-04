@@ -614,8 +614,10 @@ else
   AC_SUBST(cairo_libs)
 fi
 
-# look for libraries to support gtool3.
+# * * * GTOOL3 * * *
 echo
+echo GTOOL3
+echo ------
 LDFLAGS_save=$LDFLAGS
 CFLAGS_save=$CFLAGS
 if test "$with_gtool3" != "no" ; then
@@ -624,18 +626,16 @@ if test "$with_gtool3" != "no" ; then
   AC_CHECK_HEADER(gtool3.h,
       [AC_CHECK_LIB(gtool3, GT3_open,
           [ use_gtool3=yes
-	    gtool3_libs=-lgtool3 ])])
+            gtool3_libs=-lgtool3 ])])
 fi
 if test "$use_gtool3" != "yes" ; then
   AC_DEFINE(GTOOL3, 0, [Enable GTOOL3])
   LDFLAGS=$LDFLAGS_save
   CFLAGS=CFLAGS_save
-  echo "- GTOOL3 disabled "
 else
   AC_DEFINE(GTOOL3, 1, [Enable GTOOL3])
   AC_SUBST(gtool3_inc)
   AC_SUBST(gtool3_libs)
-  echo "+ GTOOL3 enabled "
 fi
 
 # * * * HDF5 * * *
@@ -1011,9 +1011,9 @@ else
   fi
 fi
 if test "$use_gtool3" = "yes" ; then
-   echo "  |  + gtool3 enabled             |"
+   echo "  |  + GTOOL3 enabled             |"
 else
-   echo "  |  - gtool3 disabled            |"
+   echo "  |  - GTOOL3 disabled            |"
 fi
 if test "$use_gadap" = "yes" -o "$use_dap" = "yes" ; then
   echo "  |  + OPeNDAP enabled            |"
