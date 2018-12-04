@@ -67,25 +67,9 @@ AC_PROG_LIBTOOL
 #  Additional arguments for the configure script
 # ----------------------------------------------------
 
-AC_ARG_WITH(gui,      [AC_HELP_STRING([--with-gui],
-                                      [Athena X11 widget-based GUI])])
-AC_ARG_WITH(readline, [AC_HELP_STRING([--with-readline],
-                                      [command line editing])])
-AC_ARG_WITH(printim,  [AC_HELP_STRING([--with-printim],
-                                      [image output])])
-AC_ARG_WITH(grib2,    [AC_HELP_STRING([--with-grib2],
-                                      [GRIB2 data format])])
-AC_ARG_WITH(sdf,      [AC_HELP_STRING([--with-sdf],
-                                      [all self-describing formats (HDF4,HDF5,NetCDF,OPeNDAP)])])
-AC_ARG_WITH(gadap,    [AC_HELP_STRING([--with-gadap],
-                                      [OPeNDAP for station data])])
-AC_ARG_WITH(shp,      [AC_HELP_STRING([--with-shp],
-                                      [shapefile format])])
-AC_ARG_WITH(geotiff,  [AC_HELP_STRING([--with-geotiff],
-                                      [geotiff output])])
 AC_ARG_WITH(gtool3,   [AC_HELP_STRING([--with-gtool3=ARG],
                                       [GTOOL3 directory])],
-	                              [GTOOL3_DIR=$withval],
+                                      [GTOOL3_DIR=$withval],
                                       [GTOOL3_DIR=""])
 AC_ARG_WITH([gadap],
 	    [AS_HELP_STRING([--with-gadap], [enable OPeNDAP support for station data])],
@@ -218,22 +202,6 @@ else
    AC_DEFINE(BYTEORDER,0,[little_endian machine])
 fi
 
-dnl The following tests all check for functions and typedefs that are
-dnl required for GrADS, but 1) I don't think we support any platforms
-dnl where they fail, and 2) if they do, there is no backup plan
-dnl anyway. So I figure we might as well speed the script up a bit by
-dnl commenting them out, unless/until there is some actual handling
-dnl for failure.
-
-dnl AC_TYPE_SIZE_T AC_STRUCT_TM
-
-dnl Checks for library functions.
-dnl AC_TYPE_SIGNAL
-dnl AC_FUNC_STRFTIME
-dnl AC_FUNC_VPRINTF
-dnl AC_CHECK_FUNCS(strdup strstr strtod strtol)
-
-dnl In this case we do have an alternative - valprs()
 AC_CHECK_FUNCS(strtod)
 AC_CHECK_FUNCS(strlcpy)
 
@@ -279,25 +247,11 @@ case "${enableval}" in
 esac
 
 
-AC_MSG_CHECKING([whether to use dynamic linking])
-if test "$ga_dyn_supplibs" = "yes" ; then
-   AC_MSG_RESULT([yes (Warning: binaries may not be suitable for distribution)])
-else
-   AC_MSG_RESULT([no])
-fi
-
-
-AC_ARG_VAR(SUPPLIBS,
-           [Custom path (must be absolute) to a GrADS supplib distribution])
 AC_ARG_VAR(GRADS_DATADIR,
            [Data directory for fonts and maps])
 if test -z "$GRADS_DATADIR"; then
     GRADS_DATADIR="/usr/local/share/grads"
 fi
-
-# ----------------------------------------------------
-# Check for optional feature support
-# ----------------------------------------------------
 
 # Initialize. The assumption is that we have none of the needed libs.
 use_readline=no
@@ -453,13 +407,13 @@ if test "Z$ga_supplib_dir" != "Z" ; then
   GA_UNSET_FLAGS
 fi
 # check in system locations
-if test "$use_shp" != "yes" -a "$ga_dyn_supplibs" = "yes" ; then
-  echo looking in other system locations
-  GA_CHECK_LIB_SHP(
-  [ use_shp=yes
-    shp_libs=$SHP_LIBS
-  ])
-fi
+# if test "$use_shp" != "yes" -a "$ga_dyn_supplibs" = "yes" ; then
+#   echo looking in other system locations
+#   GA_CHECK_LIB_SHP(
+#   [ use_shp=yes
+#     shp_libs=$SHP_LIBS
+#   ])
+# fi
 # set output variables
 if test "$use_shp" != "yes" ; then
   AC_DEFINE(USESHP, 0, [Disable shapefile])
@@ -643,14 +597,14 @@ if test "Z$ga_supplib_dir" != "Z" ; then
   fi
 fi
 # check in system locations
-if test "$use_cairo" != "yes" -a "$ga_dyn_supplibs" = "yes" ; then
-  echo looking in other system locations
-  GA_CHECK_LIB_CAIRO([
-    use_cairo='yes'
-    cairo_inc=$CAIRO_CFLAGS
-    cairo_libs=$CAIRO_LIBS
-  ])
-fi
+# if test "$use_cairo" != "yes" -a "$ga_dyn_supplibs" = "yes" ; then
+#   echo looking in other system locations
+#   GA_CHECK_LIB_CAIRO([
+#     use_cairo='yes'
+#     cairo_inc=$CAIRO_CFLAGS
+#     cairo_libs=$CAIRO_LIBS
+#   ])
+# fi
 # set output variables
 if test "$use_cairo" != "yes" ; then
   AC_DEFINE(USECAIRO, 0, [Disable cairo])
@@ -683,8 +637,6 @@ else
   AC_SUBST(gtool3_libs)
   echo "+ GTOOL3 enabled "
 fi
-
-# check if user wants support for self-describing files?
 
 # * * * HDF5 * * *
 echo
@@ -888,13 +840,13 @@ if test "x$with_gadap" != xno ; then
     fi
   fi
 # check in system locations
-  if test $use_gadap != "yes" -a "$ga_dyn_supplibs" = "yes" ; then
-    echo looking in other system locations
-    GA_CHECK_LIB_GADAP(
-    [ use_gadap=yes
-      gadap_libs=$GADAP_LIBS
-    ])
-  fi
+#   if test $use_gadap != "yes" -a "$ga_dyn_supplibs" = "yes" ; then
+#     echo looking in other system locations
+#     GA_CHECK_LIB_GADAP(
+#     [ use_gadap=yes
+#       gadap_libs=$GADAP_LIBS
+#     ])
+#   fi
 # set output variables
   if test $use_gadap != "yes" ; then
     AC_DEFINE(USEGADAP, 0, [Enable OPeNDAP for station data])
