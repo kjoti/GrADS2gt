@@ -8200,7 +8200,10 @@ size_t start, count;
    gr2t (pfi->grvals[dim],1.0+pfi->dimoff[dim],&tinit);
    for (i=1; i<=pfi->dnum[dim]; i++) {
      gr2t (pfi->grvals[dim],(gadouble)(i+pfi->dimoff[dim]),&time);
-     *(axis+i-1) = timdif(&tinit,&time,flag);
+     if (flag == 1)
+       *(axis+i-1) = timdif_in_month(&tinit,&time);
+     else
+       *(axis+i-1) = timdif(&tinit,&time);
    }
  }
  else {

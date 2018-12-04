@@ -5857,7 +5857,7 @@ char lab[30],olab[30],*chlb=NULL;
     /*  Do Date/Time labeling  */
 
     strcpy (olab,"mmmmmmmmmmmmmmmm");
-    while (timdif(&tstrt,&(pcm->tmax),0)>-1L) {
+    while (timdif(&tstrt,&(pcm->tmax))>-1L) {
       len = gat2ch(&tstrt,tinc,lab,30);
       v = t2gr(tvals,&tstrt);
       if (axis) {
@@ -6473,7 +6473,7 @@ struct dt twrk,temp;
 
   /* Get time difference in minutes */
 
-  tdif = timdif (&(pcm->tmin),&(pcm->tmax),0);
+  tdif = timdif (&(pcm->tmin),&(pcm->tmax));
 
   /* Set time increment based on different time differences.
      The test is entirely arbitrary. */
