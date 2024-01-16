@@ -1,6 +1,6 @@
 # Introduction
 
-`GrADS2gt` is a extension of GrADS Version 2.x (GrADS2).
+`GrADS2gt` is an extension of GrADS Version 2.x (GrADS2).
 
 The differences from the original GrADS2 are as follows:
 1. Support GTOOL3 format (read)
@@ -22,8 +22,8 @@ Then its file name can be treated as the variable name.
 After that, the variable can be handled in the same way as original GrADS2.
 
 ```
-ga-> gtopen T2  # Open a file named `T2`.
-The global calendar is set to noleap.       # Guess a calendar automatically.
+ga-> gtopen T2                                # Open a file named `T2`.
+The global calendar is set to noleap.         # Guess a calendar automatically.
 Data file T2 is open as file 1
 LON set to 0 360
 LAT set to -88.9277 88.9277
